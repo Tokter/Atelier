@@ -300,7 +300,8 @@ internal static class Program
             .Register<IconsViewModel>(vm => new IconsView(vm))
             .Register<TypographyViewModel>(vm => new TypographyView(vm))
             .Register<TreeViewViewModel>(vm => new TreeViewView(vm))
-            .Register<TransformationViewModel>(vm => new TransformationView(vm));
+            .Register<TransformationViewModel>(vm => new TransformationView(vm))
+            .Register<DialogHostViewModel>(vm => new DialogHostView(vm));
 
         // 1. Initialize ViewModel (state is preserved across Hot Reload passes)
         var vm = new MainViewModel();

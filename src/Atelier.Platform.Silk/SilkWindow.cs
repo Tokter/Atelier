@@ -17,7 +17,9 @@ using Atelier.Rendering;
 using Atelier.Theming;
 using Atelier.Theming.Material;
 using Atelier.Core.Platform;
+using Atelier.Core.Threading;
 using System.Runtime.InteropServices;
+using System.Threading;
 using SilkKey = global::Silk.NET.Input.Key;
 
 namespace Atelier.Platform.Silk;
@@ -38,6 +40,10 @@ public class SilkWindow : IDisposable
 
     private UIElement? _rootElement;
     private UIElement? _hoveredElement;
+
+    // Threading & Dispatch
+    private int _mainThreadId;
+    public int MainThreadId => _mainThreadId;
 
     // Performance & Frame Stats
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
@@ -484,12 +490,18 @@ public class SilkWindow : IDisposable
     public void Run()
     {
         Current = this;
+        _mainThreadId = Environment.CurrentManagedThreadId;
+        Dispatcher.UIThread = new SilkDispatcher(this);
+        var oldContext = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new SilkSynchronizationContext(this));
         try
         {
             _window.Run();
         }
         finally
         {
+            SynchronizationContext.SetSynchronizationContext(oldContext);
+            Dispatcher.UIThread = Dispatcher.ImmediateDispatcher.Instance;
             Dispose();
         }
     }

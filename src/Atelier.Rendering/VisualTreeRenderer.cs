@@ -83,10 +83,23 @@ public static class VisualTreeRenderer
         try
         {
             // Render children (clipped to bounds/corners if ClipToBounds is enabled)
-            int count = element.Children.Count;
-            for (int i = 0; i < count; i++)
+            var children = element.Children;
+            for (int i = 0; i < children.Count; i++)
             {
-                if (element.Children[i] is UIElement child)
+                UIElement? child = null;
+                try
+                {
+                    if (i < children.Count)
+                    {
+                        child = children[i] as UIElement;
+                    }
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    break;
+                }
+
+                if (child != null)
                 {
                     RenderElement(child, ref context, presenter, isRoot: false);
                 }

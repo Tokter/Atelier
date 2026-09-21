@@ -3,8 +3,11 @@ using System.Threading.Tasks;
 using Atelier.Controls;
 using Atelier.Core.Events;
 using Atelier.Core.Primitives;
+using Atelier.Core.Threading;
 using Atelier.Core.Tree;
 using Atelier.Layout;
+using Atelier.Rendering;
+using SkiaSharp;
 using Xunit;
 
 namespace Atelier.Tests;
@@ -534,5 +537,194 @@ public class DialogHostTests
         host.Measure(new Size(1000f, 1000f));
         Assert.Equal(80f, host.DesiredSize.Width);
         Assert.Equal(50f, host.DesiredSize.Height);
+    }
+
+    [Fact]
+    public async Task DialogHost_GlobalAndLocalHosts_CanCoexistAndRouteByIdentifier()
+    {
+        var rootHost = new DialogHost { Identifier = "RootHost" };
+        var localHost = new DialogHost { Identifier = "LocalGalleryHost" };
+
+        var localContent = new Button("Local Action");
+        localHost.Content = localContent;
+
+        var pageLayout = new StackPanel();
+        pageLayout.Add(localHost);
+        rootHost.Content = pageLayout;
+
+        // 1. Show a dialog targeting the Local host
+        var localDialog = new Dialog("Local Alert", "Confined to local card", DialogButtons.Ok);
+        var localTask = localDialog.ShowAsync(localHost);
+
+        Assert.True(localHost.IsOpen);
+        Assert.Same(localDialog, localHost.Dialog);
+        Assert.False(rootHost.IsOpen);
+        Assert.Null(rootHost.Dialog);
+
+        localDialog.Close(DialogResult.Ok);
+        await localTask;
+        Assert.False(localHost.IsOpen);
+
+        // 2. Show a dialog targeting the Global host
+        var globalDialog = new Dialog("Global Alert", "Covers entire application", DialogButtons.Ok);
+        var globalTask = DialogHost.ShowAsync(globalDialog, "RootHost");
+
+        Assert.True(rootHost.IsOpen);
+        Assert.Same(globalDialog, rootHost.Dialog);
+        Assert.False(localHost.IsOpen);
+        Assert.Null(localHost.Dialog);
+
+        globalDialog.Close(DialogResult.Ok);
+        await globalTask;
+        Assert.False(rootHost.IsOpen);
+    }
+
+    [Fact]
+    public async Task DialogHost_CloseOnClickAway_Behavior()
+    {
+        var host = new DialogHost { CloseOnClickAway = true, Content = new Border() };
+        var dialog = new Dialog("Modal Test", "Click away test", DialogButtons.OkCancel);
+        var task = dialog.ShowAsync(host);
+
+        Assert.True(host.IsOpen);
+        Assert.Equal(3, host.Children.Count);
+
+        // Scrim is at index 1
+        var scrim = host.Children[1] as UIElement;
+        Assert.NotNull(scrim);
+
+        // 1. When CloseOnClickAway = true, clicking scrim dismisses with Cancel
+        var clickEvent = new PointerEventArgs(new Point(10, 10), new Point(10, 10), PointerButtons.Left);
+        scrim.OnPointerPressed(clickEvent);
+
+        Assert.True(clickEvent.Handled);
+        var response = await task;
+        Assert.Equal(DialogResult.Cancel, response.Result);
+        Assert.Null(response.Button); // Dismissed via scrim, not a button!
+        Assert.False(host.IsOpen);
+
+        // 2. When CloseOnClickAway = false, clicking scrim does NOT dismiss
+        host.CloseOnClickAway = false;
+        var dialog2 = new Dialog("Strict Modal", "Backdrop clicks should do nothing", DialogButtons.OkCancel);
+        var task2 = dialog2.ShowAsync(host);
+
+        Assert.True(host.IsOpen);
+        var scrim2 = host.Children[1] as UIElement;
+        Assert.NotNull(scrim2);
+
+        var clickEvent2 = new PointerEventArgs(new Point(10, 10), new Point(10, 10), PointerButtons.Left);
+        scrim2.OnPointerPressed(clickEvent2);
+
+        Assert.True(clickEvent2.Handled);
+        Assert.True(host.IsOpen); // Remains open!
+        Assert.Same(dialog2, host.Dialog);
+
+        // Explicitly closing button works
+        dialog2.Close(DialogResult.Ok);
+        var response2 = await task2;
+        Assert.Equal(DialogResult.Ok, response2.Result);
+        Assert.False(host.IsOpen);
+    }
+
+    [Fact]
+    public async Task Dialog_CloseFromBackgroundThread_CompletesSuccessfully()
+    {
+        var host = new DialogHost();
+        var dialog = new Dialog("Async Modal", "Testing close from thread pool", DialogButtons.OkCancel);
+        var showTask = dialog.ShowAsync(host);
+
+        Assert.True(host.IsOpen);
+        Assert.Same(dialog, host.Dialog);
+
+        // Close from ThreadPool background thread
+        await Task.Run(() =>
+        {
+            dialog.Close(DialogResult.Ok);
+        });
+
+        var response = await showTask;
+        Assert.Equal(DialogResult.Ok, response.Result);
+        Assert.Null(host.Dialog);
+        Assert.False(host.IsOpen);
+    }
+
+    [Fact]
+    public async Task DialogHost_BackgroundThreadDialogAssignment_MarshalsProperly()
+    {
+        var host = new DialogHost();
+        var dialog = new Dialog("Async Assignment", "Testing dialog assignment from background thread");
+
+        await Task.Run(() =>
+        {
+            host.Dialog = dialog;
+        });
+
+        Assert.True(host.IsOpen);
+        Assert.Same(dialog, host.Dialog);
+
+        await Task.Run(() =>
+        {
+            host.Dialog = null;
+        });
+
+        Assert.False(host.IsOpen);
+        Assert.Null(host.Dialog);
+    }
+
+    [Fact]
+    public async Task Dispatcher_UIThread_DefaultAndCustomExecution()
+    {
+        Assert.True(Dispatcher.CheckAccess());
+
+        bool posted = false;
+        Dispatcher.Post(() => posted = true);
+        Assert.True(posted);
+
+        bool sent = false;
+        Dispatcher.Send(() => sent = true);
+        Assert.True(sent);
+
+        int result = await Dispatcher.InvokeAsync(() => 42);
+        Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void VisualTreeRenderer_ConcurrentChildRemoval_DoesNotThrowArgumentOutOfRangeException()
+    {
+        var parent = new StackPanel();
+        var child1 = new Border { Width = 50, Height = 50 };
+        var child2 = new Border { Width = 50, Height = 50 };
+        var child3 = new Border { Width = 50, Height = 50 };
+
+        parent.Add(child1);
+        parent.Add(child2);
+        parent.Add(child3);
+
+        Assert.Equal(3, parent.Children.Count);
+
+        using var bitmap = new SKBitmap(100, 100);
+        using var canvas = new SKCanvas(bitmap);
+        using var paintRegistry = new PaintRegistry();
+        var dc = new DrawingContext(canvas, paintRegistry);
+
+        var mutatingPresenter = new MutatingTestPresenter(parent);
+
+        // Rendering should complete safely without throwing ArgumentOutOfRangeException
+        VisualTreeRenderer.Render(parent, ref dc, mutatingPresenter);
+        Assert.Single(parent.Children);
+    }
+
+    private sealed class MutatingTestPresenter(StackPanel parent) : IElementVisualPresenter
+    {
+        public void Render(UIElement element, ref DrawingContext context)
+        {
+            if (parent.Children.Count > 0 && element == parent.Children[0])
+            {
+                while (parent.Children.Count > 1)
+                {
+                    parent.RemoveChild(parent.Children[^1]);
+                }
+            }
+        }
     }
 }

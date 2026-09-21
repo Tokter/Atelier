@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Atelier.Core.Events;
 using Atelier.Core.Primitives;
 using Atelier.Core.Properties;
+using Atelier.Core.Threading;
 using Atelier.Core.Tree;
 using Atelier.Layout;
 
@@ -311,13 +312,18 @@ public class Dialog : Control
     {
         ArgumentNullException.ThrowIfNull(host);
 
+        if (!Dispatcher.CheckAccess())
+        {
+            return Dispatcher.InvokeAsync(() => ShowAsync(host)).Unwrap();
+        }
+
         if (_tcs != null && !_tcs.Task.IsCompleted)
         {
             throw new InvalidOperationException("This Dialog is already active and displayed.");
         }
 
         _hostingHost = host;
-        _tcs = new TaskCompletionSource<DialogResponse>();
+        _tcs = new TaskCompletionSource<DialogResponse>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         RebuildButtons();
         host.Dialog = this;
@@ -330,6 +336,12 @@ public class Dialog : Control
     /// </summary>
     public void Close(DialogResult result = DialogResult.None, DialogButton? button = null)
     {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Post(() => Close(result, button));
+            return;
+        }
+
         var host = _hostingHost ?? Parent as DialogHost;
         if (host != null && host.Dialog == this)
         {

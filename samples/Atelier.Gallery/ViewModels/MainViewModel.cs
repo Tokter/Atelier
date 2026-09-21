@@ -35,6 +35,7 @@ namespace Atelier.Gallery.ViewModels
             _pages.Add(new TypographyViewModel());
             _pages.Add(new TreeViewViewModel());
             _pages.Add(new TransformationViewModel());
+            _pages.Add(new DialogHostViewModel());
             _currentPage = initialPage;
         }
 
