@@ -1,0 +1,1267 @@
+using System;
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Numerics;
+using Silk.NET.Core;
+using Silk.NET.Input;
+using Silk.NET.Maths;
+using Silk.NET.Windowing;
+using SkiaSharp;
+using Atelier.Controls;
+using Atelier.Core.Animation;
+using Atelier.Core.Events;
+using Atelier.Core.HotReload;
+using Atelier.Core.Primitives;
+using Atelier.Core.Tree;
+using Atelier.Rendering;
+using Atelier.Theming;
+using Atelier.Theming.Material;
+using Atelier.Core.Platform;
+using System.Runtime.InteropServices;
+using SilkKey = global::Silk.NET.Input.Key;
+
+namespace Atelier.Platform.Silk;
+
+public class SilkWindow : IDisposable
+{
+    private readonly IWindow _window;
+    private IInputContext? _inputContext;
+    private GRGlInterface? _glInterface;
+    private GRContext? _grContext;
+    private GRBackendRenderTarget? _renderTarget;
+    private SKSurface? _surface;
+    private PaintRegistry? _paintRegistry;
+    private readonly AnimationClock _animationClock = new();
+
+    private readonly ConcurrentQueue<Action> _dispatchQueue = new();
+    private Func<UIElement>? _contentFactory;
+
+    private UIElement? _rootElement;
+    private UIElement? _hoveredElement;
+
+    // Performance & Frame Stats
+    private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
+    private int _frameCount = 0;
+    private double _fpsTimer = 0;
+    public double CurrentFps { get; private set; }
+    public bool ShowFpsOverlay { get; set; } = true;
+
+    public UIElement? Content
+    {
+        get => _rootElement;
+        set
+        {
+            _rootElement = value;
+            _hoveredElement = null;
+            _pressedElement = null;
+            if (_rootElement != null)
+            {
+                _rootElement.InvalidateMeasure();
+                _rootElement.InvalidateVisual();
+            }
+        }
+    }
+
+    public void Dispatch(Action action)
+    {
+        _dispatchQueue.Enqueue(action);
+    }
+
+    public void SetContent(Func<UIElement> contentFactory)
+    {
+        _contentFactory = contentFactory;
+        Content = contentFactory();
+    }
+
+    public void ReloadContent()
+    {
+        if (_contentFactory != null)
+        {
+            Content = _contentFactory();
+        }
+        else if (_rootElement != null)
+        {
+            _rootElement.InvalidateMeasure();
+            _rootElement.InvalidateVisual();
+        }
+    }
+
+    private void OnHotReloadTriggered()
+    {
+        Dispatch(() =>
+        {
+            Console.WriteLine("[HotReload] UI rebuild triggered by Hot Reload.");
+            ReloadContent();
+        });
+    }
+
+    public static SilkWindow? Current { get; private set; }
+
+    public bool IsTitleLess { get; }
+    public bool IsTransparent { get; }
+    public float WindowOpacity { get; set; } = 1.0f;
+    public Color? WindowBackground { get; set; }
+    public int ResizeBorderThickness { get; set; } = 4;
+    public string? WindowIconPath { get; set; }
+
+    public void SetWindowIcon(string pathOrResource)
+    {
+        try
+        {
+            using var bitmap = Atelier.Controls.Image.LoadBitmap(pathOrResource);
+            if (bitmap != null)
+            {
+                SetWindowIcon(bitmap);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SilkWindow] Failed to load window icon from '{pathOrResource}': {ex.Message}");
+        }
+    }
+
+    public void SetWindowIcon(SKBitmap bitmap)
+    {
+        if (bitmap == null || bitmap.Width <= 0 || bitmap.Height <= 0) return;
+
+        try
+        {
+            using var rgbaBitmap = new SKBitmap(bitmap.Width, bitmap.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            using (var canvas = new SKCanvas(rgbaBitmap))
+            {
+                canvas.Clear(SKColors.Transparent);
+                canvas.DrawBitmap(bitmap, 0, 0, new SKSamplingOptions(SKFilterMode.Linear), null);
+            }
+
+            byte[] pixelBytes = rgbaBitmap.Bytes;
+            var rawImage = new RawImage(rgbaBitmap.Width, rgbaBitmap.Height, pixelBytes);
+            _window.SetWindowIcon(new ReadOnlySpan<RawImage>(new[] { rawImage }));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SilkWindow] Failed to set window icon: {ex.Message}");
+        }
+    }
+
+    public WindowState WindowState
+    {
+        get
+        {
+            if (TryGetHwnd(out var hwnd))
+            {
+                if (IsIconic(hwnd)) return WindowState.Minimized;
+                if (IsZoomed(hwnd)) return WindowState.Maximized;
+                return WindowState.Normal;
+            }
+            return _window.WindowState;
+        }
+        set
+        {
+            if (TryGetHwnd(out var hwnd))
+            {
+                switch (value)
+                {
+                    case WindowState.Minimized:
+                        ShowWindow(hwnd, SW_MINIMIZE);
+                        return;
+                    case WindowState.Maximized:
+                        ShowWindow(hwnd, SW_MAXIMIZE);
+                        return;
+                    case WindowState.Normal:
+                        ShowWindow(hwnd, SW_RESTORE);
+                        return;
+                }
+            }
+            _window.WindowState = value;
+        }
+    }
+
+    public Vector2D<int> Position
+    {
+        get => _window.Position;
+        set => _window.Position = value;
+    }
+
+    public Vector2D<int> Size
+    {
+        get => _window.Size;
+        set => _window.Size = value;
+    }
+
+    private bool _isClosing;
+    private bool _isManualDragging;
+    private Vector2D<int> _manualDragStartWinPos;
+    private Vector2D<int> _manualDragStartMousePos;
+    private SubclassProcDelegate? _wndProcDelegate;
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate IntPtr SubclassProcDelegate(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, UIntPtr uIdSubclass, UIntPtr dwRefData);
+
+    [DllImport("comctl32.dll", ExactSpelling = true)]
+    private static extern bool SetWindowSubclass(IntPtr hWnd, SubclassProcDelegate pfnSubclass, UIntPtr uIdSubclass, UIntPtr dwRefData);
+
+    [DllImport("comctl32.dll", ExactSpelling = true)]
+    private static extern bool RemoveWindowSubclass(IntPtr hWnd, SubclassProcDelegate pfnSubclass, UIntPtr uIdSubclass);
+
+    [DllImport("comctl32.dll", ExactSpelling = true)]
+    private static extern IntPtr DefSubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsZoomed(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS pMarInset);
+
+    private const uint WM_CLOSE = 0x0010;
+    private const uint WM_GETMINMAXINFO = 0x0024;
+    private const uint WM_NCCALCSIZE = 0x0083;
+    private const uint WM_NCHITTEST = 0x0084;
+    private const uint WM_NCDESTROY = 0x0082;
+    private const uint WM_NCLBUTTONDOWN = 0x00A1;
+
+    private const int HTCLIENT = 1;
+    private const int HTCAPTION = 2;
+    private const int HTLEFT = 10;
+    private const int HTRIGHT = 11;
+    private const int HTTOP = 12;
+    private const int HTTOPLEFT = 13;
+    private const int HTTOPRIGHT = 14;
+    private const int HTBOTTOM = 15;
+    private const int HTBOTTOMLEFT = 16;
+    private const int HTBOTTOMRIGHT = 17;
+
+    private const int SW_MINIMIZE = 6;
+    private const int SW_MAXIMIZE = 3;
+    private const int SW_RESTORE = 9;
+
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOZORDER = 0x0004;
+    private const uint SWP_FRAMECHANGED = 0x0020;
+    private const uint SWP_NOACTIVATE = 0x0010;
+
+    private const uint MONITOR_DEFAULTTONEAREST = 2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT ptReserved;
+        public POINT ptMaxSize;
+        public POINT ptMaxPosition;
+        public POINT ptMinTrackSize;
+        public POINT ptMaxTrackSize;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MONITORINFO
+    {
+        public uint cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NCCALCSIZE_PARAMS
+    {
+        public RECT rgrc0;
+        public RECT rgrc1;
+        public RECT rgrc2;
+        public IntPtr lppos;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MARGINS
+    {
+        public int cxLeftWidth;
+        public int cxRightWidth;
+        public int cyTopHeight;
+        public int cyBottomHeight;
+    }
+
+    private bool TryGetHwnd(out IntPtr hwnd)
+    {
+        hwnd = IntPtr.Zero;
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                var win32 = _window.Native?.Win32;
+                if (win32.HasValue && win32.Value.Hwnd != IntPtr.Zero && IsWindow(win32.Value.Hwnd))
+                {
+                    hwnd = win32.Value.Hwnd;
+                    return true;
+                }
+            }
+            catch { }
+        }
+        return false;
+    }
+
+    public void DragMove()
+    {
+        if (TryGetHwnd(out var hwnd))
+        {
+            try
+            {
+                ReleaseCapture();
+                SendMessage(hwnd, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
+                return;
+            }
+            catch
+            {
+                // Fallback to manual drag
+            }
+        }
+
+        _isManualDragging = true;
+        _manualDragStartWinPos = _window.Position;
+        if (_inputContext?.Mice.Count > 0)
+        {
+            var m = _inputContext.Mice[0];
+            _manualDragStartMousePos = new Vector2D<int>((int)m.Position.X, (int)m.Position.Y);
+        }
+    }
+
+    public void Minimize()
+    {
+        if (TryGetHwnd(out var hwnd))
+        {
+            ShowWindow(hwnd, SW_MINIMIZE);
+            return;
+        }
+        _window.WindowState = WindowState.Minimized;
+    }
+
+    public void Maximize()
+    {
+        if (TryGetHwnd(out var hwnd))
+        {
+            ShowWindow(hwnd, SW_MAXIMIZE);
+            return;
+        }
+        _window.WindowState = WindowState.Maximized;
+    }
+
+    public void Restore()
+    {
+        if (TryGetHwnd(out var hwnd))
+        {
+            ShowWindow(hwnd, SW_RESTORE);
+            return;
+        }
+        _window.WindowState = WindowState.Normal;
+    }
+
+    public void ToggleMaximize()
+    {
+        if (TryGetHwnd(out var hwnd))
+        {
+            if (IsZoomed(hwnd))
+            {
+                ShowWindow(hwnd, SW_RESTORE);
+            }
+            else
+            {
+                ShowWindow(hwnd, SW_MAXIMIZE);
+            }
+            return;
+        }
+        _window.WindowState = _window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    }
+
+    public void Close()
+    {
+        if (TryGetHwnd(out var hwnd))
+        {
+            PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+            return;
+        }
+        Dispatch(() => _window.Close());
+    }
+
+    public SilkWindow(
+        string title = "Atelier Application",
+        int width = 1024,
+        int height = 768,
+        bool isTitleLess = false,
+        bool isTransparent = false,
+        float windowOpacity = 1.0f,
+        Color? windowBackground = null,
+        int resizeBorderThickness = 4,
+        string? iconPath = "Assets/Icons/Atelier.png")
+    {
+        Current = this;
+        IsTitleLess = isTitleLess;
+        IsTransparent = isTransparent || windowOpacity < 1.0f;
+        WindowOpacity = windowOpacity;
+        WindowBackground = windowBackground;
+        ResizeBorderThickness = resizeBorderThickness;
+        WindowIconPath = iconPath;
+
+        var options = WindowOptions.Default;
+        options.Title = title;
+        options.Size = new Vector2D<int>(width, height);
+        options.VSync = true;
+        options.PreferredDepthBufferBits = 24;
+        options.PreferredStencilBufferBits = 8;
+        options.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 3));
+
+        if (isTitleLess && !OperatingSystem.IsWindows())
+        {
+            options.WindowBorder = WindowBorder.Hidden;
+        }
+
+        if (IsTransparent)
+        {
+            options.TransparentFramebuffer = true;
+        }
+
+        _window = Window.Create(options);
+        _window.Load += OnLoad;
+        _window.FramebufferResize += OnFramebufferResize;
+        _window.Update += OnUpdate;
+        _window.Render += OnRender;
+        _window.Closing += OnClosing;
+
+        Atelier.Controls.Button.SetGlobalAnimationClock(_animationClock);
+        CheckBox.SetGlobalAnimationClock(_animationClock);
+        Atelier.Controls.Switch.SetGlobalAnimationClock(_animationClock);
+        TextBox.SetGlobalAnimationClock(_animationClock);
+        Slider.SetGlobalAnimationClock(_animationClock);
+        ScrollViewer.SetGlobalAnimationClock(_animationClock);
+        DialogHost.RootVisualProvider = () => Current?.Content;
+
+        HotReloadManager.HotReloadTriggered += OnHotReloadTriggered;
+    }
+
+    public void Run()
+    {
+        Current = this;
+        try
+        {
+            _window.Run();
+        }
+        finally
+        {
+            Dispose();
+        }
+    }
+
+    private void SetupWindowsTitlelessFrame()
+    {
+        if (!TryGetHwnd(out var hwnd)) return;
+
+        _wndProcDelegate = SubclassProc;
+        SetWindowSubclass(hwnd, _wndProcDelegate, (UIntPtr)1001, UIntPtr.Zero);
+
+        // Extend frame into client area for DWM drop shadow
+        var margins = new MARGINS { cxLeftWidth = 1, cxRightWidth = 1, cyTopHeight = 1, cyBottomHeight = 1 };
+        DwmExtendFrameIntoClientArea(hwnd, ref margins);
+
+        // Notify DWM of frame change so WM_NCCALCSIZE is dispatched immediately
+        SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+    }
+
+    private IntPtr SubclassProc(IntPtr hWnd, uint uMsg, IntPtr wParam, IntPtr lParam, UIntPtr uIdSubclass, UIntPtr dwRefData)
+    {
+        try
+        {
+            switch (uMsg)
+            {
+                case WM_NCCALCSIZE:
+                    if (wParam != IntPtr.Zero)
+                    {
+                        if (IsZoomed(hWnd))
+                        {
+                            IntPtr hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+                            var monitorInfo = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
+                            if (GetMonitorInfo(hMonitor, ref monitorInfo))
+                            {
+                                var csp = Marshal.PtrToStructure<NCCALCSIZE_PARAMS>(lParam);
+                                csp.rgrc0 = monitorInfo.rcWork;
+                                Marshal.StructureToPtr(csp, lParam, false);
+                            }
+                        }
+                        return IntPtr.Zero;
+                    }
+                    else
+                    {
+                        if (IsZoomed(hWnd))
+                        {
+                            IntPtr hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+                            var monitorInfo = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
+                            if (GetMonitorInfo(hMonitor, ref monitorInfo))
+                            {
+                                Marshal.StructureToPtr(monitorInfo.rcWork, lParam, false);
+                            }
+                        }
+                        return IntPtr.Zero;
+                    }
+
+                case WM_GETMINMAXINFO:
+                {
+                    IntPtr hMonitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+                    if (hMonitor != IntPtr.Zero)
+                    {
+                        var monitorInfo = new MONITORINFO { cbSize = (uint)Marshal.SizeOf<MONITORINFO>() };
+                        if (GetMonitorInfo(hMonitor, ref monitorInfo))
+                        {
+                            var mmi = Marshal.PtrToStructure<MINMAXINFO>(lParam);
+                            mmi.ptMaxPosition.X = monitorInfo.rcWork.Left - monitorInfo.rcMonitor.Left;
+                            mmi.ptMaxPosition.Y = monitorInfo.rcWork.Top - monitorInfo.rcMonitor.Top;
+                            mmi.ptMaxSize.X = monitorInfo.rcWork.Right - monitorInfo.rcWork.Left;
+                            mmi.ptMaxSize.Y = monitorInfo.rcWork.Bottom - monitorInfo.rcWork.Top;
+                            Marshal.StructureToPtr(mmi, lParam, false);
+                            return IntPtr.Zero;
+                        }
+                    }
+                    break;
+                }
+
+                case WM_NCHITTEST:
+                    if (!IsZoomed(hWnd))
+                    {
+                        int x = (short)(lParam.ToInt64() & 0xFFFF);
+                        int y = (short)((lParam.ToInt64() >> 16) & 0xFFFF);
+
+                        if (GetWindowRect(hWnd, out RECT rect))
+                        {
+                            int resizeBorder = Math.Max(1, ResizeBorderThickness);
+                            int cornerBorder = Math.Max(resizeBorder * 2, 8);
+
+                            bool isTop = y >= rect.Top && y < rect.Top + resizeBorder;
+                            bool isBottom = y >= rect.Bottom - resizeBorder && y < rect.Bottom;
+                            bool isLeft = x >= rect.Left && x < rect.Left + resizeBorder;
+                            bool isRight = x >= rect.Right - resizeBorder && x < rect.Right;
+
+                            bool isCornerTop = y >= rect.Top && y < rect.Top + cornerBorder;
+                            bool isCornerBottom = y >= rect.Bottom - cornerBorder && y < rect.Bottom;
+                            bool isCornerLeft = x >= rect.Left && x < rect.Left + cornerBorder;
+                            bool isCornerRight = x >= rect.Right - cornerBorder && x < rect.Right;
+
+                            if (isCornerTop && isCornerLeft) return (IntPtr)HTTOPLEFT;
+                            if (isCornerTop && isCornerRight) return (IntPtr)HTTOPRIGHT;
+                            if (isCornerBottom && isCornerLeft) return (IntPtr)HTBOTTOMLEFT;
+                            if (isCornerBottom && isCornerRight) return (IntPtr)HTBOTTOMRIGHT;
+
+                            if (isTop) return (IntPtr)HTTOP;
+                            if (isBottom) return (IntPtr)HTBOTTOM;
+                            if (isLeft) return (IntPtr)HTLEFT;
+                            if (isRight) return (IntPtr)HTRIGHT;
+                        }
+                    }
+                    break;
+
+                case WM_NCDESTROY:
+                    if (_wndProcDelegate != null)
+                    {
+                        RemoveWindowSubclass(hWnd, _wndProcDelegate, uIdSubclass);
+                        _wndProcDelegate = null;
+                    }
+                    break;
+            }
+
+            return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[SilkWindow] SubclassProc error: {ex}");
+            return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+        }
+    }
+
+    private void OnLoad()
+    {
+        // 0. Setup Windows borderless frame, shadows, and resizing hooks
+        if (IsTitleLess && OperatingSystem.IsWindows())
+        {
+            SetupWindowsTitlelessFrame();
+        }
+
+        // 1. Initialize Silk.NET Input
+        _inputContext = _window.CreateInput();
+        HookInputEvents();
+
+        // 2. Initialize SkiaSharp OpenGL context
+        _glInterface = GRGlInterface.Create(name =>
+            _window.GLContext!.TryGetProcAddress(name, out var addr) ? addr : IntPtr.Zero);
+
+        _grContext = GRContext.CreateGl(_glInterface);
+        _paintRegistry = new PaintRegistry();
+
+        // 3. Create initial hardware render target
+        RecreateSurface(_window.FramebufferSize);
+
+        // 4. Ensure a default theme exists if none is set
+        if (!ThemeManager.HasTheme)
+        {
+            ThemeManager.Current = MaterialTheme.CreateLight();
+        }
+
+        // 5. Register native clipboard
+        Clipboard.Current = new SilkClipboard(_window);
+
+        // 6. Set window/application icon
+        if (!string.IsNullOrEmpty(WindowIconPath))
+        {
+            SetWindowIcon(WindowIconPath);
+        }
+    }
+
+    private void OnFramebufferResize(Vector2D<int> size)
+    {
+        if (_isDisposed || _isClosing || _grContext == null) return;
+        RecreateSurface(size);
+    }
+
+    private void RecreateSurface(Vector2D<int> size)
+    {
+        if (_isDisposed || _isClosing || _grContext == null || size.X <= 0 || size.Y <= 0) return;
+
+        _surface?.Dispose();
+        _renderTarget?.Dispose();
+
+        var fbInfo = new GRGlFramebufferInfo(0, 0x8058 /* GL_RGBA8 */);
+        _renderTarget = new GRBackendRenderTarget(size.X, size.Y, 0, 8, fbInfo);
+        _surface = SKSurface.Create(_grContext, _renderTarget, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888);
+
+        _rootElement?.InvalidateMeasure();
+    }
+
+    private void HookInputEvents()
+    {
+        if (_inputContext == null) return;
+
+        foreach (var mouse in _inputContext.Mice)
+        {
+            mouse.MouseDown += OnMouseDown;
+            mouse.MouseUp += OnMouseUp;
+            mouse.MouseMove += OnMouseMove;
+            mouse.Scroll += OnMouseScroll;
+        }
+
+        foreach (var keyboard in _inputContext.Keyboards)
+        {
+            keyboard.KeyDown += OnKeyDown;
+            keyboard.KeyUp += OnKeyUp;
+            keyboard.KeyChar += OnKeyChar;
+        }
+    }
+
+    private void UnhookInputEvents()
+    {
+        if (_inputContext == null) return;
+
+        try
+        {
+            foreach (var mouse in _inputContext.Mice)
+            {
+                mouse.MouseDown -= OnMouseDown;
+                mouse.MouseUp -= OnMouseUp;
+                mouse.MouseMove -= OnMouseMove;
+                mouse.Scroll -= OnMouseScroll;
+            }
+
+            foreach (var keyboard in _inputContext.Keyboards)
+            {
+                keyboard.KeyDown -= OnKeyDown;
+                keyboard.KeyUp -= OnKeyUp;
+                keyboard.KeyChar -= OnKeyChar;
+            }
+        }
+        catch { }
+    }
+
+    #region Input Event Bridges
+
+    private UIElement? _pressedElement;
+    private UIElement? _hoveredPopupElement;
+
+    private void OnMouseDown(IMouse mouse, MouseButton button)
+    {
+        if (_rootElement == null) return;
+
+        var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
+        var btn = button switch
+        {
+            MouseButton.Left => PointerButtons.Left,
+            MouseButton.Right => PointerButtons.Right,
+            MouseButton.Middle => PointerButtons.Middle,
+            _ => PointerButtons.None
+        };
+
+        if (PopupManager.HandleMouseDown(screenPos, btn))
+        {
+            _pressedElement = null;
+            return;
+        }
+
+        var hit = _rootElement.HitTest(screenPos);
+
+        if (hit != null)
+        {
+            hit.Focus();
+
+            var e = new PointerEventArgs(screenPos, screenPos, btn);
+            hit.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerPressed(localE));
+            _pressedElement = hit;
+        }
+        else
+        {
+            FocusManager.SetFocus(null);
+        }
+    }
+
+    private void OnMouseUp(IMouse mouse, MouseButton button)
+    {
+        if (_rootElement == null) return;
+
+        var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
+        var btn = button switch
+        {
+            MouseButton.Left => PointerButtons.Left,
+            MouseButton.Right => PointerButtons.Right,
+            MouseButton.Middle => PointerButtons.Middle,
+            _ => PointerButtons.None
+        };
+
+        if (PopupManager.HandleMouseUp(screenPos, btn))
+        {
+            _pressedElement = null;
+            return;
+        }
+
+        var target = UIElement.CapturedElement ?? _pressedElement ?? _rootElement.HitTest(screenPos);
+
+        if (target != null)
+        {
+            var e = new PointerEventArgs(screenPos, screenPos, btn);
+            target.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerReleased(localE));
+        }
+
+        if (button == MouseButton.Left && UIElement.CapturedElement != null)
+        {
+            UIElement.CapturedElement.ReleasePointerCapture();
+        }
+
+        _isManualDragging = false;
+        _pressedElement = null;
+    }
+
+    private void OnMouseMove(IMouse mouse, Vector2 position)
+    {
+        if (_isManualDragging)
+        {
+            if (mouse.IsButtonPressed(MouseButton.Left))
+            {
+                int dx = (int)position.X - _manualDragStartMousePos.X;
+                int dy = (int)position.Y - _manualDragStartMousePos.Y;
+                _window.Position = new Vector2D<int>(_window.Position.X + dx, _window.Position.Y + dy);
+                return;
+            }
+            else
+            {
+                _isManualDragging = false;
+            }
+        }
+
+        if (_rootElement == null) return;
+
+        var screenPos = new Point(position.X, position.Y);
+
+        // If pointer is captured by an element, deliver move directly to it
+        if (UIElement.CapturedElement != null)
+        {
+            var moveE = new PointerEventArgs(screenPos, screenPos);
+            UIElement.CapturedElement.DispatchBubblePointerEvent(moveE, (el, localE) => el.OnPointerMoved(localE));
+            return;
+        }
+
+        if (PopupManager.HandleMouseMove(screenPos, ref _hoveredPopupElement))
+        {
+            if (_hoveredElement != null)
+            {
+                var exitE = new PointerEventArgs(screenPos, screenPos);
+                _hoveredElement.DispatchBubblePointerEvent(exitE, (el, localE) => el.OnPointerExited(localE));
+                _hoveredElement = null;
+            }
+            return;
+        }
+        else if (_hoveredPopupElement != null)
+        {
+            var exitE = new PointerEventArgs(screenPos, screenPos);
+            _hoveredPopupElement.DispatchBubblePointerEvent(exitE, (el, localE) => el.OnPointerExited(localE));
+            _hoveredPopupElement = null;
+        }
+
+        var hit = _rootElement.HitTest(screenPos);
+
+        if (hit != _hoveredElement)
+        {
+            if (_hoveredElement != null)
+            {
+                var exitE = new PointerEventArgs(screenPos, screenPos);
+                _hoveredElement.DispatchBubblePointerEvent(exitE, (el, localE) => el.OnPointerExited(localE));
+            }
+
+            _hoveredElement = hit;
+
+            if (_hoveredElement != null)
+            {
+                var enterE = new PointerEventArgs(screenPos, screenPos);
+                _hoveredElement.DispatchBubblePointerEvent(enterE, (el, localE) => el.OnPointerEntered(localE));
+            }
+        }
+
+        if (hit != null)
+        {
+            var moveE = new PointerEventArgs(screenPos, screenPos);
+            hit.DispatchBubblePointerEvent(moveE, (el, localE) => el.OnPointerMoved(localE));
+        }
+    }
+
+    private void OnMouseScroll(IMouse mouse, ScrollWheel scroll)
+    {
+        if (_rootElement == null) return;
+
+        var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
+        if (PopupManager.HandleMouseScroll(screenPos, scroll.X, scroll.Y))
+        {
+            return;
+        }
+
+        var target = _hoveredElement ?? _rootElement.HitTest(screenPos);
+
+        if (target != null)
+        {
+            var wheelE = new PointerWheelEventArgs(screenPos, screenPos, scroll.X, scroll.Y);
+            target.DispatchBubblePointerEvent(wheelE, (el, localE) => el.OnPointerWheel(localE));
+        }
+    }
+
+    private void OnKeyDown(IKeyboard keyboard, SilkKey key, int keyCode)
+    {
+        // Hot Reload manual trigger: F5 or Ctrl+R
+        if (key == SilkKey.F5 || (key == SilkKey.R && (keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight))))
+        {
+            Console.WriteLine("[HotReload] Manual hot reload key triggered (F5 / Ctrl+R).");
+            ReloadContent();
+            return;
+        }
+
+        var atelierKey = MapKey(key);
+
+        // Tab focus cycling
+        if (atelierKey == Core.Events.Key.Tab && _rootElement != null)
+        {
+            bool shift = keyboard.IsKeyPressed(SilkKey.ShiftLeft) || keyboard.IsKeyPressed(SilkKey.ShiftRight);
+            if (shift)
+            {
+                FocusManager.FocusPrevious(_rootElement);
+            }
+            else
+            {
+                FocusManager.FocusNext(_rootElement);
+            }
+            return;
+        }
+
+        var keyEventArgs = new KeyEventArgs(atelierKey, keyCode, GetModifiers(keyboard), true);
+        if (PopupManager.HandleKeyDown(keyEventArgs))
+        {
+            return;
+        }
+
+        FocusManager.DispatchKeyDown(keyEventArgs, _rootElement);
+    }
+
+    private void OnKeyUp(IKeyboard keyboard, SilkKey key, int keyCode)
+    {
+        var atelierKey = MapKey(key);
+        var keyEventArgs = new KeyEventArgs(atelierKey, keyCode, GetModifiers(keyboard), false);
+        FocusManager.DispatchKeyUp(keyEventArgs, _rootElement);
+    }
+
+    private static ModifierKeys GetModifiers(IKeyboard keyboard)
+    {
+        var mods = ModifierKeys.None;
+        if (keyboard.IsKeyPressed(SilkKey.ShiftLeft) || keyboard.IsKeyPressed(SilkKey.ShiftRight))
+            mods |= ModifierKeys.Shift;
+        if (keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight))
+            mods |= ModifierKeys.Control;
+        if (keyboard.IsKeyPressed(SilkKey.AltLeft) || keyboard.IsKeyPressed(SilkKey.AltRight))
+            mods |= ModifierKeys.Alt;
+        if (keyboard.IsKeyPressed(SilkKey.SuperLeft) || keyboard.IsKeyPressed(SilkKey.SuperRight))
+            mods |= ModifierKeys.Windows;
+        return mods;
+    }
+
+    private void OnKeyChar(IKeyboard keyboard, char c)
+    {
+        var textArgs = new TextInputEventArgs(c.ToString());
+        FocusManager.DispatchTextInput(textArgs, _rootElement);
+    }
+
+    private static Core.Events.Key MapKey(SilkKey silkKey) => silkKey switch
+    {
+        SilkKey.Backspace => Core.Events.Key.Backspace,
+        SilkKey.Tab => Core.Events.Key.Tab,
+        SilkKey.Enter => Core.Events.Key.Enter,
+        SilkKey.KeypadEnter => Core.Events.Key.Enter,
+        SilkKey.Escape => Core.Events.Key.Escape,
+        SilkKey.Space => Core.Events.Key.Space,
+        SilkKey.PageUp => Core.Events.Key.PageUp,
+        SilkKey.PageDown => Core.Events.Key.PageDown,
+        SilkKey.End => Core.Events.Key.End,
+        SilkKey.Home => Core.Events.Key.Home,
+        SilkKey.Left => Core.Events.Key.Left,
+        SilkKey.Up => Core.Events.Key.Up,
+        SilkKey.Right => Core.Events.Key.Right,
+        SilkKey.Down => Core.Events.Key.Down,
+        SilkKey.Delete => Core.Events.Key.Delete,
+        SilkKey.A => Core.Events.Key.A,
+        SilkKey.B => Core.Events.Key.B,
+        SilkKey.C => Core.Events.Key.C,
+        SilkKey.D => Core.Events.Key.D,
+        SilkKey.E => Core.Events.Key.E,
+        SilkKey.F => Core.Events.Key.F,
+        SilkKey.G => Core.Events.Key.G,
+        SilkKey.H => Core.Events.Key.H,
+        SilkKey.I => Core.Events.Key.I,
+        SilkKey.J => Core.Events.Key.J,
+        SilkKey.K => Core.Events.Key.K,
+        SilkKey.L => Core.Events.Key.L,
+        SilkKey.M => Core.Events.Key.M,
+        SilkKey.N => Core.Events.Key.N,
+        SilkKey.O => Core.Events.Key.O,
+        SilkKey.P => Core.Events.Key.P,
+        SilkKey.Q => Core.Events.Key.Q,
+        SilkKey.R => Core.Events.Key.R,
+        SilkKey.S => Core.Events.Key.S,
+        SilkKey.T => Core.Events.Key.T,
+        SilkKey.U => Core.Events.Key.U,
+        SilkKey.V => Core.Events.Key.V,
+        SilkKey.W => Core.Events.Key.W,
+        SilkKey.X => Core.Events.Key.X,
+        SilkKey.Y => Core.Events.Key.Y,
+        SilkKey.Z => Core.Events.Key.Z,
+        SilkKey.Number0 => Core.Events.Key.D0,
+        SilkKey.Number1 => Core.Events.Key.D1,
+        SilkKey.Number2 => Core.Events.Key.D2,
+        SilkKey.Number3 => Core.Events.Key.D3,
+        SilkKey.Number4 => Core.Events.Key.D4,
+        SilkKey.Number5 => Core.Events.Key.D5,
+        SilkKey.Number6 => Core.Events.Key.D6,
+        SilkKey.Number7 => Core.Events.Key.D7,
+        SilkKey.Number8 => Core.Events.Key.D8,
+        SilkKey.Number9 => Core.Events.Key.D9,
+        SilkKey.Keypad0 => Core.Events.Key.D0,
+        SilkKey.Keypad1 => Core.Events.Key.D1,
+        SilkKey.Keypad2 => Core.Events.Key.D2,
+        SilkKey.Keypad3 => Core.Events.Key.D3,
+        SilkKey.Keypad4 => Core.Events.Key.D4,
+        SilkKey.Keypad5 => Core.Events.Key.D5,
+        SilkKey.Keypad6 => Core.Events.Key.D6,
+        SilkKey.Keypad7 => Core.Events.Key.D7,
+        SilkKey.Keypad8 => Core.Events.Key.D8,
+        SilkKey.Keypad9 => Core.Events.Key.D9,
+        SilkKey.F1 => Core.Events.Key.F1,
+        SilkKey.F2 => Core.Events.Key.F2,
+        SilkKey.F3 => Core.Events.Key.F3,
+        SilkKey.F4 => Core.Events.Key.F4,
+        SilkKey.F5 => Core.Events.Key.F5,
+        SilkKey.F6 => Core.Events.Key.F6,
+        SilkKey.F7 => Core.Events.Key.F7,
+        SilkKey.F8 => Core.Events.Key.F8,
+        SilkKey.F9 => Core.Events.Key.F9,
+        SilkKey.F10 => Core.Events.Key.F10,
+        SilkKey.F11 => Core.Events.Key.F11,
+        SilkKey.F12 => Core.Events.Key.F12,
+        _ => Core.Events.Key.None
+    };
+
+    #endregion
+
+    private void OnUpdate(double deltaTime)
+    {
+        if (_isDisposed || _isClosing) return;
+
+        // 0. Process thread-safe dispatch queue (e.g. Hot Reload notifications)
+        while (_dispatchQueue.TryDequeue(out var action))
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Atelier.Dispatch] Error: {ex}");
+            }
+        }
+
+        // 1. Advance Animation Clock (sub-pixel spring & tween updates)
+        _animationClock.Update(deltaTime);
+
+        // 2. Measure & Arrange Passes
+        if (_rootElement != null && _window.Size.X > 0 && _window.Size.Y > 0)
+        {
+            var winSize = new Size(_window.Size.X, _window.Size.Y);
+            var rootTransform = _rootElement.GetEffectiveTransform();
+
+            Size availableSize = winSize;
+            if (!rootTransform.IsIdentity && Matrix3x2.Invert(rootTransform, out var inv))
+            {
+                float localW = MathF.Abs(winSize.Width * inv.M11 + winSize.Height * inv.M21);
+                float localH = MathF.Abs(winSize.Width * inv.M12 + winSize.Height * inv.M22);
+                if (localW > 0 && localH > 0)
+                {
+                    availableSize = new Size(localW, localH);
+                }
+            }
+
+            _rootElement.Measure(availableSize);
+            _rootElement.Arrange(new Rect(Point.Zero, availableSize));
+
+            // Measure & Arrange active popups
+            PopupManager.UpdatePopups(winSize);
+        }
+
+        // 3. Track FPS
+        _frameCount++;
+        _fpsTimer += deltaTime;
+        if (_fpsTimer >= 0.5)
+        {
+            CurrentFps = _frameCount / _fpsTimer;
+            _frameCount = 0;
+            _fpsTimer = 0;
+        }
+    }
+
+    private void OnRender(double deltaTime)
+    {
+        if (_isDisposed || _isClosing || _surface == null || _paintRegistry == null || _grContext == null) return;
+
+        var canvas = _surface.Canvas;
+
+        // 1. Clear with background (supporting transparency and opacity)
+        Color bg = WindowBackground ?? (ThemeManager.HasTheme && ThemeManager.Current is MaterialTheme mt
+            ? mt.Colors.Background
+            : Color.White);
+
+        if (IsTransparent || WindowOpacity < 1.0f)
+        {
+            byte alpha = (byte)Math.Clamp((int)(bg.A * WindowOpacity), 0, 255);
+            canvas.Clear(new SKColor(bg.R, bg.G, bg.B, alpha));
+        }
+        else
+        {
+            canvas.Clear(new SKColor(bg.R, bg.G, bg.B, bg.A));
+        }
+
+        // 2. Render visual tree using stack-allocated DrawingContext (Zero allocations!)
+        var drawingContext = new DrawingContext(canvas, _paintRegistry);
+
+        if (_rootElement != null)
+        {
+            VisualTreeRenderer.Render(_rootElement, ref drawingContext, ThemeVisualPresenter.Instance);
+        }
+
+        // 2b. Render active popups above the visual tree
+        PopupManager.RenderPopups(ref drawingContext, ThemeVisualPresenter.Instance);
+
+        // 3. FPS & Performance overlay (Bottom-Left)
+        if (ShowFpsOverlay && _window.Size.Y > 40)
+        {
+            string fpsText = $"FPS: {CurrentFps:F0} | Animations: {_animationClock.ActiveAnimationCount}";
+            float boxWidth = 170f;
+            float boxHeight = 24f;
+            float boxX = 8f;
+            float boxY = _window.Size.Y - boxHeight - 8f;
+
+            drawingContext.DrawRoundedRect(new Rect(boxX, boxY, boxWidth, boxHeight), new CornerRadius(4), Color.Black.WithAlpha(0.65f));
+            drawingContext.DrawText(fpsText, new Point(boxX + 6f, boxY + 16f), Color.FromHex("#00E676"), 12f, bold: true);
+        }
+
+        // 4. Flush GPU commands
+        canvas.Flush();
+        _grContext.Flush();
+    }
+
+    private void CleanupGraphicsResources()
+    {
+        try
+        {
+            if (_grContext != null)
+            {
+                _grContext.AbandonContext();
+            }
+        }
+        catch { }
+
+        try
+        {
+            _surface?.Dispose();
+        }
+        catch { }
+        finally
+        {
+            _surface = null;
+        }
+
+        try
+        {
+            _renderTarget?.Dispose();
+        }
+        catch { }
+        finally
+        {
+            _renderTarget = null;
+        }
+
+        try
+        {
+            _paintRegistry?.Dispose();
+        }
+        catch { }
+        finally
+        {
+            _paintRegistry = null;
+        }
+
+        try
+        {
+            _grContext?.Dispose();
+        }
+        catch { }
+        finally
+        {
+            _grContext = null;
+        }
+
+        try
+        {
+            _glInterface?.Dispose();
+        }
+        catch { }
+        finally
+        {
+            _glInterface = null;
+        }
+    }
+
+    private void OnClosing()
+    {
+        _isClosing = true;
+
+        UnhookInputEvents();
+        CleanupGraphicsResources();
+
+        if (_wndProcDelegate != null && TryGetHwnd(out var hwnd))
+        {
+            try
+            {
+                RemoveWindowSubclass(hwnd, _wndProcDelegate, (UIntPtr)1001);
+            }
+            catch { }
+            _wndProcDelegate = null;
+        }
+    }
+
+    private bool _isDisposed;
+    public void Dispose()
+    {
+        if (_isDisposed) return;
+        _isDisposed = true;
+
+        OnClosing();
+
+        HotReloadManager.HotReloadTriggered -= OnHotReloadTriggered;
+
+        _window.Load -= OnLoad;
+        _window.FramebufferResize -= OnFramebufferResize;
+        _window.Update -= OnUpdate;
+        _window.Render -= OnRender;
+        _window.Closing -= OnClosing;
+
+        try
+        {
+            _inputContext?.Dispose();
+        }
+        catch { }
+        _inputContext = null;
+
+        if (Current == this)
+        {
+            Current = null;
+        }
+
+        if (Clipboard.Current is SilkClipboard)
+        {
+            Clipboard.Current = null!;
+        }
+
+        Atelier.Controls.Button.SetGlobalAnimationClock(null!);
+        CheckBox.SetGlobalAnimationClock(null!);
+        Atelier.Controls.Switch.SetGlobalAnimationClock(null!);
+        TextBox.SetGlobalAnimationClock(null!);
+        Slider.SetGlobalAnimationClock(null!);
+        ScrollViewer.SetGlobalAnimationClock(null!);
+        DialogHost.RootVisualProvider = null;
+
+        try
+        {
+            _window.Dispose();
+        }
+        catch { }
+
+        GC.SuppressFinalize(this);
+    }
+}

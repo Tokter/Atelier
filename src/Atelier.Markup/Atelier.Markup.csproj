@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Atelier.Core\Atelier.Core.csproj" />
+    <ProjectReference Include="..\Atelier.Layout\Atelier.Layout.csproj" />
+    <ProjectReference Include="..\Atelier.Rendering\Atelier.Rendering.csproj" />
+    <ProjectReference Include="..\Atelier.Theming\Atelier.Theming.csproj" />
+    <ProjectReference Include="..\Atelier.Controls\Atelier.Controls.csproj" />
+    <ProjectReference Include="..\Atelier.Theming.Material\Atelier.Theming.Material.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

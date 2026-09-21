@@ -1,0 +1,53 @@
+using Atelier.Controls;
+using Atelier.Theming;
+using Atelier.Theming.Material;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Atelier.Gallery.ViewModels
+{
+    public partial class MainViewModel : ObservableObject
+    {
+        [ObservableProperty]
+        private string _currentThemeMode = "Switch to Dark Mode";
+
+        [ObservableProperty]
+        private MaterialIconKind _currentThemeIcon = MaterialIconKind.LightMode;
+
+        [ObservableProperty]
+        private List<PageViewModel> _pages = new List<PageViewModel>();
+
+        [ObservableProperty]
+        private PageViewModel? _currentPage;
+
+        public MainViewModel()
+        {
+            var initialPage = new CheckboxesViewModel();
+            _pages.Add(initialPage);
+            _currentPage = initialPage;
+        }
+
+
+        [RelayCommand]
+        private void ToggleTheme()
+        {
+            if (ThemeManager.Current.IsDark)
+            {
+                ThemeManager.Current = MaterialTheme.CreateLight();
+                CurrentThemeMode = "Switch to Dark Mode";
+                CurrentThemeIcon = MaterialIconKind.LightMode;
+            }
+            else
+            {
+                ThemeManager.Current = MaterialTheme.CreateDark();
+                CurrentThemeMode = "Switch to Light Mode";
+                CurrentThemeIcon = MaterialIconKind.DarkMode;
+            }
+        }
+    }
+}

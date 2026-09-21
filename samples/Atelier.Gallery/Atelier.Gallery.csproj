@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Atelier.Core\Atelier.Core.csproj" />
+    <ProjectReference Include="..\..\src\Atelier.Layout\Atelier.Layout.csproj" />
+    <ProjectReference Include="..\..\src\Atelier.Rendering\Atelier.Rendering.csproj" />
+    <ProjectReference Include="..\..\src\Atelier.Theming\Atelier.Theming.csproj" />
+    <ProjectReference Include="..\..\src\Atelier.Theming.Material\Atelier.Theming.Material.csproj" />
+    <ProjectReference Include="..\..\src\Atelier.Controls\Atelier.Controls.csproj" />
+    <ProjectReference Include="..\..\src\Atelier.Platform.Silk\Atelier.Platform.Silk.csproj" />
+    <ProjectReference Include="..\..\src\Atelier.Markup\Atelier.Markup.csproj" />
+    <ProjectReference Include="..\..\src\Atelier.Generators\Atelier.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.152.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Pages\" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+  </PropertyGroup>
+
+</Project>
