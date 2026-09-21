@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <Folder Include="Pages\" />
+    <EmbeddedResource Include="Assets\**\*" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -25,7 +26,25 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
   </PropertyGroup>
+
+  <!-- Release Single-File Standalone Executable Configuration -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
+  </PropertyGroup>
+
+  <!-- Clean up any remaining third-party native symbols so only the single .exe remains -->
+  <Target Name="RemovePublishPdbs" AfterTargets="Publish" Condition="'$(Configuration)' == 'Release'">
+    <ItemGroup>
+      <_PublishPdbs Include="$(PublishDir)**\*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(_PublishPdbs)" />
+  </Target>
 
 </Project>

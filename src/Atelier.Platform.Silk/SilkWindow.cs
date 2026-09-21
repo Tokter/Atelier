@@ -6,6 +6,8 @@ using Silk.NET.Core;
 using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
+using Silk.NET.Windowing.Glfw;
+using Silk.NET.Input.Glfw;
 using SkiaSharp;
 using Atelier.Controls;
 using Atelier.Core.Animation;
@@ -18,6 +20,7 @@ using Atelier.Theming;
 using Atelier.Theming.Material;
 using Atelier.Core.Platform;
 using Atelier.Core.Threading;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
 using SilkKey = global::Silk.NET.Input.Key;
@@ -40,6 +43,79 @@ public class SilkWindow : IDisposable
 
     private UIElement? _rootElement;
     private UIElement? _hoveredElement;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern bool SetDllDirectory(string lpPathName);
+
+    static SilkWindow()
+    {
+        InitializeSingleFileNativeProbing();
+    }
+
+    private static void InitializeSingleFileNativeProbing()
+    {
+        string appName = AppDomain.CurrentDomain.FriendlyName;
+        if (string.IsNullOrEmpty(appName) || appName == "DefaultDomain")
+        {
+            appName = "Atelier";
+        }
+
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                string netTemp = Path.Combine(Path.GetTempPath(), ".net", appName);
+                if (Directory.Exists(netTemp))
+                {
+                    var files = Directory.GetFiles(netTemp, "glfw3.dll", SearchOption.AllDirectories);
+                    if (files.Length > 0)
+                    {
+                        Array.Sort(files, (a, b) => File.GetLastWriteTimeUtc(b).CompareTo(File.GetLastWriteTimeUtc(a)));
+                        string dir = Path.GetDirectoryName(files[0])!;
+                        SetDllDirectory(dir);
+                        try
+                        {
+                            NativeLibrary.Load(files[0]);
+                        }
+                        catch { }
+                    }
+                }
+            }
+        }
+        catch { }
+
+        try
+        {
+            NativeLibrary.SetDllImportResolver(typeof(global::Silk.NET.GLFW.Glfw).Assembly, (name, asm, searchPath) =>
+            {
+                if (name.Contains("glfw", StringComparison.OrdinalIgnoreCase))
+                {
+                    string netTemp = Path.Combine(Path.GetTempPath(), ".net", appName);
+                    if (Directory.Exists(netTemp))
+                    {
+                        var files = Directory.GetFiles(netTemp, "glfw3.dll", SearchOption.AllDirectories);
+                        if (files.Length > 0)
+                        {
+                            Array.Sort(files, (a, b) => File.GetLastWriteTimeUtc(b).CompareTo(File.GetLastWriteTimeUtc(a)));
+                            if (NativeLibrary.TryLoad(files[0], out var handle))
+                            {
+                                return handle;
+                            }
+                        }
+                    }
+                }
+                return IntPtr.Zero;
+            });
+        }
+        catch { }
+
+        try
+        {
+            GlfwWindowing.RegisterPlatform();
+            GlfwInput.RegisterPlatform();
+        }
+        catch { }
+    }
 
     // Threading & Dispatch
     private int _mainThreadId;
@@ -468,6 +544,10 @@ public class SilkWindow : IDisposable
         {
             options.TransparentFramebuffer = true;
         }
+
+        // Explicitly register GLFW windowing and input platforms to support Single-File publishing & Native AOT
+        GlfwWindowing.RegisterPlatform();
+        GlfwInput.RegisterPlatform();
 
         _window = Window.Create(options);
         _window.Load += OnLoad;
