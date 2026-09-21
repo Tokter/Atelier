@@ -77,7 +77,7 @@ public static class PopupManager
         var hit = HitTest(screenPoint);
         if (hit != null)
         {
-            var e = new PointerEventArgs(screenPoint, screenPoint, button);
+            var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64);
             hit.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerPressed(localE));
             return true;
         }
@@ -128,7 +128,7 @@ public static class PopupManager
             if (isInsidePopup)
             {
                 var captured = UIElement.CapturedElement;
-                var e = new PointerEventArgs(screenPoint, screenPoint, button);
+                var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64);
                 captured.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerReleased(localE));
                 captured.ReleasePointerCapture();
                 return true;
@@ -140,7 +140,7 @@ public static class PopupManager
         var hit = HitTest(screenPoint);
         if (hit != null)
         {
-            var e = new PointerEventArgs(screenPoint, screenPoint, button);
+            var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64);
             hit.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerReleased(localE));
             return true;
         }

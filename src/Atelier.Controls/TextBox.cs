@@ -118,7 +118,16 @@ public class TextBox : Control
 
     public float LabelAnimationProgress { get; private set; } = 0f;
 
+    public float ScrollOffset { get; private set; } = 0f;
+
     public float GetTextContentStartX() => Padding.Left + (HasLeadingIcon ? 32f : 0f);
+
+    public float GetViewportWidth()
+    {
+        float right = Bounds.Width - Padding.Right;
+        float left = GetTextContentStartX();
+        return Math.Max(0f, right - left);
+    }
 
     private int _caretIndex = 0;
     public int CaretIndex
@@ -162,6 +171,7 @@ public class TextBox : Control
         {
             LabelAnimationProgress = 1f;
         }
+        EnsureCaretVisible();
     }
 
     public void SetCaretIndex(int index, bool keepSelection = false)
@@ -171,6 +181,7 @@ public class TextBox : Control
         {
             SelectionAnchor = _caretIndex;
         }
+        EnsureCaretVisible();
         InvalidateVisual();
     }
 
@@ -234,6 +245,7 @@ public class TextBox : Control
         SelectionAnchor = Math.Clamp(SelectionAnchor, 0, newText.Length);
         UpdateLabelAnimation(animate: true);
         InvalidateMeasure();
+        EnsureCaretVisible();
         InvalidateVisual();
         TextChanged?.Invoke(this, newText);
     }
@@ -244,6 +256,7 @@ public class TextBox : Control
         length = Math.Clamp(length, 0, Text.Length - start);
         SelectionAnchor = start;
         _caretIndex = start + length;
+        EnsureCaretVisible();
         InvalidateVisual();
     }
 
@@ -251,6 +264,7 @@ public class TextBox : Control
     {
         SelectionAnchor = 0;
         _caretIndex = Text.Length;
+        EnsureCaretVisible();
         InvalidateVisual();
     }
 
@@ -309,6 +323,45 @@ public class TextBox : Control
         }
     }
 
+    public void EnsureCaretVisible()
+    {
+        float viewportWidth = GetViewportWidth();
+        if (viewportWidth <= 0)
+        {
+            ScrollOffset = 0f;
+            return;
+        }
+
+        float caretTextX = 0f;
+        if (!string.IsNullOrEmpty(Text) && _caretIndex > 0)
+        {
+            var textBeforeCaret = Text[..Math.Min(_caretIndex, Text.Length)];
+            caretTextX = TextMeasurer.Measure(textBeforeCaret, FontSize, FontFamily).Width;
+        }
+
+        float totalTextWidth = string.IsNullOrEmpty(Text) ? 0f : TextMeasurer.Measure(Text, FontSize, FontFamily).Width;
+        float caretWidth = Math.Max(1f, MathF.Round(CaretWidth));
+        float maxScroll = Math.Max(0f, totalTextWidth + caretWidth - viewportWidth);
+
+        float newOffset = ScrollOffset;
+
+        if (caretTextX < newOffset)
+        {
+            newOffset = caretTextX;
+        }
+        else if (caretTextX + caretWidth > newOffset + viewportWidth)
+        {
+            newOffset = caretTextX + caretWidth - viewportWidth;
+        }
+
+        newOffset = Math.Clamp(newOffset, 0f, maxScroll);
+        if (MathF.Abs(newOffset - ScrollOffset) > 0.001f)
+        {
+            ScrollOffset = newOffset;
+            InvalidateVisual();
+        }
+    }
+
     public override void OnPointerPressed(PointerEventArgs e)
     {
         if (!IsEnabled) return;
@@ -319,23 +372,28 @@ public class TextBox : Control
         CapturePointer();
         CaretVisible = true;
 
-        float localX = e.Position.X - GetTextContentStartX();
+        float localX = (e.Position.X - GetTextContentStartX()) + ScrollOffset;
         int idx = EstimateCaretIndex(localX);
 
-        bool isDoubleClick = (e.TimestampMs > 0 && e.TimestampMs - _lastClickTime < 350)
-            || (_lastClickTime > 0 && MathF.Abs(e.Position.X - _lastClickPos.X) < 6);
+        ulong clickTime = e.TimestampMs > 0 ? e.TimestampMs : (ulong)Environment.TickCount64;
+        ulong timeDelta = clickTime >= _lastClickTime ? clickTime - _lastClickTime : ulong.MaxValue;
+        float distX = MathF.Abs(e.Position.X - _lastClickPos.X);
+        float distY = MathF.Abs(e.Position.Y - _lastClickPos.Y);
+
+        bool isDoubleClick = _lastClickTime > 0 && timeDelta < 500 && distX < 10f && distY < 10f;
 
         if (isDoubleClick)
         {
             SelectWord(idx);
+            _lastClickTime = 0;
         }
         else
         {
             SetCaretIndex(idx, keepSelection: false);
+            _lastClickTime = clickTime;
+            _lastClickPos = e.Position;
         }
 
-        _lastClickTime = e.TimestampMs;
-        _lastClickPos = e.Position;
         InvalidateVisual();
     }
 
@@ -344,7 +402,7 @@ public class TextBox : Control
         base.OnPointerMoved(e);
         if (IsPointerCaptured)
         {
-            float localX = e.Position.X - GetTextContentStartX();
+            float localX = (e.Position.X - GetTextContentStartX()) + ScrollOffset;
             int idx = EstimateCaretIndex(localX);
             SetCaretIndex(idx, keepSelection: true);
             CaretVisible = true;
@@ -361,22 +419,33 @@ public class TextBox : Control
         }
     }
 
-    private void SelectWord(int charIndex)
+    public void SelectWord(int charIndex)
     {
         if (string.IsNullOrEmpty(Text)) return;
 
         charIndex = Math.Clamp(charIndex, 0, Text.Length);
 
-        // Find word boundary to the left
-        int start = charIndex;
-        while (start > 0 && !char.IsWhiteSpace(Text[start - 1]) && !char.IsPunctuation(Text[start - 1]))
+        int targetIndex = charIndex;
+        if (targetIndex >= Text.Length && targetIndex > 0)
+        {
+            targetIndex = targetIndex - 1;
+        }
+        else if (targetIndex < Text.Length && char.IsWhiteSpace(Text[targetIndex]) && targetIndex > 0 && !char.IsWhiteSpace(Text[targetIndex - 1]))
+        {
+            targetIndex = targetIndex - 1;
+        }
+
+        char targetChar = Text[targetIndex];
+        int cat = GetCharCategory(targetChar);
+
+        int start = targetIndex;
+        while (start > 0 && GetCharCategory(Text[start - 1]) == cat)
         {
             start--;
         }
 
-        // Find word boundary to the right
-        int end = charIndex;
-        while (end < Text.Length && !char.IsWhiteSpace(Text[end]) && !char.IsPunctuation(Text[end]))
+        int end = targetIndex + 1;
+        while (end < Text.Length && GetCharCategory(Text[end]) == cat)
         {
             end++;
         }
@@ -391,7 +460,91 @@ public class TextBox : Control
         }
     }
 
-    private int EstimateCaretIndex(float localX)
+    private static int GetCharCategory(char c)
+    {
+        if (char.IsLetterOrDigit(c) || c == '_') return 1;
+        if (char.IsWhiteSpace(c)) return 2;
+        return 3;
+    }
+
+    public static bool IsWordChar(char c) => char.IsLetterOrDigit(c) || c == '_';
+
+    public int FindPreviousWordBoundary(int startIndex)
+    {
+        if (string.IsNullOrEmpty(Text) || startIndex <= 0)
+            return 0;
+
+        int i = Math.Clamp(startIndex, 0, Text.Length);
+
+        // 1. Skip whitespace backwards
+        while (i > 0 && char.IsWhiteSpace(Text[i - 1]))
+        {
+            i--;
+        }
+
+        if (i <= 0)
+            return 0;
+
+        // 2. Skip word characters or non-word/non-whitespace characters backwards
+        if (IsWordChar(Text[i - 1]))
+        {
+            while (i > 0 && IsWordChar(Text[i - 1]))
+            {
+                i--;
+            }
+        }
+        else
+        {
+            while (i > 0 && !char.IsWhiteSpace(Text[i - 1]) && !IsWordChar(Text[i - 1]))
+            {
+                i--;
+            }
+        }
+
+        return i;
+    }
+
+    public int FindNextWordBoundary(int startIndex)
+    {
+        if (string.IsNullOrEmpty(Text) || startIndex >= Text.Length)
+            return string.IsNullOrEmpty(Text) ? 0 : Text.Length;
+
+        int i = Math.Clamp(startIndex, 0, Text.Length);
+
+        if (char.IsWhiteSpace(Text[i]))
+        {
+            while (i < Text.Length && char.IsWhiteSpace(Text[i]))
+            {
+                i++;
+            }
+        }
+        else if (IsWordChar(Text[i]))
+        {
+            while (i < Text.Length && IsWordChar(Text[i]))
+            {
+                i++;
+            }
+            while (i < Text.Length && char.IsWhiteSpace(Text[i]))
+            {
+                i++;
+            }
+        }
+        else
+        {
+            while (i < Text.Length && !char.IsWhiteSpace(Text[i]) && !IsWordChar(Text[i]))
+            {
+                i++;
+            }
+            while (i < Text.Length && char.IsWhiteSpace(Text[i]))
+            {
+                i++;
+            }
+        }
+
+        return i;
+    }
+
+    internal int EstimateCaretIndex(float localX)
     {
         if (string.IsNullOrEmpty(Text) || localX <= 0) return 0;
 
@@ -467,7 +620,7 @@ public class TextBox : Control
             // Allow navigation and copy while ReadOnly
             if (e.Key is Key.Left or Key.Right or Key.Home or Key.End)
             {
-                HandleNavigationKey(e.Key, shift);
+                HandleNavigationKey(e.Key, shift, ctrl);
                 e.Handled = true;
                 InvalidateVisual();
             }
@@ -482,6 +635,13 @@ public class TextBox : Control
                 {
                     ReplaceSelection(string.Empty);
                 }
+                else if (ctrl && _caretIndex > 0)
+                {
+                    int prevWord = FindPreviousWordBoundary(_caretIndex);
+                    int len = _caretIndex - prevWord;
+                    Text = Text.Remove(prevWord, len);
+                    SetCaretIndex(prevWord, keepSelection: false);
+                }
                 else if (_caretIndex > 0 && Text.Length > 0)
                 {
                     int delIdx = _caretIndex - 1;
@@ -495,6 +655,13 @@ public class TextBox : Control
                 {
                     ReplaceSelection(string.Empty);
                 }
+                else if (ctrl && _caretIndex < Text.Length)
+                {
+                    int nextWord = FindNextWordBoundary(_caretIndex);
+                    int len = nextWord - _caretIndex;
+                    Text = Text.Remove(_caretIndex, len);
+                    SetCaretIndex(_caretIndex, keepSelection: false);
+                }
                 else if (_caretIndex < Text.Length)
                 {
                     Text = Text.Remove(_caretIndex, 1);
@@ -506,7 +673,7 @@ public class TextBox : Control
             case Key.Right:
             case Key.Home:
             case Key.End:
-                HandleNavigationKey(e.Key, shift);
+                HandleNavigationKey(e.Key, shift, ctrl);
                 break;
 
             default:
@@ -516,6 +683,13 @@ public class TextBox : Control
                     if (HasSelection)
                     {
                         ReplaceSelection(string.Empty);
+                    }
+                    else if (ctrl && _caretIndex > 0)
+                    {
+                        int prevWord = FindPreviousWordBoundary(_caretIndex);
+                        int len = _caretIndex - prevWord;
+                        Text = Text.Remove(prevWord, len);
+                        SetCaretIndex(prevWord, keepSelection: false);
                     }
                     else if (_caretIndex > 0 && Text.Length > 0)
                     {
@@ -529,6 +703,13 @@ public class TextBox : Control
                     if (HasSelection)
                     {
                         ReplaceSelection(string.Empty);
+                    }
+                    else if (ctrl && _caretIndex < Text.Length)
+                    {
+                        int nextWord = FindNextWordBoundary(_caretIndex);
+                        int len = nextWord - _caretIndex;
+                        Text = Text.Remove(_caretIndex, len);
+                        SetCaretIndex(_caretIndex, keepSelection: false);
                     }
                     else if (_caretIndex < Text.Length)
                     {
@@ -551,12 +732,17 @@ public class TextBox : Control
         }
     }
 
-    private void HandleNavigationKey(Key key, bool shift)
+    private void HandleNavigationKey(Key key, bool shift, bool ctrl)
     {
         switch (key)
         {
             case Key.Left:
-                if (shift)
+                if (ctrl)
+                {
+                    int target = FindPreviousWordBoundary(shift ? _caretIndex : (HasSelection ? SelectionStart : _caretIndex));
+                    SetCaretIndex(target, keepSelection: shift);
+                }
+                else if (shift)
                 {
                     if (_caretIndex > 0) SetCaretIndex(_caretIndex - 1, keepSelection: true);
                 }
@@ -574,7 +760,12 @@ public class TextBox : Control
                 break;
 
             case Key.Right:
-                if (shift)
+                if (ctrl)
+                {
+                    int target = FindNextWordBoundary(shift ? _caretIndex : (HasSelection ? SelectionStart + SelectionLength : _caretIndex));
+                    SetCaretIndex(target, keepSelection: shift);
+                }
+                else if (shift)
                 {
                     if (_caretIndex < Text.Length) SetCaretIndex(_caretIndex + 1, keepSelection: true);
                 }
@@ -620,5 +811,12 @@ public class TextBox : Control
             Math.Max(140f, contentW),
             totalH
         );
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        var size = base.ArrangeOverride(finalSize);
+        EnsureCaretVisible();
+        return size;
     }
 }

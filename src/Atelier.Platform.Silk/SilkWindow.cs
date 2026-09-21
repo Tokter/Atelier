@@ -750,7 +750,7 @@ public class SilkWindow : IDisposable
         {
             hit.Focus();
 
-            var e = new PointerEventArgs(screenPos, screenPos, btn);
+            var e = new PointerEventArgs(screenPos, screenPos, btn, (ulong)Environment.TickCount64);
             hit.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerPressed(localE));
             _pressedElement = hit;
         }
@@ -783,7 +783,7 @@ public class SilkWindow : IDisposable
 
         if (target != null)
         {
-            var e = new PointerEventArgs(screenPos, screenPos, btn);
+            var e = new PointerEventArgs(screenPos, screenPos, btn, (ulong)Environment.TickCount64);
             target.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerReleased(localE));
         }
 

@@ -570,57 +570,63 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
             textY = containerRect.Top + (containerRect.Height + textBox.FontSize) * 0.5f - 2f;
         }
 
-        var textPos = new Point(textStartX, textY);
+        var textPos = new Point(textStartX - textBox.ScrollOffset, textY);
 
-        // Selection highlight
-        if (isFocused && textBox.HasSelection && !string.IsNullOrEmpty(textBox.Text))
+        float viewportWidth = textBox.GetViewportWidth();
+        var textClipRect = new Rect(textStartX, containerRect.Top + 1f, viewportWidth, Math.Max(0f, containerRect.Height - 2f));
+
+        using (context.PushClip(textClipRect))
         {
-            int selStart = textBox.SelectionStart;
-            int selLen = textBox.SelectionLength;
-
-            float selStartX = textStartX;
-            if (selStart > 0)
+            // Selection highlight
+            if (isFocused && textBox.HasSelection && !string.IsNullOrEmpty(textBox.Text))
             {
-                var prefix = textBox.Text[..Math.Min(selStart, textBox.Text.Length)];
-                selStartX += context.MeasureText(prefix, textBox.FontSize, textBox.FontFamily).Width;
+                int selStart = textBox.SelectionStart;
+                int selLen = textBox.SelectionLength;
+
+                float selStartX = textStartX - textBox.ScrollOffset;
+                if (selStart > 0)
+                {
+                    var prefix = textBox.Text[..Math.Min(selStart, textBox.Text.Length)];
+                    selStartX += context.MeasureText(prefix, textBox.FontSize, textBox.FontFamily).Width;
+                }
+
+                var selSubstring = textBox.Text.Substring(selStart, Math.Min(selLen, textBox.Text.Length - selStart));
+                float selWidth = context.MeasureText(selSubstring, textBox.FontSize, textBox.FontFamily).Width;
+
+                float selTop = textY - textBox.FontSize - 1f;
+                float selHeight = textBox.FontSize + 4f;
+
+                context.DrawRect(new Rect(selStartX, selTop, selWidth, selHeight), colors.Primary.WithAlpha(0.35f));
             }
 
-            var selSubstring = textBox.Text.Substring(selStart, Math.Min(selLen, textBox.Text.Length - selStart));
-            float selWidth = context.MeasureText(selSubstring, textBox.FontSize, textBox.FontFamily).Width;
-
-            float selTop = textY - textBox.FontSize - 1f;
-            float selHeight = textBox.FontSize + 4f;
-
-            context.DrawRect(new Rect(selStartX, selTop, selWidth, selHeight), colors.Primary.WithAlpha(0.35f));
-        }
-
-        if (!string.IsNullOrEmpty(textBox.Text))
-        {
-            Color textColor = isEnabled ? colors.OnSurface : colors.OnSurface.WithAlpha(0.38f);
-            context.DrawText(textBox.Text, textPos, textColor, textBox.FontSize, textBox.FontFamily);
-        }
-        else if (!string.IsNullOrEmpty(textBox.Placeholder) && (!textBox.HasLabel || progress > 0.8f))
-        {
-            Color placeholderColor = isEnabled ? colors.OnSurfaceVariant.WithAlpha(0.6f) : colors.OnSurface.WithAlpha(0.38f);
-            context.DrawText(textBox.Placeholder, textPos, placeholderColor, textBox.FontSize, textBox.FontFamily);
-        }
-
-        // Caret
-        if (isFocused && isEnabled && textBox.CaretVisible && !textBox.HasSelection)
-        {
-            float caretX = textStartX;
-            if (!string.IsNullOrEmpty(textBox.Text) && textBox.CaretIndex > 0)
+            if (!string.IsNullOrEmpty(textBox.Text))
             {
-                var textBeforeCaret = textBox.Text[..Math.Min(textBox.CaretIndex, textBox.Text.Length)];
-                var measured = context.MeasureText(textBeforeCaret, textBox.FontSize, textBox.FontFamily);
-                caretX += measured.Width;
+                Color textColor = isEnabled ? colors.OnSurface : colors.OnSurface.WithAlpha(0.38f);
+                context.DrawText(textBox.Text, textPos, textColor, textBox.FontSize, textBox.FontFamily);
+            }
+            else if (!string.IsNullOrEmpty(textBox.Placeholder) && (!textBox.HasLabel || progress > 0.8f))
+            {
+                Color placeholderColor = isEnabled ? colors.OnSurfaceVariant.WithAlpha(0.6f) : colors.OnSurface.WithAlpha(0.38f);
+                context.DrawText(textBox.Placeholder, textPos, placeholderColor, textBox.FontSize, textBox.FontFamily);
             }
 
-            float caretWidth = Math.Max(1f, MathF.Round(textBox.CaretWidth));
-            float caretTop = textY - textBox.FontSize;
-            float caretHeight = textBox.FontSize + 2f;
+            // Caret
+            if (isFocused && isEnabled && textBox.CaretVisible && !textBox.HasSelection)
+            {
+                float caretX = textStartX - textBox.ScrollOffset;
+                if (!string.IsNullOrEmpty(textBox.Text) && textBox.CaretIndex > 0)
+                {
+                    var textBeforeCaret = textBox.Text[..Math.Min(textBox.CaretIndex, textBox.Text.Length)];
+                    var measured = context.MeasureText(textBeforeCaret, textBox.FontSize, textBox.FontFamily);
+                    caretX += measured.Width;
+                }
 
-            context.DrawPixelRect(new Rect(caretX, caretTop, caretWidth, caretHeight), colors.Primary);
+                float caretWidth = Math.Max(1f, MathF.Round(textBox.CaretWidth));
+                float caretTop = textY - textBox.FontSize;
+                float caretHeight = textBox.FontSize + 2f;
+
+                context.DrawPixelRect(new Rect(caretX, caretTop, caretWidth, caretHeight), colors.Primary);
+            }
         }
 
         // 5. Supporting Text (Optional)

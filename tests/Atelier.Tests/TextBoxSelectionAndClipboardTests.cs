@@ -282,4 +282,192 @@ public class TextBoxSelectionAndClipboardTests
         var outsideRight = bitmap.GetPixel(7, 6);
         Assert.Equal(0, outsideRight.Alpha);
     }
+
+    [Fact]
+    public void TextBox_HorizontalScroll_WhenCaretPastViewport_ScrollsRight()
+    {
+        var tb = new TextBox("The quick brown fox jumps over the lazy dog and runs across the field");
+        tb.Arrange(new Rect(0, 0, 100, 48));
+
+        // Viewport width is 100 - 16 - 16 = 68px
+        Assert.Equal(68f, tb.GetViewportWidth());
+
+        // Place caret at start: ScrollOffset should be 0
+        tb.CaretIndex = 0;
+        Assert.Equal(0f, tb.ScrollOffset);
+
+        // Move caret to end
+        tb.CaretIndex = tb.Text.Length;
+        Assert.True(tb.ScrollOffset > 0f);
+
+        // Caret position relative to viewport should be <= viewport width
+        float textWidth = Atelier.Rendering.TextMeasurer.Measure(tb.Text, tb.FontSize, tb.FontFamily).Width;
+        float relativeCaretX = textWidth - tb.ScrollOffset;
+        Assert.True(relativeCaretX <= tb.GetViewportWidth());
+    }
+
+    [Fact]
+    public void TextBox_HorizontalScroll_WhenCaretAtStart_ScrollsBackToZero()
+    {
+        var tb = new TextBox("The quick brown fox jumps over the lazy dog and runs across the field");
+        tb.Arrange(new Rect(0, 0, 100, 48));
+        FocusManager.SetFocus(tb);
+
+        // Move to end (scrolls right)
+        tb.OnKeyDown(new KeyEventArgs(Key.End, 0, ModifierKeys.None, true));
+        Assert.True(tb.ScrollOffset > 0f);
+
+        // Press Home key: scrolls back to start
+        tb.OnKeyDown(new KeyEventArgs(Key.Home, 0, ModifierKeys.None, true));
+        Assert.Equal(0, tb.CaretIndex);
+        Assert.Equal(0f, tb.ScrollOffset);
+    }
+
+    [Fact]
+    public void TextBox_WordNavigation_CtrlLeft_And_CtrlRight()
+    {
+        var tb = new TextBox("The quick brown fox");
+        FocusManager.SetFocus(tb);
+        tb.CaretIndex = 0;
+
+        // Ctrl + Right: jumps word by word
+        tb.OnKeyDown(new KeyEventArgs(Key.Right, 0, ModifierKeys.Control, true));
+        Assert.Equal(4, tb.CaretIndex); // start of "quick"
+
+        tb.OnKeyDown(new KeyEventArgs(Key.Right, 0, ModifierKeys.Control, true));
+        Assert.Equal(10, tb.CaretIndex); // start of "brown"
+
+        tb.OnKeyDown(new KeyEventArgs(Key.Right, 0, ModifierKeys.Control, true));
+        Assert.Equal(16, tb.CaretIndex); // start of "fox"
+
+        tb.OnKeyDown(new KeyEventArgs(Key.Right, 0, ModifierKeys.Control, true));
+        Assert.Equal(19, tb.CaretIndex); // end of "fox"
+
+        // Ctrl + Left: jumps back word by word
+        tb.OnKeyDown(new KeyEventArgs(Key.Left, 0, ModifierKeys.Control, true));
+        Assert.Equal(16, tb.CaretIndex);
+
+        tb.OnKeyDown(new KeyEventArgs(Key.Left, 0, ModifierKeys.Control, true));
+        Assert.Equal(10, tb.CaretIndex);
+
+        tb.OnKeyDown(new KeyEventArgs(Key.Left, 0, ModifierKeys.Control, true));
+        Assert.Equal(4, tb.CaretIndex);
+
+        tb.OnKeyDown(new KeyEventArgs(Key.Left, 0, ModifierKeys.Control, true));
+        Assert.Equal(0, tb.CaretIndex);
+    }
+
+    [Fact]
+    public void TextBox_WordSelection_CtrlShiftLeft_And_CtrlShiftRight()
+    {
+        var tb = new TextBox("The quick brown fox");
+        FocusManager.SetFocus(tb);
+        tb.CaretIndex = 0;
+
+        // Ctrl + Shift + Right: selects word by word
+        tb.OnKeyDown(new KeyEventArgs(Key.Right, 0, ModifierKeys.Control | ModifierKeys.Shift, true));
+        Assert.Equal(4, tb.CaretIndex);
+        Assert.Equal(0, tb.SelectionAnchor);
+        Assert.Equal("The ", tb.SelectedText);
+
+        tb.OnKeyDown(new KeyEventArgs(Key.Right, 0, ModifierKeys.Control | ModifierKeys.Shift, true));
+        Assert.Equal(10, tb.CaretIndex);
+        Assert.Equal("The quick ", tb.SelectedText);
+
+        // Ctrl + Shift + Left: contracts selection word by word
+        tb.OnKeyDown(new KeyEventArgs(Key.Left, 0, ModifierKeys.Control | ModifierKeys.Shift, true));
+        Assert.Equal(4, tb.CaretIndex);
+        Assert.Equal("The ", tb.SelectedText);
+
+        tb.OnKeyDown(new KeyEventArgs(Key.Left, 0, ModifierKeys.Control | ModifierKeys.Shift, true));
+        Assert.Equal(0, tb.CaretIndex);
+        Assert.False(tb.HasSelection);
+    }
+
+    [Fact]
+    public void TextBox_WordDeletion_CtrlBackspace_And_CtrlDelete()
+    {
+        var tb = new TextBox("The quick brown fox");
+        FocusManager.SetFocus(tb);
+        tb.CaretIndex = 10; // at "brown"
+
+        // Ctrl + Backspace deletes "quick "
+        tb.OnKeyDown(new KeyEventArgs(Key.Backspace, 8, ModifierKeys.Control, true));
+        Assert.Equal("The brown fox", tb.Text);
+        Assert.Equal(4, tb.CaretIndex);
+
+        // Ctrl + Delete deletes "brown "
+        tb.OnKeyDown(new KeyEventArgs(Key.Delete, 46, ModifierKeys.Control, true));
+        Assert.Equal("The fox", tb.Text);
+        Assert.Equal(4, tb.CaretIndex);
+    }
+
+    [Fact]
+    public void TextBox_DoubleClick_SelectsWordUnderCursor()
+    {
+        var tb = new TextBox("The quick brown fox");
+        tb.Arrange(new Rect(0, 0, 400, 48));
+        FocusManager.SetFocus(tb);
+
+        // Determine X coordinate for "brown"
+        float prefixWidth = Atelier.Rendering.TextMeasurer.Measure("The quick ", tb.FontSize, tb.FontFamily).Width;
+        float wordMiddleWidth = Atelier.Rendering.TextMeasurer.Measure("bro", tb.FontSize, tb.FontFamily).Width;
+        float clickX = tb.GetTextContentStartX() + prefixWidth + wordMiddleWidth;
+
+        // First click
+        tb.OnPointerPressed(new PointerEventArgs(new Point(clickX, 24), new Point(clickX, 24), PointerButtons.Left, 1000));
+        tb.OnPointerReleased(new PointerEventArgs(new Point(clickX, 24), new Point(clickX, 24), PointerButtons.Left, 1050));
+
+        // Second click within 200ms at same spot
+        tb.OnPointerPressed(new PointerEventArgs(new Point(clickX, 24), new Point(clickX, 24), PointerButtons.Left, 1200));
+
+        Assert.True(tb.HasSelection);
+        Assert.Equal("brown", tb.SelectedText);
+    }
+
+    [Fact]
+    public void TextBox_DoubleClick_WhenScrolled_SelectsWordUnderCursor()
+    {
+        var tb = new TextBox("Start Word and some very long filler in between and then EndWord");
+        tb.Arrange(new Rect(0, 0, 150, 48));
+        FocusManager.SetFocus(tb);
+
+        // Scroll to end
+        tb.CaretIndex = tb.Text.Length;
+        Assert.True(tb.ScrollOffset > 0f);
+
+        // Compute local X for "EndWord"
+        float textBeforeEnd = Atelier.Rendering.TextMeasurer.Measure("Start Word and some very long filler in between and then ", tb.FontSize, tb.FontFamily).Width;
+        float endMiddle = Atelier.Rendering.TextMeasurer.Measure("End", tb.FontSize, tb.FontFamily).Width;
+        float clickX = tb.GetTextContentStartX() + (textBeforeEnd + endMiddle) - tb.ScrollOffset;
+
+        // Double click at clickX
+        tb.OnPointerPressed(new PointerEventArgs(new Point(clickX, 24), new Point(clickX, 24), PointerButtons.Left, 2000));
+        tb.OnPointerReleased(new PointerEventArgs(new Point(clickX, 24), new Point(clickX, 24), PointerButtons.Left, 2050));
+        tb.OnPointerPressed(new PointerEventArgs(new Point(clickX, 24), new Point(clickX, 24), PointerButtons.Left, 2200));
+
+        Assert.True(tb.HasSelection);
+        Assert.Equal("EndWord", tb.SelectedText);
+    }
+
+    [Fact]
+    public void TextBox_MaterialRenderer_RendersWithClippingAndScrollOffset()
+    {
+        using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(200, 60, SkiaSharp.SKColorType.Rgba8888));
+        var paintRegistry = new Atelier.Rendering.PaintRegistry();
+        var context = new Atelier.Rendering.DrawingContext(surface.Canvas, paintRegistry);
+
+        var colors = Atelier.Theming.Material.MaterialColorScheme.Light();
+        var renderer = new Atelier.Theming.Material.Renderers.MaterialTextBoxRenderer(colors);
+
+        var tb = new TextBox("This is a very long text that exceeds the bounds of the text box");
+        tb.Arrange(new Rect(0, 0, 120, 48));
+        FocusManager.SetFocus(tb);
+        tb.CaretIndex = tb.Text.Length; // Scrolled
+
+        // Should render without exception, pushing clip and applying ScrollOffset
+        renderer.Render(tb, ref context);
+        surface.Canvas.Flush();
+        Assert.True(tb.ScrollOffset > 0f);
+    }
 }
