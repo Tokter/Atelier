@@ -29,6 +29,8 @@ namespace Atelier.Gallery.ViewModels
         {
             var initialPage = new CheckboxesViewModel();
             _pages.Add(initialPage);
+            _pages.Add(new TextBoxesViewModel());
+            _pages.Add(new CardsViewModel());
             _currentPage = initialPage;
         }
 

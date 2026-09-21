@@ -31,6 +31,7 @@ public class Card : Border
     {
         CornerRadius = new CornerRadius(12f);
         Padding = new Thickness(16f);
+        ClipToBounds = true;
     }
 
     public Card(CardVariant variant) : this()

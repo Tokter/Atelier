@@ -20,19 +20,46 @@ public partial class CheckboxesViewModel : PageViewModel
 
     // Checkbox observable properties
     [ObservableProperty]
-    private bool _enableNotifications = true;
+    private bool _basicUnchecked = false;
+
+    [ObservableProperty]
+    private bool _basicChecked = true;
+
+    [ObservableProperty]
+    private bool _syncCloudStorage = false;
 
     [ObservableProperty]
     private bool _autoUpdate = true;
 
     [ObservableProperty]
+    private bool _enableNotifications = true;
+
+    [ObservableProperty]
     private bool _sendAnalytics = false;
 
-    // Radio Button enum selection
+    // Radio Button selections
+    [ObservableProperty]
+    private string _basicOption = "Option A";
+
+    [ObservableProperty]
+    private string _shippingMethod = "Standard";
+
     [ObservableProperty]
     private QualitySetting _streamingQuality = QualitySetting.High1080p;
 
     // Switch observable properties
+    [ObservableProperty]
+    private bool _standardSwitchOff = false;
+
+    [ObservableProperty]
+    private bool _standardSwitchOn = true;
+
+    [ObservableProperty]
+    private bool _iconSwitchOff = false;
+
+    [ObservableProperty]
+    private bool _iconSwitchOn = true;
+
     [ObservableProperty]
     private bool _wifiEnabled = true;
 
@@ -70,13 +97,43 @@ public partial class CheckboxesViewModel : PageViewModel
     private void ResetDefaults()
     {
         InteractiveControlsEnabled = true;
-        EnableNotifications = true;
+        BasicUnchecked = false;
+        BasicChecked = true;
+        SyncCloudStorage = false;
         AutoUpdate = true;
+        EnableNotifications = true;
         SendAnalytics = false;
+        BasicOption = "Option A";
+        ShippingMethod = "Standard";
         StreamingQuality = QualitySetting.High1080p;
+        StandardSwitchOff = false;
+        StandardSwitchOn = true;
+        IconSwitchOff = false;
+        IconSwitchOn = true;
         WifiEnabled = true;
         BluetoothEnabled = false;
         AirplaneMode = false;
         HighFpsMode = true;
+    }
+
+    [RelayCommand]
+    private void ClearAll()
+    {
+        BasicUnchecked = false;
+        BasicChecked = false;
+        SyncCloudStorage = false;
+        AutoUpdate = false;
+        EnableNotifications = false;
+        SendAnalytics = false;
+        BasicOption = "";
+        ShippingMethod = "";
+        StandardSwitchOff = false;
+        StandardSwitchOn = false;
+        IconSwitchOff = false;
+        IconSwitchOn = false;
+        WifiEnabled = false;
+        BluetoothEnabled = false;
+        AirplaneMode = false;
+        HighFpsMode = false;
     }
 }

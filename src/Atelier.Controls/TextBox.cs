@@ -8,6 +8,12 @@ using Atelier.Rendering;
 
 namespace Atelier.Controls;
 
+public enum TextBoxVariant
+{
+    Outlined,
+    Filled
+}
+
 public class TextBox : Control
 {
     public static readonly BindableProperty<string> TextProperty =
@@ -29,6 +35,34 @@ public class TextBox : Control
 
     public static readonly BindableProperty<float> CaretWidthProperty =
         BindableProperty.Register<TextBox, float>(nameof(CaretWidth), 2f, (s, o, n) => ((TextBox)s).InvalidateVisual());
+
+    public static readonly BindableProperty<TextBoxVariant> VariantProperty =
+        BindableProperty.Register<TextBox, TextBoxVariant>(
+            nameof(Variant),
+            TextBoxVariant.Outlined,
+            (s, o, n) => ((TextBox)s).InvalidateVisual()
+        );
+
+    public static readonly BindableProperty<string> LabelProperty =
+        BindableProperty.Register<TextBox, string>(
+            nameof(Label),
+            string.Empty,
+            (s, o, n) => ((TextBox)s).OnLabelChanged(o, n)
+        );
+
+    public static readonly BindableProperty<MaterialIconKind> LeadingIconKindProperty =
+        BindableProperty.Register<TextBox, MaterialIconKind>(
+            nameof(LeadingIconKind),
+            MaterialIconKind.None,
+            (s, o, n) => { ((TextBox)s).InvalidateMeasure(); ((TextBox)s).InvalidateVisual(); }
+        );
+
+    public static readonly BindableProperty<string> SupportingTextProperty =
+        BindableProperty.Register<TextBox, string>(
+            nameof(SupportingText),
+            string.Empty,
+            (s, o, n) => { ((TextBox)s).InvalidateMeasure(); ((TextBox)s).InvalidateVisual(); }
+        );
 
     public string Text
     {
@@ -53,6 +87,38 @@ public class TextBox : Control
         get => GetValue(CaretWidthProperty);
         set => SetValue(CaretWidthProperty, value);
     }
+
+    public TextBoxVariant Variant
+    {
+        get => GetValue(VariantProperty);
+        set => SetValue(VariantProperty, value);
+    }
+
+    public string Label
+    {
+        get => GetValue(LabelProperty);
+        set => SetValue(LabelProperty, value);
+    }
+
+    public MaterialIconKind LeadingIconKind
+    {
+        get => GetValue(LeadingIconKindProperty);
+        set => SetValue(LeadingIconKindProperty, value);
+    }
+
+    public string SupportingText
+    {
+        get => GetValue(SupportingTextProperty);
+        set => SetValue(SupportingTextProperty, value);
+    }
+
+    public bool HasLabel => !string.IsNullOrEmpty(Label);
+    public bool HasLeadingIcon => LeadingIconKind != MaterialIconKind.None;
+    public bool HasSupportingText => !string.IsNullOrEmpty(SupportingText);
+
+    public float LabelAnimationProgress { get; private set; } = 0f;
+
+    public float GetTextContentStartX() => Padding.Left + (HasLeadingIcon ? 32f : 0f);
 
     private int _caretIndex = 0;
     public int CaretIndex
@@ -83,7 +149,7 @@ public class TextBox : Control
     public TextBox()
     {
         IsFocusable = true;
-        Padding = new Thickness(14, 12);
+        Padding = new Thickness(16, 8);
         CornerRadius = new CornerRadius(4);
     }
 
@@ -92,6 +158,10 @@ public class TextBox : Control
         Text = text;
         _caretIndex = text.Length;
         SelectionAnchor = _caretIndex;
+        if (!string.IsNullOrEmpty(text))
+        {
+            LabelAnimationProgress = 1f;
+        }
     }
 
     public void SetCaretIndex(int index, bool keepSelection = false)
@@ -104,11 +174,67 @@ public class TextBox : Control
         InvalidateVisual();
     }
 
+    public override void OnGotFocus()
+    {
+        base.OnGotFocus();
+        UpdateLabelAnimation(animate: true);
+        CaretVisible = true;
+        InvalidateVisual();
+    }
+
+    public override void OnLostFocus()
+    {
+        base.OnLostFocus();
+        UpdateLabelAnimation(animate: true);
+        CaretVisible = false;
+        ClearSelection();
+        InvalidateVisual();
+    }
+
+    private void OnLabelChanged(string oldLabel, string newLabel)
+    {
+        UpdateLabelAnimation(animate: false);
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    private void UpdateLabelAnimation(bool animate)
+    {
+        bool shouldFloat = HasLabel && (IsFocused || !string.IsNullOrEmpty(Text));
+        float target = shouldFloat ? 1f : 0f;
+
+        if (MathF.Abs(LabelAnimationProgress - target) < 0.001f)
+            return;
+
+        if (!animate || _clock == null)
+        {
+            LabelAnimationProgress = target;
+            InvalidateVisual();
+            return;
+        }
+
+        var anim = new FloatAnimation(
+            LabelAnimationProgress,
+            target,
+            TimeSpan.FromMilliseconds(180),
+            p =>
+            {
+                LabelAnimationProgress = p;
+                InvalidateVisual();
+            },
+            Easing.EmphasizedDecelerate
+        );
+
+        _clock.Add(anim);
+    }
+
     private void OnTextChanged(string oldText, string newText)
     {
         _caretIndex = Math.Clamp(_caretIndex, 0, newText.Length);
         SelectionAnchor = Math.Clamp(SelectionAnchor, 0, newText.Length);
+        UpdateLabelAnimation(animate: true);
         InvalidateMeasure();
+        InvalidateVisual();
         TextChanged?.Invoke(this, newText);
     }
 
@@ -185,13 +311,15 @@ public class TextBox : Control
 
     public override void OnPointerPressed(PointerEventArgs e)
     {
+        if (!IsEnabled) return;
+
         base.OnPointerPressed(e);
         e.Handled = true;
         Focus();
         CapturePointer();
         CaretVisible = true;
 
-        float localX = e.Position.X - Padding.Left;
+        float localX = e.Position.X - GetTextContentStartX();
         int idx = EstimateCaretIndex(localX);
 
         bool isDoubleClick = (e.TimestampMs > 0 && e.TimestampMs - _lastClickTime < 350)
@@ -216,7 +344,7 @@ public class TextBox : Control
         base.OnPointerMoved(e);
         if (IsPointerCaptured)
         {
-            float localX = e.Position.X - Padding.Left;
+            float localX = e.Position.X - GetTextContentStartX();
             int idx = EstimateCaretIndex(localX);
             SetCaretIndex(idx, keepSelection: true);
             CaretVisible = true;
@@ -476,11 +604,21 @@ public class TextBox : Control
     protected override Size MeasureOverride(Size availableSize)
     {
         var padding = Padding;
-        string displayText = !string.IsNullOrEmpty(Text) ? Text : (!string.IsNullOrEmpty(Placeholder) ? Placeholder : " ");
+        string displayText = !string.IsNullOrEmpty(Text) ? Text : (!string.IsNullOrEmpty(Placeholder) ? Placeholder : (!string.IsNullOrEmpty(Label) ? Label : " "));
         var textSize = TextMeasurer.Measure(displayText, FontSize, FontFamily);
+        float contentW = GetTextContentStartX() + textSize.Width + padding.Right + 4;
+        if (HasSupportingText)
+        {
+            var supportSize = TextMeasurer.Measure(SupportingText, 12f, FontFamily);
+            contentW = Math.Max(contentW, padding.Left + supportSize.Width + padding.Right);
+        }
+
+        float containerH = HasLabel ? 56f : Math.Max(48f, textSize.Height + padding.Vertical);
+        float totalH = containerH + (HasSupportingText ? 20f : 0f);
+
         return new Size(
-            Math.Max(120, textSize.Width + padding.Horizontal + 4),
-            Math.Max(40, textSize.Height + padding.Vertical)
+            Math.Max(140f, contentW),
+            totalH
         );
     }
 }

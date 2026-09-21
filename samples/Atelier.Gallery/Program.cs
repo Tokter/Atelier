@@ -294,7 +294,9 @@ internal static class Program
         ViewLocator.Current
             .Register<CityStatsDetailViewModel, CityStatsDetailView>()
             .Register<CityWeatherDetailViewModel, CityWeatherDetailView>()
-            .Register<CheckboxesViewModel>(vm => new CheckboxesView(vm));
+            .Register<CheckboxesViewModel>(vm => new CheckboxesView(vm))
+            .Register<TextBoxesViewModel>(vm => new TextBoxesView(vm))
+            .Register<CardsViewModel>(vm => new CardsView(vm));
 
         // 1. Initialize ViewModel (state is preserved across Hot Reload passes)
         var vm = new MainViewModel();

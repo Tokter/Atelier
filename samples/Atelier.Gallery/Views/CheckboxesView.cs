@@ -7,6 +7,7 @@ using Atelier.Layout;
 using Atelier.Markup;
 using Atelier.Theming;
 using Atelier.Gallery.ViewModels;
+using SkiaSharp;
 
 namespace Atelier.Gallery.Views;
 
@@ -67,7 +68,7 @@ public class CheckboxesView : Grid
         var card = new Card(CardVariant.Filled)
         {
             Padding = new Thickness(20),
-            CornerRadius = new CornerRadius(14)
+            CornerRadius = new CornerRadius(14),
         };
 
         var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
@@ -108,7 +109,12 @@ public class CheckboxesView : Grid
                 new Button("Reset All to Defaults")
                     .Variant(ButtonVariant.Tonal)
                     .VerticalAlign(VerticalAlignment.Center)
-                    .Command(_viewModel.ResetDefaultsCommand)
+                    .Command(_viewModel.ResetDefaultsCommand),
+
+                new Button("Clear / Uncheck All")
+                    .Variant(ButtonVariant.Outlined)
+                    .VerticalAlign(VerticalAlignment.Center)
+                    .Command(_viewModel.ClearAllCommand)
             );
 
         stack.Add(toggleRow);
@@ -130,11 +136,12 @@ public class CheckboxesView : Grid
             .ColumnSpacing(20)
             .Children(
                 new CheckBox("Standard Unchecked")
+                    .BindIsChecked(_viewModel, x => x.BasicUnchecked, (vm, v) => vm.BasicUnchecked = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
                     .Row(0).Column(0),
 
                 new CheckBox("Standard Checked")
-                    { IsChecked = true }
+                    .BindIsChecked(_viewModel, x => x.BasicChecked, (vm, v) => vm.BasicChecked = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
                     .Row(0).Column(1),
 
@@ -159,7 +166,8 @@ public class CheckboxesView : Grid
                     new Icon(MaterialIconKind.CloudQueue, 20) { Foreground = Color.FromHex("#1E88E5"), VerticalAlignment = VerticalAlignment.Center },
                     new TextBlock("Sync Workspace with Cloud Storage").VerticalAlign(VerticalAlignment.Center)
                 )
-        }.BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
+        }.BindIsChecked(_viewModel, x => x.SyncCloudStorage, (vm, v) => vm.SyncCloudStorage = v)
+         .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
         children.Add(iconCheckBox);
 
         var detailedCheckBox = new CheckBox
@@ -219,12 +227,13 @@ public class CheckboxesView : Grid
             .Children(
                 new RadioButton("Option A (Standard)")
                     .GroupName("DemoBasic")
-                    .IsChecked(true)
+                    .BindIsChecked(_viewModel, x => x.BasicOption, (vm, v) => vm.BasicOption = v, "Option A")
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
                     .Row(0).Column(0),
 
                 new RadioButton("Option B (Standard)")
                     .GroupName("DemoBasic")
+                    .BindIsChecked(_viewModel, x => x.BasicOption, (vm, v) => vm.BasicOption = v, "Option B")
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
                     .Row(0).Column(1),
 
@@ -255,9 +264,9 @@ public class CheckboxesView : Grid
                             new TextBlock("Standard Shipping").Bold().FontSize(13),
                             new TextBlock("Estimated delivery in 3-5 business days (Free)").FontSize(11).Muted()
                         )
-                ),
-            IsChecked = true
-        }.BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
+                )
+        }.BindIsChecked(_viewModel, x => x.ShippingMethod, (vm, v) => vm.ShippingMethod = v, "Standard")
+         .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
         children.Add(shippingOption1);
 
         var shippingOption2 = new RadioButton
@@ -272,7 +281,8 @@ public class CheckboxesView : Grid
                             new TextBlock("Guaranteed morning arrival with real-time GPS tracking ($9.99)").FontSize(11).Muted()
                         )
                 )
-        }.BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
+        }.BindIsChecked(_viewModel, x => x.ShippingMethod, (vm, v) => vm.ShippingMethod = v, "Express")
+         .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
         children.Add(shippingOption2);
 
         // Sub-section 3: Enum Data Binding
@@ -326,22 +336,24 @@ public class CheckboxesView : Grid
             .ColumnSpacing(20)
             .Children(
                 new Switch("Standard Switch (Off)")
+                    .BindIsChecked(_viewModel, x => x.StandardSwitchOff, (vm, v) => vm.StandardSwitchOff = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
                     .Row(0).Column(0),
 
                 new Switch("Standard Switch (On)")
-                    { IsChecked = true }
+                    .BindIsChecked(_viewModel, x => x.StandardSwitchOn, (vm, v) => vm.StandardSwitchOn = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
                     .Row(0).Column(1),
 
                 new Switch("MD3 Icon Switch (Off)")
                     .ShowThumbIcon()
+                    .BindIsChecked(_viewModel, x => x.IconSwitchOff, (vm, v) => vm.IconSwitchOff = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
                     .Row(1).Column(0),
 
                 new Switch("MD3 Icon Switch (On)")
-                    { IsChecked = true }
                     .ShowThumbIcon()
+                    .BindIsChecked(_viewModel, x => x.IconSwitchOn, (vm, v) => vm.IconSwitchOn = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
                     .Row(1).Column(1),
 

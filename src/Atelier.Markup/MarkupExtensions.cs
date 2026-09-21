@@ -253,6 +253,175 @@ public static class MarkupExtensions
         return border;
     }
 
+    public static Card Child(this Card card, UIElement child)
+    {
+        card.Child = child;
+        return card;
+    }
+
+    public static Card Variant(this Card card, CardVariant variant)
+    {
+        card.Variant = variant;
+        return card;
+    }
+
+    public static Card BindVariant<TSource>(
+        this Card card,
+        TSource source,
+        Func<TSource, CardVariant> getter,
+        Action<TSource, CardVariant>? setter = null)
+        where TSource : class
+    {
+        card.SetBinding(Card.VariantProperty, source, getter, setter);
+        return card;
+    }
+
+    public static Border Elevation(this Border border, float elevation)
+    {
+        border.Elevation = elevation;
+        return border;
+    }
+
+    public static Card Elevation(this Card card, float elevation)
+    {
+        card.Elevation = elevation;
+        return card;
+    }
+
+    public static Border BindElevation<TSource>(
+        this Border border,
+        TSource source,
+        Func<TSource, float> getter,
+        Action<TSource, float>? setter = null)
+        where TSource : class
+    {
+        border.SetBinding(Border.ElevationProperty, source, getter, setter);
+        return border;
+    }
+
+    public static Card BindElevation<TSource>(
+        this Card card,
+        TSource source,
+        Func<TSource, float> getter,
+        Action<TSource, float>? setter = null)
+        where TSource : class
+    {
+        card.SetBinding(Border.ElevationProperty, source, getter, setter);
+        return card;
+    }
+
+    public static Border CornerRadius(this Border border, CornerRadius cornerRadius)
+    {
+        border.CornerRadius = cornerRadius;
+        return border;
+    }
+
+    public static Card CornerRadius(this Card card, CornerRadius cornerRadius)
+    {
+        card.CornerRadius = cornerRadius;
+        return card;
+    }
+
+    public static Border CornerRadius(this Border border, float uniformRadius)
+    {
+        border.CornerRadius = new CornerRadius(uniformRadius);
+        return border;
+    }
+
+    public static Card CornerRadius(this Card card, float uniformRadius)
+    {
+        card.CornerRadius = new CornerRadius(uniformRadius);
+        return card;
+    }
+
+    public static Border BindCornerRadius<TSource>(
+        this Border border,
+        TSource source,
+        Func<TSource, float> getter)
+        where TSource : class
+    {
+        border.SetBinding(Border.CornerRadiusProperty, source, s => new CornerRadius(getter(s)));
+        return border;
+    }
+
+    public static Card BindCornerRadius<TSource>(
+        this Card card,
+        TSource source,
+        Func<TSource, float> getter)
+        where TSource : class
+    {
+        card.SetBinding(Border.CornerRadiusProperty, source, s => new CornerRadius(getter(s)));
+        return card;
+    }
+
+    public static Border Padding(this Border border, Thickness padding)
+    {
+        border.Padding = padding;
+        return border;
+    }
+
+    public static Card Padding(this Card card, Thickness padding)
+    {
+        card.Padding = padding;
+        return card;
+    }
+
+    public static Border Padding(this Border border, float horizontal, float vertical)
+    {
+        border.Padding = new Thickness(horizontal, vertical);
+        return border;
+    }
+
+    public static Card Padding(this Card card, float horizontal, float vertical)
+    {
+        card.Padding = new Thickness(horizontal, vertical);
+        return card;
+    }
+
+    public static Border Padding(this Border border, float uniform)
+    {
+        border.Padding = new Thickness(uniform);
+        return border;
+    }
+
+    public static Card Padding(this Card card, float uniform)
+    {
+        card.Padding = new Thickness(uniform);
+        return card;
+    }
+
+    public static Border BindPadding<TSource>(
+        this Border border,
+        TSource source,
+        Func<TSource, float> getter)
+        where TSource : class
+    {
+        border.SetBinding(Border.PaddingProperty, source, s => new Thickness(getter(s)));
+        return border;
+    }
+
+    public static Card BindPadding<TSource>(
+        this Card card,
+        TSource source,
+        Func<TSource, float> getter)
+        where TSource : class
+    {
+        card.SetBinding(Border.PaddingProperty, source, s => new Thickness(getter(s)));
+        return card;
+    }
+
+    public static Border Background(this Border border, Color background)
+    {
+        border.Background = background;
+        return border;
+    }
+
+    public static Card Background(this Card card, Color background)
+    {
+        card.Background = background;
+        return card;
+    }
+
     public static T Content<T>(this T control, object content) where T : ContentControl
     {
         control.Content = content;
@@ -576,6 +745,69 @@ public static class MarkupExtensions
     {
         switchControl.SetBinding(Switch.IsCheckedProperty, getter, setter);
         return switchControl;
+    }
+
+    // TextBox Extensions
+    public static TextBox Text(this TextBox textBox, string text)
+    {
+        textBox.Text = text;
+        return textBox;
+    }
+
+    public static TextBox Placeholder(this TextBox textBox, string placeholder)
+    {
+        textBox.Placeholder = placeholder;
+        return textBox;
+    }
+
+    public static TextBox Variant(this TextBox textBox, TextBoxVariant variant)
+    {
+        textBox.Variant = variant;
+        return textBox;
+    }
+
+    public static TextBox Label(this TextBox textBox, string label)
+    {
+        textBox.Label = label;
+        return textBox;
+    }
+
+    public static TextBox LeadingIcon(this TextBox textBox, MaterialIconKind iconKind)
+    {
+        textBox.LeadingIconKind = iconKind;
+        return textBox;
+    }
+
+    public static TextBox SupportingText(this TextBox textBox, string supportingText)
+    {
+        textBox.SupportingText = supportingText;
+        return textBox;
+    }
+
+    public static TextBox IsReadOnly(this TextBox textBox, bool isReadOnly = true)
+    {
+        textBox.IsReadOnly = isReadOnly;
+        return textBox;
+    }
+
+    public static TextBox BindLabel<TSource>(
+        this TextBox textBox,
+        TSource source,
+        Func<TSource, string> getter)
+        where TSource : class
+    {
+        textBox.SetBinding(TextBox.LabelProperty, source, getter);
+        return textBox;
+    }
+
+    public static TextBox BindSupportingText<TSource>(
+        this TextBox textBox,
+        TSource source,
+        Func<TSource, string> getter)
+        where TSource : class
+    {
+        textBox.SetBinding(TextBox.SupportingTextProperty, source, getter);
+        return textBox;
     }
 
     public static Slider Minimum(this Slider slider, float min)
@@ -1448,12 +1680,6 @@ public static class MarkupExtensions
 
     #region Border & Toolbar Extensions
 
-    public static Border Elevation(this Border border, float elevation)
-    {
-        border.Elevation = elevation;
-        return border;
-    }
-
     public static Border BorderBrush(this Border border, Color color)
     {
         border.BorderBrush = color;
@@ -1470,12 +1696,6 @@ public static class MarkupExtensions
     {
         border.BorderThickness = new Thickness(uniform);
         return border;
-    }
-
-    public static Card Variant(this Card card, CardVariant variant)
-    {
-        card.Variant = variant;
-        return card;
     }
 
     public static Toolbar Elevation(this Toolbar toolbar, float elevation)

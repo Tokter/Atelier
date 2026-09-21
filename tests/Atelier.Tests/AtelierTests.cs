@@ -844,7 +844,19 @@ public class AtelierCoreTests
     [Fact]
     public void Font_Inspection_LoadsMaterialSymbolsVariableFont()
     {
-        string fontPath = @"d:\Projects\Atelier\Assets\Fonts\MaterialSymbolsRounded-VariableFont_FILL,GRAD,opsz,wght.ttf";
+        string fontPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts", "MaterialSymbolsRounded-VariableFont_FILL,GRAD,opsz,wght.ttf");
+        if (!System.IO.File.Exists(fontPath))
+        {
+            var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null && !System.IO.File.Exists(System.IO.Path.Combine(dir.FullName, "Assets", "Fonts", "MaterialSymbolsRounded-VariableFont_FILL,GRAD,opsz,wght.ttf")))
+            {
+                dir = dir.Parent;
+            }
+            if (dir != null)
+            {
+                fontPath = System.IO.Path.Combine(dir.FullName, "Assets", "Fonts", "MaterialSymbolsRounded-VariableFont_FILL,GRAD,opsz,wght.ttf");
+            }
+        }
         Assert.True(System.IO.File.Exists(fontPath));
 
         using var tf = SkiaSharp.SKTypeface.FromFile(fontPath);

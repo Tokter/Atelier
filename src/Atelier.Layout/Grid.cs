@@ -179,6 +179,29 @@ public class Grid : Panel
             }
         }
 
+        // Re-measure children with their assigned column widths so that width-dependent
+        // elements (such as text wrapping) compute their correct DesiredSize.Height
+        for (int i = 0; i < Children.Count; i++)
+        {
+            if (Children[i] is UIElement child && child.Visibility != Visibility.Collapsed)
+            {
+                int colIdx = Math.Clamp(GetColumn(child), 0, cols.Count - 1);
+                int colSpan = Math.Clamp(GetColumnSpan(child), 1, cols.Count - colIdx);
+
+                float childWidth = 0;
+                for (int c = 0; c < colSpan; c++)
+                {
+                    childWidth += cols[colIdx + c].ActualWidth;
+                }
+                if (colSpan > 1)
+                {
+                    childWidth += (colSpan - 1) * ColumnSpacing;
+                }
+
+                child.Measure(new Size(childWidth, availableSize.Height));
+            }
+        }
+
         // Compute row heights
         float totalRowSpacing = Math.Max(0, rows.Count - 1) * RowSpacing;
         float remainingHeight = float.IsPositiveInfinity(availableSize.Height) ? 0 : Math.Max(0, availableSize.Height - totalRowSpacing);

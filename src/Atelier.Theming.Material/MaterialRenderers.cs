@@ -421,44 +421,164 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
         var bounds = new Rect(Point.Zero, textBox.Bounds.Size);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
 
-        // Container background
-        Color containerColor = colors.SurfaceContainerHighest;
-        context.DrawRoundedRect(bounds, textBox.CornerRadius, containerColor);
+        bool isEnabled = textBox.IsEnabled;
+        bool isFocused = textBox.IsFocused;
+        float progress = textBox.LabelAnimationProgress;
 
-        // Active indicator line or focus outline
-        if (textBox.IsFocused)
-        {
-            context.DrawRoundedRectOutline(bounds, textBox.CornerRadius, colors.Primary, 2f);
-        }
-        else
-        {
-            // Bottom line for filled text box, taking CornerRadius into account
-            float startX = bounds.Left + textBox.CornerRadius.BottomLeft;
-            float endX = bounds.Right - textBox.CornerRadius.BottomRight;
+        float supportingTextHeight = textBox.HasSupportingText ? 20f : 0f;
+        var containerRect = new Rect(bounds.Left, bounds.Top, bounds.Width, Math.Max(36f, bounds.Height - supportingTextHeight));
 
-            if (endX > startX)
+        // 1. Container Background & Border/Underline
+        if (textBox.Variant == TextBoxVariant.Filled)
+        {
+            // Filled style: colored background + rounded top corners + bottom underline
+            Color containerBg = isEnabled
+                ? colors.SurfaceContainerHighest
+                : colors.OnSurface.WithAlpha(0.04f);
+
+            var topCorners = new CornerRadius(textBox.CornerRadius.TopLeft, textBox.CornerRadius.TopRight, 0, 0);
+            context.DrawRoundedRect(containerRect, topCorners, containerBg);
+
+            // Bottom underline (active indicator line)
+            float lineY = containerRect.Bottom - 1f;
+            if (isFocused && isEnabled)
             {
-                using var clip = context.PushRoundedClip(bounds, textBox.CornerRadius);
+                // Brightens in color when focused (2dp Primary)
                 context.DrawLine(
-                    new Point(startX, bounds.Bottom - 1),
-                    new Point(endX, bounds.Bottom - 1),
-                    colors.OnSurfaceVariant,
+                    new Point(containerRect.Left, lineY),
+                    new Point(containerRect.Right, lineY),
+                    colors.Primary,
+                    2f
+                );
+            }
+            else
+            {
+                Color underlineColor = !isEnabled
+                    ? colors.OnSurface.WithAlpha(0.12f)
+                    : (textBox.IsHovered ? colors.OnSurface : colors.Outline);
+
+                context.DrawLine(
+                    new Point(containerRect.Left, lineY),
+                    new Point(containerRect.Right, lineY),
+                    underlineColor,
                     1f
                 );
             }
         }
+        else // Outlined style
+        {
+            // Outlined does not change background, has box with rounded corners around whole field
+            Color outlineColor;
+            float strokeWidth = 1f;
 
-        // Draw text or placeholder
-        float textY = (bounds.Height + textBox.FontSize) * 0.5f - 2;
-        var textPos = new Point(textBox.Padding.Left, textY);
+            if (!isEnabled)
+            {
+                outlineColor = colors.OnSurface.WithAlpha(0.12f);
+            }
+            else if (isFocused)
+            {
+                outlineColor = colors.Primary;
+                strokeWidth = 2f;
+            }
+            else if (textBox.IsHovered)
+            {
+                outlineColor = colors.OnSurface;
+            }
+            else
+            {
+                outlineColor = colors.Outline;
+            }
 
-        // Draw selection highlight behind text
-        if (textBox.IsFocused && textBox.HasSelection && !string.IsNullOrEmpty(textBox.Text))
+            context.DrawRoundedRectOutline(containerRect, textBox.CornerRadius, outlineColor, strokeWidth);
+        }
+
+        // 2. Leading Icon (Optional)
+        float textStartX = textBox.GetTextContentStartX();
+        if (textBox.HasLeadingIcon)
+        {
+            float iconSize = 20f;
+            float iconLeft = containerRect.Left + 12f;
+            float iconTop = containerRect.Top + (containerRect.Height - iconSize) * 0.5f;
+
+            Color iconColor = !isEnabled
+                ? colors.OnSurface.WithAlpha(0.38f)
+                : (isFocused ? colors.Primary : colors.OnSurfaceVariant);
+
+            string glyph = char.ConvertFromUtf32((int)textBox.LeadingIconKind);
+            var tf = MaterialIconFontManager.GetTypeface(0, 400, 0, iconSize);
+            var font = context.PaintRegistry.GetFont(iconSize, tf);
+            var paint = context.PaintRegistry.GetFillPaint(iconColor);
+            font.GetFontMetrics(out var metrics);
+            float glyphWidth = font.MeasureText(glyph);
+            float ix = iconLeft + (iconSize - glyphWidth) * 0.5f;
+            float iy = iconTop + (iconSize - (metrics.Ascent + metrics.Descent)) * 0.5f;
+            context.Canvas.DrawText(glyph, ix, iy, SKTextAlign.Left, font, paint);
+        }
+
+        // 3. Label Text (with smooth animation between resting and floating)
+        if (textBox.HasLabel)
+        {
+            float floatingFontSize = 11f;
+            float restingFontSize = textBox.FontSize;
+            float currentFontSize = restingFontSize + (floatingFontSize - restingFontSize) * progress;
+
+            // Resting positions
+            float restingX = textStartX;
+            float restingY = containerRect.Top + (containerRect.Height + restingFontSize) * 0.5f - 2f;
+
+            // Floating positions
+            float floatingX = textBox.Variant == TextBoxVariant.Filled ? textStartX : containerRect.Left + 12f;
+            float floatingY = textBox.Variant == TextBoxVariant.Filled
+                ? containerRect.Top + 8f + floatingFontSize
+                : containerRect.Top + floatingFontSize * 0.5f;
+
+            float currentX = restingX + (floatingX - restingX) * progress;
+            float currentY = restingY + (floatingY - restingY) * progress;
+
+            Color labelColor;
+            if (!isEnabled)
+            {
+                labelColor = colors.OnSurface.WithAlpha(0.38f);
+            }
+            else
+            {
+                Color targetColor = isFocused ? colors.Primary : colors.OnSurfaceVariant;
+                labelColor = Color.Lerp(colors.OnSurfaceVariant, targetColor, progress);
+            }
+
+            // Cutout notch for Outlined when floating
+            if (textBox.Variant == TextBoxVariant.Outlined && progress > 0.05f)
+            {
+                var labelMeasure = context.MeasureText(textBox.Label, currentFontSize, textBox.FontFamily);
+                var notchRect = new Rect(currentX - 4f, containerRect.Top - 3f, (labelMeasure.Width + 8f) * progress, 6f);
+                context.DrawRect(notchRect, colors.Surface);
+            }
+
+            context.DrawText(textBox.Label, new Point(currentX, currentY), labelColor, currentFontSize, textBox.FontFamily);
+        }
+
+        // 4. Input Text & Placeholder
+        float textY;
+        if (textBox.Variant == TextBoxVariant.Filled && textBox.HasLabel)
+        {
+            // Position text in lower portion of filled container when label is present
+            textY = containerRect.Top + containerRect.Height - 14f;
+        }
+        else
+        {
+            // Center vertically in container
+            textY = containerRect.Top + (containerRect.Height + textBox.FontSize) * 0.5f - 2f;
+        }
+
+        var textPos = new Point(textStartX, textY);
+
+        // Selection highlight
+        if (isFocused && textBox.HasSelection && !string.IsNullOrEmpty(textBox.Text))
         {
             int selStart = textBox.SelectionStart;
             int selLen = textBox.SelectionLength;
 
-            float selStartX = textBox.Padding.Left;
+            float selStartX = textStartX;
             if (selStart > 0)
             {
                 var prefix = textBox.Text[..Math.Min(selStart, textBox.Text.Length)];
@@ -468,25 +588,27 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
             var selSubstring = textBox.Text.Substring(selStart, Math.Min(selLen, textBox.Text.Length - selStart));
             float selWidth = context.MeasureText(selSubstring, textBox.FontSize, textBox.FontFamily).Width;
 
-            float selTop = (bounds.Height - textBox.FontSize) * 0.5f - 2;
-            float selHeight = textBox.FontSize + 4;
+            float selTop = textY - textBox.FontSize - 1f;
+            float selHeight = textBox.FontSize + 4f;
 
             context.DrawRect(new Rect(selStartX, selTop, selWidth, selHeight), colors.Primary.WithAlpha(0.35f));
         }
 
         if (!string.IsNullOrEmpty(textBox.Text))
         {
-            context.DrawText(textBox.Text, textPos, colors.OnSurface, textBox.FontSize, textBox.FontFamily);
+            Color textColor = isEnabled ? colors.OnSurface : colors.OnSurface.WithAlpha(0.38f);
+            context.DrawText(textBox.Text, textPos, textColor, textBox.FontSize, textBox.FontFamily);
         }
-        else if (!string.IsNullOrEmpty(textBox.Placeholder))
+        else if (!string.IsNullOrEmpty(textBox.Placeholder) && (!textBox.HasLabel || progress > 0.8f))
         {
-            context.DrawText(textBox.Placeholder, textPos, colors.OnSurfaceVariant.WithAlpha(0.6f), textBox.FontSize, textBox.FontFamily);
+            Color placeholderColor = isEnabled ? colors.OnSurfaceVariant.WithAlpha(0.6f) : colors.OnSurface.WithAlpha(0.38f);
+            context.DrawText(textBox.Placeholder, textPos, placeholderColor, textBox.FontSize, textBox.FontFamily);
         }
 
-        // Draw blinking caret
-        if (textBox.IsFocused && textBox.CaretVisible && !textBox.HasSelection)
+        // Caret
+        if (isFocused && isEnabled && textBox.CaretVisible && !textBox.HasSelection)
         {
-            float caretX = textBox.Padding.Left;
+            float caretX = textStartX;
             if (!string.IsNullOrEmpty(textBox.Text) && textBox.CaretIndex > 0)
             {
                 var textBeforeCaret = textBox.Text[..Math.Min(textBox.CaretIndex, textBox.Text.Length)];
@@ -495,10 +617,18 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
             }
 
             float caretWidth = Math.Max(1f, MathF.Round(textBox.CaretWidth));
-            float caretTop = (bounds.Height - textBox.FontSize) * 0.5f - 1f;
+            float caretTop = textY - textBox.FontSize;
             float caretHeight = textBox.FontSize + 2f;
 
             context.DrawPixelRect(new Rect(caretX, caretTop, caretWidth, caretHeight), colors.Primary);
+        }
+
+        // 5. Supporting Text (Optional)
+        if (textBox.HasSupportingText)
+        {
+            Color supportColor = isEnabled ? colors.OnSurfaceVariant : colors.OnSurface.WithAlpha(0.38f);
+            float supportY = containerRect.Bottom + 15f;
+            context.DrawText(textBox.SupportingText, new Point(containerRect.Left + 16f, supportY), supportColor, 12f, textBox.FontFamily);
         }
     }
 }
@@ -723,7 +853,7 @@ public class MaterialCardRenderer(MaterialColorScheme colors) : ControlRenderer<
         var bounds = new Rect(Point.Zero, card.Bounds.Size);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
 
-        var corner = card.CornerRadius.TopLeft > 0 ? card.CornerRadius : new CornerRadius(12f);
+        var corner = card.CornerRadius;
 
         Color bg;
         Color border = Color.Transparent;
