@@ -170,19 +170,20 @@ public readonly ref struct DrawingContext
         in Color color,
         float fontSize,
         string? fontFamily = null,
-        bool bold = false)
+        bool bold = false,
+        bool italic = false)
     {
         if (string.IsNullOrEmpty(text) || color.A == 0 || fontSize <= 0) return;
-        var tf = PaintRegistry.GetTypeface(fontFamily, bold);
+        var tf = PaintRegistry.GetTypeface(fontFamily, bold, italic);
         var font = PaintRegistry.GetFont(fontSize, tf);
         var paint = PaintRegistry.GetFillPaint(ApplyOpacity(color));
         Canvas.DrawText(text, position.X, position.Y, SKTextAlign.Left, font, paint);
     }
 
-    public Size MeasureText(string text, float fontSize, string? fontFamily = null, bool bold = false)
+    public Size MeasureText(string text, float fontSize, string? fontFamily = null, bool bold = false, bool italic = false)
     {
         if (string.IsNullOrEmpty(text) || fontSize <= 0) return Size.Zero;
-        var tf = PaintRegistry.GetTypeface(fontFamily, bold);
+        var tf = PaintRegistry.GetTypeface(fontFamily, bold, italic);
         var font = PaintRegistry.GetFont(fontSize, tf);
         float width = font.MeasureText(text, out _);
         return new Size(width, font.Spacing);

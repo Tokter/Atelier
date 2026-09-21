@@ -478,6 +478,17 @@ public static class MarkupExtensions
         return button;
     }
 
+    public static Button BindVariant<TSource>(
+        this Button button,
+        TSource source,
+        Func<TSource, ButtonVariant> getter,
+        Action<TSource, ButtonVariant>? setter = null)
+        where TSource : class
+    {
+        button.SetBinding(Button.VariantProperty, source, getter, setter);
+        return button;
+    }
+
     public static Button OnClick(this Button button, Action action)
     {
         button.Click += (s, e) => action();
@@ -533,6 +544,51 @@ public static class MarkupExtensions
         return textBlock;
     }
 
+    public static TextBlock Italic(this TextBlock textBlock, bool italic = true)
+    {
+        textBlock.Italic = italic;
+        return textBlock;
+    }
+
+    public static TextBlock FontFamily(this TextBlock textBlock, string fontFamily)
+    {
+        textBlock.FontFamily = fontFamily;
+        return textBlock;
+    }
+
+    public static TextBlock BindItalic<TSource>(
+        this TextBlock textBlock,
+        TSource source,
+        Func<TSource, bool> getter,
+        Action<TSource, bool>? setter = null)
+        where TSource : class
+    {
+        textBlock.SetBinding(TextBlock.ItalicProperty, source, getter, setter);
+        return textBlock;
+    }
+
+    public static TextBlock BindFontFamily<TSource>(
+        this TextBlock textBlock,
+        TSource source,
+        Func<TSource, string?> getter,
+        Action<TSource, string?>? setter = null)
+        where TSource : class
+    {
+        textBlock.SetBinding(TextBlock.FontFamilyProperty, source, getter, setter);
+        return textBlock;
+    }
+
+    public static TextBlock BindText<TSource>(
+        this TextBlock textBlock,
+        TSource source,
+        Func<TSource, string> getter,
+        Action<TSource, string>? setter = null)
+        where TSource : class
+    {
+        textBlock.SetBinding(TextBlock.TextProperty, source, getter, setter);
+        return textBlock;
+    }
+
     public static TextBlock BindForeground<TSource>(
         this TextBlock textBlock,
         TSource source,
@@ -543,6 +599,93 @@ public static class MarkupExtensions
         return textBlock;
     }
 
+    public static TextBlock BindFontSize<TSource>(
+        this TextBlock textBlock,
+        TSource source,
+        Func<TSource, float> getter,
+        Action<TSource, float>? setter = null)
+        where TSource : class
+    {
+        textBlock.SetBinding(TextBlock.FontSizeProperty, source, getter, setter);
+        return textBlock;
+    }
+
+    public static TextBlock BindBold<TSource>(
+        this TextBlock textBlock,
+        TSource source,
+        Func<TSource, bool> getter,
+        Action<TSource, bool>? setter = null)
+        where TSource : class
+    {
+        textBlock.SetBinding(TextBlock.BoldProperty, source, getter, setter);
+        return textBlock;
+    }
+
+    public static TextBlock BindMuted<TSource>(
+        this TextBlock textBlock,
+        TSource source,
+        Func<TSource, bool> getter,
+        Action<TSource, bool>? setter = null)
+        where TSource : class
+    {
+        textBlock.SetBinding(TextBlock.MutedProperty, source, getter, setter);
+        return textBlock;
+    }
+
+    public static TextBlock BindTextAlignment<TSource>(
+        this TextBlock textBlock,
+        TSource source,
+        Func<TSource, TextAlignment> getter,
+        Action<TSource, TextAlignment>? setter = null)
+        where TSource : class
+    {
+        textBlock.SetBinding(TextBlock.TextAlignmentProperty, source, getter, setter);
+        return textBlock;
+    }
+
+    public static TextBlock BindTextWrapping<TSource>(
+        this TextBlock textBlock,
+        TSource source,
+        Func<TSource, TextWrapping> getter,
+        Action<TSource, TextWrapping>? setter = null)
+        where TSource : class
+    {
+        textBlock.SetBinding(TextBlock.TextWrappingProperty, source, getter, setter);
+        return textBlock;
+    }
+
+    #region Material Typography Extensions
+
+    public static TextBlock DisplayLarge(this TextBlock textBlock) => textBlock.StyleKey("DisplayLarge");
+    public static TextBlock DisplayMedium(this TextBlock textBlock) => textBlock.StyleKey("DisplayMedium");
+    public static TextBlock DisplaySmall(this TextBlock textBlock) => textBlock.StyleKey("DisplaySmall");
+
+    public static TextBlock HeadlineLarge(this TextBlock textBlock) => textBlock.StyleKey("HeadlineLarge");
+    public static TextBlock HeadlineMedium(this TextBlock textBlock) => textBlock.StyleKey("HeadlineMedium");
+    public static TextBlock HeadlineSmall(this TextBlock textBlock) => textBlock.StyleKey("HeadlineSmall");
+
+    public static TextBlock TitleLarge(this TextBlock textBlock) => textBlock.StyleKey("TitleLarge");
+    public static TextBlock TitleMedium(this TextBlock textBlock) => textBlock.StyleKey("TitleMedium");
+    public static TextBlock TitleSmall(this TextBlock textBlock) => textBlock.StyleKey("TitleSmall");
+
+    public static TextBlock BodyLarge(this TextBlock textBlock) => textBlock.StyleKey("BodyLarge");
+    public static TextBlock BodyMedium(this TextBlock textBlock) => textBlock.StyleKey("BodyMedium");
+    public static TextBlock BodySmall(this TextBlock textBlock) => textBlock.StyleKey("BodySmall");
+
+    public static TextBlock LabelLarge(this TextBlock textBlock) => textBlock.StyleKey("LabelLarge");
+    public static TextBlock LabelMedium(this TextBlock textBlock) => textBlock.StyleKey("LabelMedium");
+    public static TextBlock LabelSmall(this TextBlock textBlock) => textBlock.StyleKey("LabelSmall");
+
+    // Common Aliases
+    public static TextBlock Heading1(this TextBlock textBlock) => textBlock.StyleKey("Heading1");
+    public static TextBlock Heading2(this TextBlock textBlock) => textBlock.StyleKey("Heading2");
+    public static TextBlock Heading3(this TextBlock textBlock) => textBlock.StyleKey("Heading3");
+    public static TextBlock NormalText(this TextBlock textBlock) => textBlock.StyleKey("NormalText");
+    public static TextBlock Subtext(this TextBlock textBlock) => textBlock.StyleKey("Subtext");
+    public static TextBlock Caption(this TextBlock textBlock) => textBlock.StyleKey("Caption");
+
+    #endregion
+
     public static T Style<T>(this T element, Style style) where T : UIElement
     {
         element.Style = style;
@@ -552,6 +695,18 @@ public static class MarkupExtensions
     public static T StyleKey<T>(this T element, string styleKey) where T : UIElement
     {
         element.StyleKey = styleKey;
+        return element;
+    }
+
+    public static T BindStyleKey<T, TSource>(
+        this T element,
+        TSource source,
+        Func<TSource, string?> getter,
+        Action<TSource, string?>? setter = null)
+        where T : UIElement
+        where TSource : class
+    {
+        element.SetBinding(UIElement.StyleKeyProperty, source, getter, setter);
         return element;
     }
 

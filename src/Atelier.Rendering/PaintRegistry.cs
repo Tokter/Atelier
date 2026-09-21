@@ -11,7 +11,7 @@ public interface IPaintRegistry
     SKPaint GetPixelFillPaint(Color color);
     SKPaint GetStrokePaint(Color color, float strokeWidth);
     SKFont GetFont(float fontSize, SKTypeface? typeface = null);
-    SKTypeface GetTypeface(string? familyName, bool bold = false);
+    SKTypeface GetTypeface(string? familyName, bool bold = false, bool italic = false);
 }
 
 public sealed class PaintRegistry : IPaintRegistry, IDisposable
@@ -37,13 +37,14 @@ public sealed class PaintRegistry : IPaintRegistry, IDisposable
     private readonly ConcurrentDictionary<string, SKTypeface> _typefaces = new();
     private readonly ConcurrentDictionary<(int size, IntPtr tf), SKFont> _fonts = new();
 
-    public SKTypeface GetTypeface(string? familyName, bool bold = false)
+    public SKTypeface GetTypeface(string? familyName, bool bold = false, bool italic = false)
     {
-        string key = $"{familyName ?? "Default"}_{(bold ? "Bold" : "Regular")}";
+        string key = $"{familyName ?? "Default"}_{(bold ? "Bold" : "Regular")}_{(italic ? "Italic" : "Upright")}";
         return _typefaces.GetOrAdd(key, _ =>
         {
             var weight = bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
-            var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+            var slant = italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
+            var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
             return SKTypeface.FromFamilyName(familyName, style) ?? SKTypeface.Default;
         });
     }

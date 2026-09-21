@@ -297,7 +297,8 @@ internal static class Program
             .Register<CheckboxesViewModel>(vm => new CheckboxesView(vm))
             .Register<TextBoxesViewModel>(vm => new TextBoxesView(vm))
             .Register<CardsViewModel>(vm => new CardsView(vm))
-            .Register<IconsViewModel>(vm => new IconsView(vm));
+            .Register<IconsViewModel>(vm => new IconsView(vm))
+            .Register<TypographyViewModel>(vm => new TypographyView(vm));
 
         // 1. Initialize ViewModel (state is preserved across Hot Reload passes)
         var vm = new MainViewModel();

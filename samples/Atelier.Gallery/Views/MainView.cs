@@ -75,11 +75,10 @@ namespace Atelier.Gallery.Views
                                         Size = 18,
                                         VerticalAlignment = VerticalAlignment.Center
                                     }.BindKind(_viewModel, x => x.CurrentThemeIcon),
-                                    new TextBlock
-                                    {
-                                        FontSize = 12f,
-                                        VerticalAlignment = VerticalAlignment.Center
-                                    }.BindText(_viewModel, x => x.CurrentThemeMode)
+                                    new TextBlock()
+                                        .LabelMedium()
+                                        .VerticalAlign(VerticalAlignment.Center)
+                                        .BindText(_viewModel, x => x.CurrentThemeMode)
                                 )
                         }
                     )
@@ -101,7 +100,10 @@ namespace Atelier.Gallery.Views
                     return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 }
                     .Children(
                         new Icon().BindKind(item, x => x.PageIcon),
-                        new TextBlock { VerticalAlignment = VerticalAlignment.Center }.BindText(item, x => x.PageTitle)
+                        new TextBlock()
+                            .LabelLarge()
+                            .VerticalAlign(VerticalAlignment.Center)
+                            .BindText(item, x => x.PageTitle)
                     );
                 }),
 

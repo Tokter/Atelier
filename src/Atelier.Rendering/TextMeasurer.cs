@@ -10,15 +10,16 @@ public static class TextMeasurer
     private static readonly ConcurrentDictionary<string, SKTypeface> _typefaces = new();
     private static readonly ConcurrentDictionary<(int size, IntPtr tf), SKFont> _fonts = new();
 
-    public static Size Measure(string text, float fontSize, string? fontFamily = null, bool bold = false)
+    public static Size Measure(string text, float fontSize, string? fontFamily = null, bool bold = false, bool italic = false)
     {
         if (string.IsNullOrEmpty(text) || fontSize <= 0) return Size.Zero;
 
-        string tfKey = $"{fontFamily ?? "Default"}_{(bold ? "Bold" : "Regular")}";
+        string tfKey = $"{fontFamily ?? "Default"}_{(bold ? "Bold" : "Regular")}_{(italic ? "Italic" : "Upright")}";
         var tf = _typefaces.GetOrAdd(tfKey, _ =>
         {
             var weight = bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
-            var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+            var slant = italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
+            var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
             return SKTypeface.FromFamilyName(fontFamily, style) ?? SKTypeface.Default;
         });
 
@@ -29,15 +30,16 @@ public static class TextMeasurer
         return new Size(width, font.Spacing);
     }
 
-    public static float GetFontSpacing(float fontSize, string? fontFamily = null, bool bold = false)
+    public static float GetFontSpacing(float fontSize, string? fontFamily = null, bool bold = false, bool italic = false)
     {
         if (fontSize <= 0) return 0f;
 
-        string tfKey = $"{fontFamily ?? "Default"}_{(bold ? "Bold" : "Regular")}";
+        string tfKey = $"{fontFamily ?? "Default"}_{(bold ? "Bold" : "Regular")}_{(italic ? "Italic" : "Upright")}";
         var tf = _typefaces.GetOrAdd(tfKey, _ =>
         {
             var weight = bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
-            var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+            var slant = italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
+            var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
             return SKTypeface.FromFamilyName(fontFamily, style) ?? SKTypeface.Default;
         });
 
@@ -51,7 +53,8 @@ public static class TextMeasurer
         float maxWidth,
         float fontSize,
         string? fontFamily = null,
-        bool bold = false)
+        bool bold = false,
+        bool italic = false)
     {
         if (string.IsNullOrEmpty(text) || fontSize <= 0)
         {
@@ -60,15 +63,16 @@ public static class TextMeasurer
 
         if (maxWidth <= 0 || float.IsPositiveInfinity(maxWidth))
         {
-            var singleLine = Measure(text, fontSize, fontFamily, bold);
+            var singleLine = Measure(text, fontSize, fontFamily, bold, italic);
             return (singleLine, [text]);
         }
 
-        string tfKey = $"{fontFamily ?? "Default"}_{(bold ? "Bold" : "Regular")}";
+        string tfKey = $"{fontFamily ?? "Default"}_{(bold ? "Bold" : "Regular")}_{(italic ? "Italic" : "Upright")}";
         var tf = _typefaces.GetOrAdd(tfKey, _ =>
         {
             var weight = bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
-            var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+            var slant = italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
+            var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
             return SKTypeface.FromFamilyName(fontFamily, style) ?? SKTypeface.Default;
         });
 

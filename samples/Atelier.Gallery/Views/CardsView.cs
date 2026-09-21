@@ -73,10 +73,9 @@ public class CardsView : Grid
         // Header text
         stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
             .Children(
-                new TextBlock("Cards (Material Design 3)").Bold().FontSize(18),
+                new TextBlock("Cards (Material Design 3)").TitleLarge(),
                 new TextBlock("Cards contain content and actions about a single subject. MD3 defines three core variants: Elevated, Filled, and Outlined.")
-                    .FontSize(12)
-                    .Muted()
+                    .Subtext()
             )
         );
 
@@ -121,12 +120,12 @@ public class CardsView : Grid
                                 new Icon(MaterialIconKind.Layers, 24) { Foreground = Color.FromHex("#6750A4"), VerticalAlignment = VerticalAlignment.Center },
                                 new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
                                     .Children(
-                                        new TextBlock("Elevated Card").Bold().FontSize(15),
-                                        new TextBlock("SurfaceContainerLow • 2dp Shadow").FontSize(11).Muted()
+                                        new TextBlock("Elevated Card").TitleMedium(),
+                                        new TextBlock("SurfaceContainerLow • 2dp Shadow").Caption()
                                     )
                             ).Row(0),
                         new TextBlock("Elevated cards have a subtle drop shadow and container fill for clear separation against flat surfaces and busy backgrounds.")
-                            .FontSize(12)
+                            .Subtext()
                             .TextWrapping(TextWrapping.Wrap)
                             .Row(1),
                         new Button("Elevated Action")
@@ -151,12 +150,12 @@ public class CardsView : Grid
                                 new Icon(MaterialIconKind.Dashboard, 24) { Foreground = Color.FromHex("#7D5260"), VerticalAlignment = VerticalAlignment.Center },
                                 new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
                                     .Children(
-                                        new TextBlock("Filled Card").Bold().FontSize(15),
-                                        new TextBlock("SurfaceContainerHighest • No Shadow").FontSize(11).Muted()
+                                        new TextBlock("Filled Card").TitleMedium(),
+                                        new TextBlock("SurfaceContainerHighest • No Shadow").Caption()
                                     )
                             ).Row(0),
                         new TextBlock("Filled cards use distinct container fill color without casting a shadow, offering visual containment on light or dark pages.")
-                            .FontSize(12)
+                            .Subtext()
                             .TextWrapping(TextWrapping.Wrap)
                             .Row(1),
                         new Button("Filled Action")
@@ -181,12 +180,12 @@ public class CardsView : Grid
                                 new Icon(MaterialIconKind.CropSquare, 24) { Foreground = Color.FromHex("#2E7D32"), VerticalAlignment = VerticalAlignment.Center },
                                 new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
                                     .Children(
-                                        new TextBlock("Outlined Card").Bold().FontSize(15),
-                                        new TextBlock("Surface • 1dp OutlineVariant").FontSize(11).Muted()
+                                        new TextBlock("Outlined Card").TitleMedium(),
+                                        new TextBlock("Surface • 1dp OutlineVariant").Caption()
                                     )
                             ).Row(0),
                         new TextBlock("Outlined cards feature a clean border outline on the standard surface color, providing boundary separation with minimal visual weight.")
-                            .FontSize(12)
+                            .Subtext()
                             .TextWrapping(TextWrapping.Wrap)
                             .Row(1),
                         new Button("Outlined Action")
@@ -232,13 +231,13 @@ public class CardsView : Grid
                                         new Icon(MaterialIconKind.Palette, 28) { Foreground = Color.FromHex("#1E88E5"), VerticalAlignment = VerticalAlignment.Center },
                                         new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
                                             .Children(
-                                                new TextBlock("FEATURED FRAMEWORK RELEASE").Bold().FontSize(10).Foreground(Color.FromHex("#1E88E5")),
-                                                new TextBlock("Atelier UI Studio v2.5").Bold().FontSize(16)
+                                                new TextBlock("FEATURED FRAMEWORK RELEASE").LabelSmall().Foreground(Color.FromHex("#1E88E5")),
+                                                new TextBlock("Atelier UI Studio v2.5").TitleMedium()
                                             )
                                     )
                             ).Row(0),
                         new TextBlock("High-performance cross-platform desktop UI framework with hardware-accelerated SkiaSharp rendering, sub-pixel animation, and complete Material Design 3 tokens.")
-                            .FontSize(12)
+                            .Subtext()
                             .TextWrapping(TextWrapping.Wrap)
                             .Row(1),
                         new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
@@ -257,7 +256,7 @@ public class CardsView : Grid
                                                     .BindKind(_viewModel, x => x.FavoriteSelected ? MaterialIconKind.Bookmark : MaterialIconKind.BookmarkBorder)
                                                     .BindForeground(_viewModel, x => x.FavoriteSelected ? Color.FromHex("#FFB300") : Color.FromHex("#757575")),
                                                 new TextBlock()
-                                                    .FontSize(12)
+                                                    .LabelMedium()
                                                     .BindText(_viewModel, x => x.FavoriteSelected ? "Saved" : "Save")
                                             )
                                     )
@@ -279,8 +278,8 @@ public class CardsView : Grid
                                 new Icon(MaterialIconKind.Tune, 24) { Foreground = Color.FromHex("#E65100"), VerticalAlignment = VerticalAlignment.Center },
                                 new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
                                     .Children(
-                                        new TextBlock("Embedded Interactive Controls").Bold().FontSize(15),
-                                        new TextBlock("Cards can host switches, text fields, and buttons.").FontSize(11).Muted()
+                                        new TextBlock("Embedded Interactive Controls").TitleMedium(),
+                                        new TextBlock("Cards can host switches, text fields, and buttons.").Caption()
                                     )
                             ),
                         new Switch("Card Notifications")
@@ -305,8 +304,7 @@ public class CardsView : Grid
                                     .VerticalAlign(VerticalAlignment.Center)
                                     .Child(
                                         new TextBlock()
-                                            .Bold()
-                                            .FontSize(11)
+                                            .LabelSmall()
                                             .BindText(_viewModel, x => $"Interactions: {x.InteractiveCardClickCount} taps")
                                     )
                             )
@@ -333,7 +331,7 @@ public class CardsView : Grid
         var controlsStack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
 
         // 1. Variant selection
-        controlsStack.Add(new TextBlock("Card Variant").Bold().FontSize(13));
+        controlsStack.Add(new TextBlock("Card Variant").TitleSmall());
         var variantStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new RadioButton("Elevated")
@@ -352,7 +350,7 @@ public class CardsView : Grid
         controlsStack.Add(
             new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
                 .Children(
-                    new TextBlock().Bold().FontSize(12).BindText(_viewModel, x => $"Elevation: {x.PlaygroundElevation:F0}dp"),
+                    new TextBlock().LabelMedium().BindText(_viewModel, x => $"Elevation: {x.PlaygroundElevation:F0}dp"),
                     new Slider()
                         .Minimum(0f)
                         .Maximum(8f)
@@ -364,7 +362,7 @@ public class CardsView : Grid
         controlsStack.Add(
             new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
                 .Children(
-                    new TextBlock().Bold().FontSize(12).BindText(_viewModel, x => $"Corner Radius: {x.PlaygroundCornerRadius:F0}dp"),
+                    new TextBlock().LabelMedium().BindText(_viewModel, x => $"Corner Radius: {x.PlaygroundCornerRadius:F0}dp"),
                     new Slider()
                         .Minimum(0f)
                         .Maximum(28f)
@@ -376,7 +374,7 @@ public class CardsView : Grid
         controlsStack.Add(
             new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
                 .Children(
-                    new TextBlock().Bold().FontSize(12).BindText(_viewModel, x => $"Padding: {x.PlaygroundPadding:F0}dp"),
+                    new TextBlock().LabelMedium().BindText(_viewModel, x => $"Padding: {x.PlaygroundPadding:F0}dp"),
                     new Slider()
                         .Minimum(8f)
                         .Maximum(36f)
@@ -397,15 +395,13 @@ public class CardsView : Grid
                         new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
                             .Children(
                                 new Icon(MaterialIconKind.AutoAwesome, 22) { Foreground = Color.FromHex("#6750A4"), VerticalAlignment = VerticalAlignment.Center },
-                                new TextBlock("Live Card Preview").Bold().FontSize(15)
+                                new TextBlock("Live Card Preview").TitleMedium()
                             ),
                         new TextBlock()
-                            .FontSize(11)
-                            .Muted()
+                            .Caption()
                             .BindText(_viewModel, x => $"Variant: {x.PlaygroundVariant}  |  Elevation: {x.PlaygroundElevation:F0}dp"),
                         new TextBlock()
-                            .FontSize(11)
-                            .Muted()
+                            .Caption()
                             .BindText(_viewModel, x => $"Corner Radius: {x.PlaygroundCornerRadius:F0}dp  |  Padding: {x.PlaygroundPadding:F0}dp"),
                         new Button("Interactive Preview Action")
                             .Variant(ButtonVariant.Filled)
@@ -433,8 +429,8 @@ public class CardsView : Grid
 
         stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
             .Children(
-                new TextBlock(title).Bold().FontSize(15),
-                new TextBlock(description).FontSize(12).Muted()
+                new TextBlock(title).TitleMedium(),
+                new TextBlock(description).Subtext()
             )
         );
 

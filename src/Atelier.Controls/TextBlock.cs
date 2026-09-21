@@ -73,6 +73,13 @@ public class TextBlock : UIElement
             (s, o, n) => ((TextBlock)s).InvalidateMeasure()
         );
 
+    public static readonly BindableProperty<bool> ItalicProperty =
+        BindableProperty.Register<TextBlock, bool>(
+            nameof(Italic),
+            false,
+            (s, o, n) => ((TextBlock)s).InvalidateMeasure()
+        );
+
     public static readonly BindableProperty<bool> MutedProperty =
         BindableProperty.Register<TextBlock, bool>(
             nameof(Muted),
@@ -87,6 +94,7 @@ public class TextBlock : UIElement
     public TextAlignment TextAlignment { get => GetValue(TextAlignmentProperty); set => SetValue(TextAlignmentProperty, value); }
     public TextWrapping TextWrapping { get => GetValue(TextWrappingProperty); set => SetValue(TextWrappingProperty, value); }
     public bool Bold { get => GetValue(BoldProperty); set => SetValue(BoldProperty, value); }
+    public bool Italic { get => GetValue(ItalicProperty); set => SetValue(ItalicProperty, value); }
     public bool Muted { get => GetValue(MutedProperty); set => SetValue(MutedProperty, value); }
 
     public TextBlock()
@@ -105,10 +113,10 @@ public class TextBlock : UIElement
 
         if (TextWrapping == TextWrapping.Wrap && !float.IsPositiveInfinity(availableSize.Width) && availableSize.Width > 0)
         {
-            var (size, _) = TextMeasurer.MeasureWrapped(Text, availableSize.Width, FontSize, FontFamily, Bold);
+            var (size, _) = TextMeasurer.MeasureWrapped(Text, availableSize.Width, FontSize, FontFamily, Bold, Italic);
             return size;
         }
 
-        return TextMeasurer.Measure(Text, FontSize, FontFamily, Bold);
+        return TextMeasurer.Measure(Text, FontSize, FontFamily, Bold, Italic);
     }
 }

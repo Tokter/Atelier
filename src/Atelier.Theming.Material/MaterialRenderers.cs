@@ -740,18 +740,23 @@ public class MaterialProgressBarRenderer(MaterialColorScheme colors) : ControlRe
 
 public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRenderer<TextBlock>
 {
-    public override void Render(TextBlock textBlock, ref DrawingContext context)
+    public Color GetTextColor(TextBlock textBlock)
     {
-        if (string.IsNullOrEmpty(textBlock.Text)) return;
-
         Color textColor;
-        if (textBlock.Foreground != Color.Black)
+        bool hasCustomForeground = textBlock.Foreground != Color.Black &&
+                                   textBlock.Foreground != Color.Transparent &&
+                                   textBlock.Foreground != colors.OnSurface &&
+                                   textBlock.Foreground != colors.OnSurfaceVariant;
+
+        if (textBlock.Muted)
+        {
+            textColor = hasCustomForeground
+                ? textBlock.Foreground.WithAlpha(textBlock.Foreground.Af * 0.6f)
+                : colors.OnSurfaceVariant;
+        }
+        else if (hasCustomForeground)
         {
             textColor = textBlock.Foreground;
-        }
-        else if (textBlock.Muted)
-        {
-            textColor = colors.OnSurfaceVariant;
         }
         else
         {
@@ -763,6 +768,15 @@ public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRend
             textColor = textColor.WithAlpha(textColor.Af * 0.38f);
         }
 
+        return textColor;
+    }
+
+    public override void Render(TextBlock textBlock, ref DrawingContext context)
+    {
+        if (string.IsNullOrEmpty(textBlock.Text)) return;
+
+        Color textColor = GetTextColor(textBlock);
+
         if (textBlock.TextWrapping == TextWrapping.Wrap && textBlock.Bounds.Width > 0)
         {
             var (_, lines) = TextMeasurer.MeasureWrapped(
@@ -770,10 +784,11 @@ public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRend
                 textBlock.Bounds.Width,
                 textBlock.FontSize,
                 textBlock.FontFamily,
-                textBlock.Bold
+                textBlock.Bold,
+                textBlock.Italic
             );
 
-            float lineHeight = TextMeasurer.GetFontSpacing(textBlock.FontSize, textBlock.FontFamily, textBlock.Bold);
+            float lineHeight = TextMeasurer.GetFontSpacing(textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
             if (lineHeight <= 0) lineHeight = textBlock.FontSize * 1.35f;
             float textY = textBlock.FontSize;
 
@@ -784,7 +799,7 @@ public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRend
 
                 if (textBlock.TextAlignment != TextAlignment.Left)
                 {
-                    var measured = context.MeasureText(line, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold);
+                    var measured = context.MeasureText(line, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
                     if (textBlock.TextAlignment == TextAlignment.Center)
                     {
                         textX = (textBlock.Bounds.Width - measured.Width) * 0.5f;
@@ -795,7 +810,7 @@ public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRend
                     }
                 }
 
-                context.DrawText(line, new Point(textX, textY), textColor, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold);
+                context.DrawText(line, new Point(textX, textY), textColor, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
                 textY += lineHeight;
             }
         }
@@ -806,7 +821,7 @@ public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRend
 
             if (textBlock.TextAlignment != TextAlignment.Left)
             {
-                var measured = context.MeasureText(textBlock.Text, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold);
+                var measured = context.MeasureText(textBlock.Text, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
                 if (textBlock.TextAlignment == TextAlignment.Center)
                 {
                     textX = (textBlock.Bounds.Width - measured.Width) * 0.5f;
@@ -817,7 +832,7 @@ public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRend
                 }
             }
 
-            context.DrawText(textBlock.Text, new Point(textX, textY), textColor, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold);
+            context.DrawText(textBlock.Text, new Point(textX, textY), textColor, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
         }
     }
 }

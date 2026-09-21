@@ -100,10 +100,9 @@ public class IconsView : Grid
         // Header text
         stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
             .Children(
-                new TextBlock("Icons & Material Symbols (4 Variable Axes)").Bold().FontSize(18),
+                new TextBlock("Icons & Material Symbols (4 Variable Axes)").TitleLarge(),
                 new TextBlock("High-performance vector rendering of Google Material Symbols Rounded across 4 variable font axes (FILL, wght, GRAD, opsz) and custom SVG/SKPath geometry.")
-                    .FontSize(12)
-                    .Muted()
+                    .Subtext()
             )
         );
 
@@ -161,16 +160,13 @@ public class IconsView : Grid
                 new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
                     .Children(
                         new TextBlock()
-                            .FontSize(12)
-                            .Bold()
+                            .LabelMedium()
                             .BindText(_viewModel, x => $"Icon: {x.PlaygroundKind}   |   Size: {x.PlaygroundSize:F0}dp"),
                         new TextBlock()
-                            .FontSize(11)
-                            .Muted()
+                            .Caption()
                             .BindText(_viewModel, x => $"FILL: {x.PlaygroundFill:F2} ({(x.PlaygroundFill >= 0.5f ? "Filled" : "Outlined")})   |   wght: {x.PlaygroundWeight:F0} ({x.WeightName})"),
                         new TextBlock()
-                            .FontSize(11)
-                            .Muted()
+                            .Caption()
                             .BindText(_viewModel, x => $"GRAD: {x.PlaygroundGrade:F0}   |   opsz: {x.PlaygroundOpticalSize:F0}dp")
                     )
             );
@@ -195,31 +191,31 @@ public class IconsView : Grid
         var slidersStack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 };
 
         // 1. FILL Axis Slider
-        var fillLabel = new TextBlock().FontSize(12).Bold();
+        var fillLabel = new TextBlock().LabelMedium();
         fillLabel.BindText(_viewModel, x => $"FILL Axis: {x.PlaygroundFill:F2} ({(x.PlaygroundFill >= 0.5f ? "Solid Fill" : "Outlined")})");
         var fillSlider = new Slider { Minimum = 0, Maximum = 100, Value = _viewModel.PlaygroundFill * 100f };
         fillSlider.ValueChanged += (s, v) => _viewModel.PlaygroundFill = v / 100f;
 
         // 2. Weight Axis Slider (100 to 700)
-        var weightLabel = new TextBlock().FontSize(12).Bold();
+        var weightLabel = new TextBlock().LabelMedium();
         weightLabel.BindText(_viewModel, x => $"wght (Weight) Axis: {x.PlaygroundWeight:F0} ({x.WeightName})");
         var weightSlider = new Slider { Minimum = 100, Maximum = 700, Value = _viewModel.PlaygroundWeight };
         weightSlider.ValueChanged += (s, v) => _viewModel.PlaygroundWeight = v;
 
         // 3. Grade Axis Slider (-25 to 200)
-        var gradeLabel = new TextBlock().FontSize(12).Bold();
+        var gradeLabel = new TextBlock().LabelMedium();
         gradeLabel.BindText(_viewModel, x => $"GRAD (Grade) Axis: {x.PlaygroundGrade:F0} ({(x.PlaygroundGrade == 0 ? "Normal" : x.PlaygroundGrade > 0 ? "Heavy Emphasis" : "Low Emphasis")})");
         var gradeSlider = new Slider { Minimum = -25, Maximum = 200, Value = _viewModel.PlaygroundGrade };
         gradeSlider.ValueChanged += (s, v) => _viewModel.PlaygroundGrade = v;
 
         // 4. Optical Size Axis Slider (20 to 48)
-        var opszLabel = new TextBlock().FontSize(12).Bold();
+        var opszLabel = new TextBlock().LabelMedium();
         opszLabel.BindText(_viewModel, x => $"opsz (Optical Size) Axis: {x.PlaygroundOpticalSize:F0}dp");
         var opszSlider = new Slider { Minimum = 20, Maximum = 48, Value = _viewModel.PlaygroundOpticalSize };
         opszSlider.ValueChanged += (s, v) => _viewModel.PlaygroundOpticalSize = v;
 
         // 5. Display Size Slider (24 to 120dp)
-        var sizeLabel = new TextBlock().FontSize(12).Bold();
+        var sizeLabel = new TextBlock().LabelMedium();
         sizeLabel.BindText(_viewModel, x => $"Display Size: {x.PlaygroundSize:F0}dp");
         var sizeSlider = new Slider { Minimum = 24, Maximum = 120, Value = _viewModel.PlaygroundSize };
         sizeSlider.ValueChanged += (s, v) => _viewModel.PlaygroundSize = v;
@@ -271,8 +267,8 @@ public class IconsView : Grid
         // --- Subsection A: Weight Spectrum (100 to 700) ---
         var weightHeader = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
             .Children(
-                new TextBlock("1. Weight Axis (wght: 100 to 700)").Bold().FontSize(14),
-                new TextBlock("Seven standard stroke weight tiers ranging from ultra-thin (100) to bold (700):").FontSize(12).Muted()
+                new TextBlock("1. Weight Axis (wght: 100 to 700)").TitleSmall(),
+                new TextBlock("Seven standard stroke weight tiers ranging from ultra-thin (100) to bold (700):").Subtext()
             );
 
         var weightsRow = new Grid()
@@ -292,8 +288,8 @@ public class IconsView : Grid
         // --- Subsection B: Fill Axis (Outlined vs Filled) ---
         var fillHeader = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
             .Children(
-                new TextBlock("2. Fill Axis (FILL: 0.0 Outlined vs 1.0 Filled)").Bold().FontSize(14),
-                new TextBlock("Switching between outlined and solid filled states across active states and selections:").FontSize(12).Muted()
+                new TextBlock("2. Fill Axis (FILL: 0.0 Outlined vs 1.0 Filled)").TitleSmall(),
+                new TextBlock("Switching between outlined and solid filled states across active states and selections:").Subtext()
             );
 
         var fillGrid = new Grid()
@@ -312,8 +308,8 @@ public class IconsView : Grid
         // --- Subsection C: Grade Axis (-25, 0, +200) & Optical Size (20, 24, 40, 48) ---
         var subCHeader = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
             .Children(
-                new TextBlock("3 & 4. Grade (GRAD) and Optical Size (opsz) Axes").Bold().FontSize(14),
-                new TextBlock("Grade fine-tunes stroke thickness without affecting layout metrics. Optical size tunes letterform proportion for small vs large scales:").FontSize(12).Muted()
+                new TextBlock("3 & 4. Grade (GRAD) and Optical Size (opsz) Axes").TitleSmall(),
+                new TextBlock("Grade fine-tunes stroke thickness without affecting layout metrics. Optical size tunes letterform proportion for small vs large scales:").Subtext()
             );
 
         var subCGrid = new Grid()
@@ -327,7 +323,7 @@ public class IconsView : Grid
             .Child(
                 new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
                     .Children(
-                        new TextBlock("Grade (GRAD): -25 to +200").Bold().FontSize(13),
+                        new TextBlock("Grade (GRAD): -25 to +200").TitleSmall(),
                         new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, HorizontalAlignment = HorizontalAlignment.Center }
                             .Children(
                                 CreateMiniTile(MaterialIconKind.Settings, "GRAD: -25", grade: -25f),
@@ -344,7 +340,7 @@ public class IconsView : Grid
             .Child(
                 new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
                     .Children(
-                        new TextBlock("Optical Size (opsz): 20dp to 48dp").Bold().FontSize(13),
+                        new TextBlock("Optical Size (opsz): 20dp to 48dp").TitleSmall(),
                         new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, HorizontalAlignment = HorizontalAlignment.Center }
                             .Children(
                                 CreateMiniTile(MaterialIconKind.Search, "20dp", opsz: 20f, size: 24f),
@@ -381,8 +377,7 @@ public class IconsView : Grid
             .HorizontalAlign(HorizontalAlignment.Center);
 
         var text = new TextBlock(label)
-            .FontSize(10)
-            .Bold()
+            .LabelSmall()
             .HorizontalAlign(HorizontalAlignment.Center);
 
         return new Card(CardVariant.Filled)
@@ -403,8 +398,7 @@ public class IconsView : Grid
             .VerticalAlign(VerticalAlignment.Center);
 
         var label = new TextBlock(name)
-            .FontSize(11)
-            .Bold()
+            .LabelSmall()
             .HorizontalAlign(HorizontalAlignment.Center);
 
         return new Card(CardVariant.Filled)
@@ -428,8 +422,7 @@ public class IconsView : Grid
             .HorizontalAlign(HorizontalAlignment.Center);
 
         var text = new TextBlock(label)
-            .FontSize(10)
-            .Muted()
+            .Caption()
             .HorizontalAlign(HorizontalAlignment.Center);
 
         return new StackPanel { Orientation = Orientation.Vertical, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center }
@@ -477,9 +470,9 @@ public class IconsView : Grid
 
         // Interactive StrokeWidth slider for vector geometry
         var strokeSliderRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14, VerticalAlignment = VerticalAlignment.Center };
-        var strokeLabel = new TextBlock("Adjust StrokeWidth (0 = Solid Fill, >0 = Stroked Outline):").FontSize(12).Bold();
+        var strokeLabel = new TextBlock("Adjust StrokeWidth (0 = Solid Fill, >0 = Stroked Outline):").LabelMedium();
         var strokeSlider = new Slider { Minimum = 0, Maximum = 40, Value = 18, Width = 160 };
-        var strokeValText = new TextBlock("1.8dp").FontSize(12).Muted();
+        var strokeValText = new TextBlock("1.8dp").Subtext();
 
         var dynamicRocket = new Icon(svgRocket, 32, Color.FromHex("#F97316")) { StrokeWidth = 1.8f };
         var dynamicDiamond = new Icon(svgDiamond, 32, Color.FromHex("#8B5CF6")) { StrokeWidth = 1.8f };
@@ -506,7 +499,7 @@ public class IconsView : Grid
     private static UIElement CreateCustomTile(Icon icon, string label)
     {
         icon.HorizontalAlignment = HorizontalAlignment.Center;
-        var text = new TextBlock(label).FontSize(11).Bold().HorizontalAlign(HorizontalAlignment.Center);
+        var text = new TextBlock(label).LabelSmall().HorizontalAlign(HorizontalAlignment.Center);
 
         return new Card(CardVariant.Filled)
             .Padding(8, 10)
@@ -532,10 +525,9 @@ public class IconsView : Grid
         // Header title & description
         stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
             .Children(
-                new TextBlock("Material Symbols Catalog (2,130+ Icons)").Bold().FontSize(15),
+                new TextBlock("Material Symbols Catalog (2,130+ Icons)").TitleMedium(),
                 new TextBlock("Search the complete Google Material Symbols catalog in real-time. Click any icon to load and customize it in the playground above.")
-                    .FontSize(12)
-                    .Muted()
+                    .Subtext()
             )
         );
 
@@ -559,8 +551,7 @@ public class IconsView : Grid
 
         // Search Status readout
         _statusText = new TextBlock(_viewModel.SearchStatus)
-            .FontSize(12)
-            .Muted();
+            .Subtext();
         stack.Add(_statusText);
 
         // WrapPanel containing icon tiles
@@ -645,7 +636,7 @@ public class IconsView : Grid
             .HorizontalAlign(HorizontalAlignment.Center);
 
         var label = new TextBlock(item.DisplayName)
-            .FontSize(11)
+            .Caption()
             .HorizontalAlign(HorizontalAlignment.Center)
             .TextAlignment(TextAlignment.Center)
             .TextWrapping(TextWrapping.Wrap);
@@ -682,8 +673,8 @@ public class IconsView : Grid
 
         stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
             .Children(
-                new TextBlock(title).Bold().FontSize(15),
-                new TextBlock(description).FontSize(12).Muted()
+                new TextBlock(title).TitleMedium(),
+                new TextBlock(description).Subtext()
             )
         );
 

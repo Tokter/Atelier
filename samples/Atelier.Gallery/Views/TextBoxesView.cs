@@ -75,10 +75,9 @@ public class TextBoxesView : Grid
         // Header text
         stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
             .Children(
-                new TextBlock("Text Fields (Material Design 3)").Bold().FontSize(18),
+                new TextBlock("Text Fields (Material Design 3)").TitleLarge(),
                 new TextBlock("Demonstrating Outlined and Filled text boxes with animated floating labels, leading icons, supporting text, and live data-binding.")
-                    .FontSize(12)
-                    .Muted()
+                    .Subtext()
             )
         );
 
@@ -97,8 +96,7 @@ public class TextBoxesView : Grid
                             .BindForeground(_viewModel, x => x.InteractiveControlsEnabled ? Color.FromHex("#4CAF50") : Color.FromHex("#E53935")),
 
                         new TextBlock()
-                            .Bold()
-                            .FontSize(12)
+                            .LabelMedium()
                             .VerticalAlign(VerticalAlignment.Center)
                             .BindText(_viewModel, x => x.InteractiveControlsEnabled
                                 ? "Controls are ENABLED (interactive)"
@@ -125,7 +123,7 @@ public class TextBoxesView : Grid
     {
         var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
 
-        children.Add(new TextBlock("Standard, Leading Icon & Supporting Text Configurations").Bold().FontSize(13));
+        children.Add(new TextBlock("Standard, Leading Icon & Supporting Text Configurations").TitleSmall());
 
         var grid = new Grid()
             .Columns(GridLength.Star, GridLength.Star)
@@ -215,7 +213,7 @@ public class TextBoxesView : Grid
     {
         var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
 
-        children.Add(new TextBlock("Container Background & Active Underline Indicator").Bold().FontSize(13));
+        children.Add(new TextBlock("Container Background & Active Underline Indicator").TitleSmall());
 
         var grid = new Grid()
             .Columns(GridLength.Star, GridLength.Star)
@@ -305,7 +303,7 @@ public class TextBoxesView : Grid
     {
         var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
 
-        children.Add(new TextBlock("Two-Way MVVM Property Binding & Live Feedback").Bold().FontSize(13));
+        children.Add(new TextBlock("Two-Way MVVM Property Binding & Live Feedback").TitleSmall());
 
         var grid = new Grid()
             .Columns(GridLength.Star, GridLength.Star)
@@ -356,12 +354,12 @@ public class TextBoxesView : Grid
         }.Child(
             new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 }
                 .Children(
-                    new TextBlock("Live ViewModel State").Bold().FontSize(12),
+                    new TextBlock("Live ViewModel State").LabelMedium(),
                     new TextBlock()
-                        .FontSize(11)
+                        .Caption()
                         .BindText(_viewModel, x => $"Username: \"{x.Username}\"  |  Email: \"{x.Email}\""),
                     new TextBlock()
-                        .FontSize(11)
+                        .Caption()
                         .BindText(_viewModel, x => $"Phone: \"{x.Phone}\"  |  Bio: \"{x.Bio}\"")
                 )
         );
@@ -387,8 +385,8 @@ public class TextBoxesView : Grid
 
         stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
             .Children(
-                new TextBlock(title).Bold().FontSize(15),
-                new TextBlock(description).FontSize(12).Muted()
+                new TextBlock(title).TitleMedium(),
+                new TextBlock(description).Subtext()
             )
         );
 

@@ -37,6 +37,9 @@ public class MaterialTheme : Theme
         Renderers.Register(new MaterialTreeViewItemRenderer(colors));
         Renderers.Register(new MaterialImageRenderer());
         Renderers.Register(new MaterialToolbarRenderer(colors));
+
+        // Register Material Design 3 Typography Styles globally
+        MaterialTypography.RegisterStyles(Atelier.Core.Styling.StyleManager.GlobalStyles, colors);
     }
 
     public static MaterialTheme CreateLight() => new("Material 3 Light", false, MaterialColorScheme.Light());

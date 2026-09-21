@@ -76,10 +76,9 @@ public class CheckboxesView : Grid
         // Header text
         stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
             .Children(
-                new TextBlock("Selection Controls (Material Design 3)").Bold().FontSize(18),
+                new TextBlock("Selection Controls (Material Design 3)").TitleLarge(),
                 new TextBlock("Demonstrating Checkboxes, Radio Buttons, and Switches with rich content, two-way data-binding, and disabled states.")
-                    .FontSize(12)
-                    .Muted()
+                    .Subtext()
             )
         );
 
@@ -98,8 +97,7 @@ public class CheckboxesView : Grid
                             .BindForeground(_viewModel, x => x.InteractiveControlsEnabled ? Color.FromHex("#4CAF50") : Color.FromHex("#E53935")),
 
                         new TextBlock()
-                            .Bold()
-                            .FontSize(12)
+                            .LabelMedium()
                             .VerticalAlign(VerticalAlignment.Center)
                             .BindText(_viewModel, x => x.InteractiveControlsEnabled
                                 ? "Controls are ENABLED (interactive)"
@@ -127,7 +125,7 @@ public class CheckboxesView : Grid
         var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
 
         // Sub-section 1: Basic & Disabled States
-        children.Add(new TextBlock("Standard & Disabled States").Bold().FontSize(13));
+        children.Add(new TextBlock("Standard & Disabled States").TitleSmall());
 
         var statesGrid = new Grid()
             .Columns(GridLength.Star, GridLength.Star)
@@ -157,7 +155,7 @@ public class CheckboxesView : Grid
         children.Add(statesGrid);
 
         // Sub-section 2: Rich Content (Icon, Subtitle)
-        children.Add(new TextBlock("Rich Content (Icons & Multi-line Descriptions)").Bold().FontSize(13));
+        children.Add(new TextBlock("Rich Content (Icons & Multi-line Descriptions)").TitleSmall());
 
         var iconCheckBox = new CheckBox
         {
@@ -174,15 +172,15 @@ public class CheckboxesView : Grid
         {
             Content = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
                 .Children(
-                    new TextBlock("Automatic Software Updates").Bold().FontSize(13),
-                    new TextBlock("Download and install critical framework hot reload patches in background").FontSize(11).Muted()
+                    new TextBlock("Automatic Software Updates").TitleSmall(),
+                    new TextBlock("Download and install critical framework hot reload patches in background").Caption()
                 )
         }.BindIsChecked(_viewModel, x => x.AutoUpdate, (vm, v) => vm.AutoUpdate = v)
          .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
         children.Add(detailedCheckBox);
 
         // Sub-section 3: Two-Way Data Binding
-        children.Add(new TextBlock("Two-Way MVVM Data Binding").Bold().FontSize(13));
+        children.Add(new TextBlock("Two-Way MVVM Data Binding").TitleSmall());
 
         var bindingRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, VerticalAlignment = VerticalAlignment.Center }
             .Children(
@@ -197,8 +195,7 @@ public class CheckboxesView : Grid
                     VerticalAlignment = VerticalAlignment.Center
                 }.Child(
                     new TextBlock()
-                        .Bold()
-                        .FontSize(11)
+                        .Caption()
                         .BindText(_viewModel, x => $"ViewModel.EnableNotifications: {(x.EnableNotifications ? "TRUE (Enabled)" : "FALSE (Muted)")}")
                 ),
 
@@ -217,7 +214,7 @@ public class CheckboxesView : Grid
         var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
 
         // Sub-section 1: Mutually Exclusive Selection & Disabled States
-        children.Add(new TextBlock("Standard Mutually Exclusive Group & Disabled States").Bold().FontSize(13));
+        children.Add(new TextBlock("Standard Mutually Exclusive Group & Disabled States").TitleSmall());
 
         var groupGrid = new Grid()
             .Columns(GridLength.Star, GridLength.Star)
@@ -251,7 +248,7 @@ public class CheckboxesView : Grid
         children.Add(groupGrid);
 
         // Sub-section 2: Rich Content (Icon, Header, Badge/Subtitle)
-        children.Add(new TextBlock("Rich Content (Icons, Badges & Multi-line Layout)").Bold().FontSize(13));
+        children.Add(new TextBlock("Rich Content (Icons, Badges & Multi-line Layout)").TitleSmall());
 
         var shippingOption1 = new RadioButton
         {
@@ -261,8 +258,8 @@ public class CheckboxesView : Grid
                     new Icon(MaterialIconKind.LocalShipping, 20) { Foreground = Color.FromHex("#2E7D32"), VerticalAlignment = VerticalAlignment.Center },
                     new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
                         .Children(
-                            new TextBlock("Standard Shipping").Bold().FontSize(13),
-                            new TextBlock("Estimated delivery in 3-5 business days (Free)").FontSize(11).Muted()
+                            new TextBlock("Standard Shipping").TitleSmall(),
+                            new TextBlock("Estimated delivery in 3-5 business days (Free)").Caption()
                         )
                 )
         }.BindIsChecked(_viewModel, x => x.ShippingMethod, (vm, v) => vm.ShippingMethod = v, "Standard")
@@ -277,8 +274,8 @@ public class CheckboxesView : Grid
                     new Icon(MaterialIconKind.ElectricBolt, 20) { Foreground = Color.FromHex("#D84315"), VerticalAlignment = VerticalAlignment.Center },
                     new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
                         .Children(
-                            new TextBlock("Express Delivery (Next-Day)").Bold().FontSize(13),
-                            new TextBlock("Guaranteed morning arrival with real-time GPS tracking ($9.99)").FontSize(11).Muted()
+                            new TextBlock("Express Delivery (Next-Day)").TitleSmall(),
+                            new TextBlock("Guaranteed morning arrival with real-time GPS tracking ($9.99)").Caption()
                         )
                 )
         }.BindIsChecked(_viewModel, x => x.ShippingMethod, (vm, v) => vm.ShippingMethod = v, "Express")
@@ -286,7 +283,7 @@ public class CheckboxesView : Grid
         children.Add(shippingOption2);
 
         // Sub-section 3: Enum Data Binding
-        children.Add(new TextBlock("Enum / Value Two-Way Data Binding").Bold().FontSize(13));
+        children.Add(new TextBlock("Enum / Value Two-Way Data Binding").TitleSmall());
 
         var enumStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, VerticalAlignment = VerticalAlignment.Center }
             .Children(
@@ -312,8 +309,7 @@ public class CheckboxesView : Grid
                     VerticalAlignment = VerticalAlignment.Center
                 }.Child(
                     new TextBlock()
-                        .Bold()
-                        .FontSize(11)
+                        .Caption()
                         .BindText(_viewModel, x => $"Selected Enum: {x.StreamingQuality}")
                 )
             );
@@ -327,7 +323,7 @@ public class CheckboxesView : Grid
         var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
 
         // Sub-section 1: Standard & Disabled MD3 Switches
-        children.Add(new TextBlock("Material Design 3 Switches & Thumb Icons").Bold().FontSize(13));
+        children.Add(new TextBlock("Material Design 3 Switches & Thumb Icons").TitleSmall());
 
         var switchGrid = new Grid()
             .Columns(GridLength.Star, GridLength.Star)
@@ -369,7 +365,7 @@ public class CheckboxesView : Grid
         children.Add(switchGrid);
 
         // Sub-section 2: Rich Content Switches
-        children.Add(new TextBlock("Rich Content (Icons, Titles & Descriptions)").Bold().FontSize(13));
+        children.Add(new TextBlock("Rich Content (Icons, Titles & Descriptions)").TitleSmall());
 
         var airplaneSwitch = new Switch
         {
@@ -379,8 +375,8 @@ public class CheckboxesView : Grid
                     new Icon(MaterialIconKind.AirplanemodeActive, 20) { Foreground = Color.FromHex("#E65100"), VerticalAlignment = VerticalAlignment.Center },
                     new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
                         .Children(
-                            new TextBlock("Airplane Mode").Bold().FontSize(13),
-                            new TextBlock("Disables Wi-Fi, Bluetooth, and cellular radios simultaneously").FontSize(11).Muted()
+                            new TextBlock("Airplane Mode").TitleSmall(),
+                            new TextBlock("Disables Wi-Fi, Bluetooth, and cellular radios simultaneously").Caption()
                         )
                 )
         }.BindIsChecked(_viewModel, x => x.AirplaneMode, (vm, v) => vm.AirplaneMode = v)
@@ -395,8 +391,8 @@ public class CheckboxesView : Grid
                     new Icon(MaterialIconKind.Speed, 20) { Foreground = Color.FromHex("#2E7D32"), VerticalAlignment = VerticalAlignment.Center },
                     new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
                         .Children(
-                            new TextBlock("High Smoothness (120 Hz VSync)").Bold().FontSize(13),
-                            new TextBlock("Enables sub-pixel spring animations and high-rate frame pacing").FontSize(11).Muted()
+                            new TextBlock("High Smoothness (120 Hz VSync)").TitleSmall(),
+                            new TextBlock("Enables sub-pixel spring animations and high-rate frame pacing").Caption()
                         )
                 )
         }.BindIsChecked(_viewModel, x => x.HighFpsMode, (vm, v) => vm.HighFpsMode = v)
@@ -404,7 +400,7 @@ public class CheckboxesView : Grid
         children.Add(fpsSwitch);
 
         // Sub-section 3: Two-Way Data Binding & Batch Actions
-        children.Add(new TextBlock("Two-Way Data Binding & Reactive Batch Actions").Bold().FontSize(13));
+        children.Add(new TextBlock("Two-Way Data Binding & Reactive Batch Actions").TitleSmall());
 
         var wirelessRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, VerticalAlignment = VerticalAlignment.Center }
             .Children(
@@ -425,8 +421,7 @@ public class CheckboxesView : Grid
                     VerticalAlignment = VerticalAlignment.Center
                 }.Child(
                     new TextBlock()
-                        .Bold()
-                        .FontSize(11)
+                        .Caption()
                         .BindText(_viewModel, x => $"Wireless State: Wi-Fi: {(x.WifiEnabled ? "ON" : "OFF")} | BT: {(x.BluetoothEnabled ? "ON" : "OFF")}")
                 ),
 
@@ -452,8 +447,8 @@ public class CheckboxesView : Grid
 
         stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
             .Children(
-                new TextBlock(title).Bold().FontSize(15),
-                new TextBlock(description).FontSize(12).Muted()
+                new TextBlock(title).TitleMedium(),
+                new TextBlock(description).Subtext()
             )
         );
 
