@@ -385,4 +385,235 @@ public class TransformTests
         var rotatedBounds = rotatedBox.GetScreenBounds();
         Assert.True(rotatedBounds.Bottom <= buttonBelow.Bounds.Y + 0.5f);
     }
+
+    [Fact]
+    public void CompoundAffineMatrix_ScaleRotationTranslation_HitTestMatchesTransformedSpace()
+    {
+        var panel = new Canvas().Size(800, 800);
+
+        // A 200x100 container with compound scale (1.5x), rotation (45 deg), and translation (50, 50)
+        var rad = 45f * (MathF.PI / 180f);
+        var matrix = Matrix3x2.CreateScale(1.5f)
+                   * Matrix3x2.CreateRotation(rad)
+                   * Matrix3x2.CreateTranslation(50f, 50f);
+
+        var container = new Border { Width = 200, Height = 100 }
+            .Transform(matrix)
+            .TransformOrigin(0.5f, 0.5f);
+
+        var button = new Button("Test").Size(80, 40);
+        Canvas.SetLeft(button, 20);
+        Canvas.SetTop(button, 20);
+        container.Child = button;
+        panel.AddChild(container);
+
+        panel.Measure(new Size(800, 800));
+        panel.Arrange(new Rect(0, 0, 800, 800));
+
+        // The button is inside container at local (20..100, 20..60).
+        // Transform button local center (60, 40) through container's effective transform to find its screen position.
+        var buttonCenterLocal = new Point(60, 40);
+        var screenPoint = button.PointToScreen(new Point(40, 20)); // Button's own center in its coordinate space
+
+        // Hit-test at that exact screen position must resolve to button!
+        var hit = panel.HitTest(screenPoint);
+        Assert.Equal(button, hit);
+
+        // Converting that screen point back to button coordinates yields local center
+        var localPoint = button.PointToClient(screenPoint);
+        Assert.Equal(40, localPoint.X, 1e-2f);
+        Assert.Equal(20, localPoint.Y, 1e-2f);
+    }
+
+    [Fact]
+    public void SkewMatrix_TransformsGeometryAndHitTests()
+    {
+        var panel = new Canvas().Size(600, 600);
+        var skewRad = 15f * (MathF.PI / 180f);
+        var skewMatrix = Matrix3x2.CreateSkew(skewRad, 0f);
+
+        var button = new Button("Skewed").Size(120, 50)
+            .Transform(skewMatrix)
+            .TransformOrigin(0.5f, 0.5f);
+
+        Canvas.SetLeft(button, 100);
+        Canvas.SetTop(button, 100);
+        panel.AddChild(button);
+
+        panel.Measure(new Size(600, 600));
+        panel.Arrange(new Rect(0, 0, 600, 600));
+
+        // Center of button is at local (60, 25)
+        var screenCenter = button.PointToScreen(new Point(60, 25));
+        var hit = panel.HitTest(screenCenter);
+        Assert.Equal(button, hit);
+    }
+
+    [Fact]
+    public void RenderTransform_RotatesAroundRenderTransformOrigin_PreservesLayoutBounds()
+    {
+        var panel = new Canvas().Size(600, 600);
+        var button = new Button("Click").Size(100, 50);
+        Canvas.SetLeft(button, 100);
+        Canvas.SetTop(button, 100);
+        panel.AddChild(button);
+
+        // 1. Center pivot rotation (0.5, 0.5)
+        button.RenderTransformOrigin = new Point(0.5f, 0.5f);
+        button.RenderRotate(90f);
+
+        panel.Measure(new Size(600, 600));
+        panel.Arrange(new Rect(0, 0, 600, 600));
+
+        // Layout bounds remain strictly untransformed
+        Assert.Equal(100, button.Bounds.X);
+        Assert.Equal(100, button.Bounds.Y);
+        Assert.Equal(100, button.Bounds.Width);
+        Assert.Equal(50, button.Bounds.Height);
+
+        // Center is local (50, 25) -> stays pinned at screen (100 + 50, 100 + 25) = (150, 125)
+        var centerScreen = button.PointToScreen(new Point(50, 25));
+        Assert.Equal(150, centerScreen.X, 1e-3f);
+        Assert.Equal(125, centerScreen.Y, 1e-3f);
+
+        // 2. Top-Left pivot rotation (0, 0)
+        button.RenderTransformOrigin = new Point(0f, 0f);
+        // Top-left local (0, 0) stays pinned at screen (100, 100)
+        var tlScreen = button.PointToScreen(Point.Zero);
+        Assert.Equal(100, tlScreen.X, 1e-3f);
+        Assert.Equal(100, tlScreen.Y, 1e-3f);
+
+        // Local (100, 0) rotated 90 deg around (0, 0) -> (0, 100) -> screen (100, 200)
+        var trScreen = button.PointToScreen(new Point(100, 0));
+        Assert.Equal(100, trScreen.X, 1e-3f);
+        Assert.Equal(200, trScreen.Y, 1e-3f);
+
+        // 3. Bottom-Right pivot rotation (1, 1)
+        button.RenderTransformOrigin = new Point(1f, 1f);
+        // Bottom-right local (100, 50) stays pinned at screen (100 + 100, 100 + 50) = (200, 150)
+        var brScreen = button.PointToScreen(new Point(100, 50));
+        Assert.Equal(200, brScreen.X, 1e-3f);
+        Assert.Equal(150, brScreen.Y, 1e-3f);
+    }
+
+    [Fact]
+    public void RenderTransform_HitTesting_InvertsPostLayoutTransformAccurately()
+    {
+        var panel = new Canvas().Size(600, 600);
+        var button = new Button("Click").Size(100, 60);
+        Canvas.SetLeft(button, 100);
+        Canvas.SetTop(button, 100);
+        button.RenderTransformOrigin = new Point(0.5f, 0.5f);
+        button.RenderRotate(45f);
+        panel.AddChild(button);
+
+        panel.Measure(new Size(600, 600));
+        panel.Arrange(new Rect(0, 0, 600, 600));
+
+        // Center of button is at screen (150, 130)
+        var centerScreen = new Point(150, 130);
+        var hit = panel.HitTest(centerScreen);
+        Assert.Equal(button, hit);
+
+        // Client conversion of that hit point yields local center (50, 30)
+        var localPoint = button.PointToClient(centerScreen);
+        Assert.Equal(50, localPoint.X, 1e-2f);
+        Assert.Equal(30, localPoint.Y, 1e-2f);
+
+        // A point far outside the rotated shape must not hit the button
+        var miss = panel.HitTest(new Point(10, 10));
+        Assert.NotEqual(button, miss);
+    }
+
+    [Fact]
+    public void RenderTransform_ChangingPivotOrigins_ProducesDistinctScreenCoordinates()
+    {
+        var panel = new Canvas().Size(600, 600);
+        var button = new Button("Card").Size(320, 200);
+        Canvas.SetLeft(button, 100);
+        Canvas.SetTop(button, 100);
+        button.RenderRotate(30f);
+        panel.AddChild(button);
+
+        panel.Measure(new Size(600, 600));
+        panel.Arrange(new Rect(0, 0, 600, 600));
+
+        // When origin is Top-Left (0, 0)
+        button.RenderTransformOrigin = new Point(0f, 0f);
+        var centerWithTL = button.PointToScreen(new Point(160, 100));
+
+        // When origin is Center (0.5, 0.5)
+        button.RenderTransformOrigin = new Point(0.5f, 0.5f);
+        var centerWithCenter = button.PointToScreen(new Point(160, 100));
+
+        // When origin is Bottom-Right (1, 1)
+        button.RenderTransformOrigin = new Point(1f, 1f);
+        var centerWithBR = button.PointToScreen(new Point(160, 100));
+
+        // Verify that changing origin produces substantial, measurable differences
+        Assert.NotEqual(centerWithTL.X, centerWithCenter.X);
+        Assert.NotEqual(centerWithCenter.X, centerWithBR.X);
+        Assert.True(MathF.Abs(centerWithTL.X - centerWithBR.X) > 50f);
+    }
+
+    [Fact]
+    public void LayoutTransform_Vs_RenderTransform_DesiredSizeBehavior()
+    {
+        // 1. LayoutTransform (UIElement.Transform): Expands DesiredSize during Measure pass
+        var layoutBtn = new Button("Layout").Size(200, 100);
+        layoutBtn.Rotate(45f);
+        var container = new Border { Child = layoutBtn };
+
+        container.Measure(new Size(800, 800));
+
+        float expectedRotatedW = 200f * MathF.Cos(MathF.PI / 4f) + 100f * MathF.Sin(MathF.PI / 4f); // (200 + 100) / sqrt(2) ≈ 212.132
+        float expectedRotatedH = 200f * MathF.Sin(MathF.PI / 4f) + 100f * MathF.Cos(MathF.PI / 4f); // ≈ 212.132
+
+        Assert.InRange(layoutBtn.DesiredSize.Width, expectedRotatedW - 0.5f, expectedRotatedW + 0.5f);
+        Assert.InRange(layoutBtn.DesiredSize.Height, expectedRotatedH - 0.5f, expectedRotatedH + 0.5f);
+
+        // 2. RenderTransform (UIElement.RenderTransform): Leaves DesiredSize strictly untransformed
+        var renderBtn = new Button("Render").Size(200, 100);
+        renderBtn.RenderRotate(45f);
+        var renderContainer = new Border { Child = renderBtn };
+
+        renderContainer.Measure(new Size(800, 800));
+
+        Assert.Equal(200, renderBtn.DesiredSize.Width);
+        Assert.Equal(100, renderBtn.DesiredSize.Height);
+    }
+
+    [Theory]
+    [InlineData(0f, 0f)]     // Top-Left
+    [InlineData(1f, 0f)]     // Top-Right
+    [InlineData(0.5f, 0.5f)] // Center
+    [InlineData(0f, 1f)]     // Bottom-Left
+    [InlineData(1f, 1f)]     // Bottom-Right
+    public void RenderTransform_PivotOriginIsStationaryFixedPointUnderRotation(float originX, float originY)
+    {
+        var panel = new Canvas().Size(600, 600);
+        var button = new Button("Target").Size(240, 180);
+        Canvas.SetLeft(button, 100);
+        Canvas.SetTop(button, 100);
+        panel.AddChild(button);
+
+        panel.Measure(new Size(600, 600));
+        panel.Arrange(new Rect(0, 0, 600, 600));
+
+        var origin = new Point(originX, originY);
+        button.RenderTransformOrigin = origin;
+
+        var localPivot = new Point(originX * 240f, originY * 180f);
+
+        // Before rotation
+        var screenBefore = button.PointToScreen(localPivot);
+
+        // Apply 45 degree rotation
+        button.RenderRotate(45f);
+        var screenAfter = button.PointToScreen(localPivot);
+
+        // Under rotation around the pivot, the pivot point itself must remain exactly stationary (no wobble)
+        Assert.Equal(screenBefore.X, screenAfter.X, 0.01f);
+        Assert.Equal(screenBefore.Y, screenAfter.Y, 0.01f);
+    }
 }

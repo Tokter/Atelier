@@ -1850,6 +1850,59 @@ public static class MarkupExtensions
         return node;
     }
 
+    public static T RenderTransform<T>(this T node, Matrix3x2 transform) where T : VisualNode
+    {
+        node.RenderTransform = transform;
+        return node;
+    }
+
+    public static T RenderTransformOrigin<T>(this T node, float x, float y) where T : VisualNode
+    {
+        node.RenderTransformOrigin = new Point(x, y);
+        return node;
+    }
+
+    public static T RenderTransformOrigin<T>(this T node, Point origin) where T : VisualNode
+    {
+        node.RenderTransformOrigin = origin;
+        return node;
+    }
+
+    public static T RenderScale<T>(this T node, float scale) where T : VisualNode
+    {
+        node.RenderTransform = Matrix3x2.CreateScale(scale);
+        return node;
+    }
+
+    public static T RenderScale<T>(this T node, float scaleX, float scaleY) where T : VisualNode
+    {
+        node.RenderTransform = Matrix3x2.CreateScale(scaleX, scaleY);
+        return node;
+    }
+
+    public static T RenderRotate<T>(this T node, float degrees) where T : VisualNode
+    {
+        float radians = degrees * (MathF.PI / 180f);
+        node.RenderTransform = Matrix3x2.CreateRotation(radians);
+        return node;
+    }
+
+    public static T RenderRotateCenter<T>(this T node, float degrees) where T : VisualNode
+    {
+        node.RenderTransformOrigin = new Point(0.5f, 0.5f);
+        float radians = degrees * (MathF.PI / 180f);
+        node.RenderTransform = Matrix3x2.CreateRotation(radians);
+        return node;
+    }
+
+    public static T RenderSkew<T>(this T node, float skewXDegrees, float skewYDegrees) where T : VisualNode
+    {
+        float skewXRad = skewXDegrees * (MathF.PI / 180f);
+        float skewYRad = skewYDegrees * (MathF.PI / 180f);
+        node.RenderTransform = Matrix3x2.CreateSkew(skewXRad, skewYRad);
+        return node;
+    }
+
     #endregion
 
     #region Image Extensions

@@ -333,7 +333,13 @@ public abstract class UIElement : VisualNode
             : Matrix3x2.CreateTranslation(Bounds.X, Bounds.Y);
 
         var eff = GetEffectiveTransform();
-        return eff.IsIdentity ? translation : (eff * translation);
+        var baseTransform = eff.IsIdentity ? translation : (eff * translation);
+
+        if (RenderTransform.IsIdentity)
+            return baseTransform;
+
+        var renderEff = GetEffectiveRenderTransform(Bounds.Width, Bounds.Height);
+        return renderEff.IsIdentity ? baseTransform : (renderEff * baseTransform);
     }
 
     public Rect TransformRectToScreen(Rect localRect)
@@ -712,9 +718,10 @@ public abstract class UIElement : VisualNode
         }
 
         var eff = GetEffectiveTransform();
+        var renderEff = RenderTransform.IsIdentity ? Matrix3x2.Identity : GetEffectiveRenderTransform(Bounds.Width, Bounds.Height);
         Point localPoint;
 
-        if (eff.IsIdentity)
+        if (eff.IsIdentity && renderEff.IsIdentity)
         {
             // Fast-path: untransformed element
             if (!Bounds.Contains(point))

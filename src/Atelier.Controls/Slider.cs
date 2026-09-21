@@ -76,6 +76,12 @@ public class Slider : Control
         ValueChanged?.Invoke(this, newValue);
     }
 
+    private bool _isDragging;
+    private Point _dragStartScreenPos;
+    private float _dragStartRatio;
+    private Point _dragTrackVector;
+    private float _dragUsableWidth;
+
     public Slider()
     {
         IsFocusable = true;
@@ -84,9 +90,13 @@ public class Slider : Control
 
     private void OnPointerCaptureChanged(UIElement? captured)
     {
-        if (captured != this && ValueIndicatorOpacity > 0f && !IsPressed)
+        if (captured != this)
         {
-            FadeValueIndicator(0f, 200);
+            _isDragging = false;
+            if (ValueIndicatorOpacity > 0f && !IsPressed)
+            {
+                FadeValueIndicator(0f, 200);
+            }
         }
     }
 
@@ -98,6 +108,18 @@ public class Slider : Control
             CapturePointer();
             e.Handled = true;
             UpdateValueFromPosition(e.Position);
+
+            _isDragging = true;
+            _dragStartScreenPos = e.ScreenPosition;
+            _dragStartRatio = NormalizedValue;
+
+            Point p0 = PointToScreen(new Point(0, 0));
+            Point p1 = PointToScreen(new Point(1, 0));
+            _dragTrackVector = new Point(p1.X - p0.X, p1.Y - p0.Y);
+
+            float handleRadius = 10f;
+            float usableWidth = Bounds.Width - handleRadius * 2;
+            _dragUsableWidth = usableWidth > 0 ? usableWidth : Math.Max(1f, Bounds.Width);
 
             if (ShowValueIndicator)
             {
@@ -112,13 +134,21 @@ public class Slider : Control
         if (IsPressed || IsPointerCaptured)
         {
             e.Handled = true;
-            UpdateValueFromPosition(e.Position);
+            if (_isDragging)
+            {
+                UpdateValueFromDrag(e.ScreenPosition);
+            }
+            else
+            {
+                UpdateValueFromPosition(e.Position);
+            }
         }
     }
 
     public override void OnPointerReleased(PointerEventArgs e)
     {
         base.OnPointerReleased(e);
+        _isDragging = false;
         if (IsPointerCaptured)
         {
             ReleasePointerCapture();
@@ -128,6 +158,25 @@ public class Slider : Control
         if (ShowValueIndicator)
         {
             FadeValueIndicator(0f, 200);
+        }
+    }
+
+    private void UpdateValueFromDrag(Point screenPos)
+    {
+        float dx = screenPos.X - _dragStartScreenPos.X;
+        float dy = screenPos.Y - _dragStartScreenPos.Y;
+
+        float trackLenSq = _dragTrackVector.X * _dragTrackVector.X + _dragTrackVector.Y * _dragTrackVector.Y;
+        if (trackLenSq > 0.0001f && _dragUsableWidth > 0)
+        {
+            float deltaAlongTrack = (dx * _dragTrackVector.X + dy * _dragTrackVector.Y) / trackLenSq;
+            float newRatio = Math.Clamp(_dragStartRatio + deltaAlongTrack / _dragUsableWidth, 0f, 1f);
+            Value = Minimum + newRatio * (Maximum - Minimum);
+        }
+        else
+        {
+            float ratio = Math.Clamp(_dragStartRatio + dx / Math.Max(1f, _dragUsableWidth), 0f, 1f);
+            Value = Minimum + ratio * (Maximum - Minimum);
         }
     }
 

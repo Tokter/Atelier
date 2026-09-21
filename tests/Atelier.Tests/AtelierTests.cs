@@ -394,6 +394,56 @@ public class AtelierCoreTests
     }
 
     [Fact]
+    public void Slider_DragTracking_StableWhenParentOrWindowIsScaledDuringDrag()
+    {
+        UIElement.ReleaseCurrentPointerCapture();
+
+        var slider = new Slider { Minimum = 80, Maximum = 200, Value = 100 }.Size(240, 48);
+        var root = new Canvas().Children(slider);
+        root.Measure(new Size(800, 800));
+        root.Arrange(new Rect(0, 0, 800, 800));
+
+        // Hook ValueChanged to dynamically rescale root during the drag
+        // (reproducing exactly what happens when "Scale Entire App Window" is checked)
+        slider.ValueChanged += (s, v) =>
+        {
+            root.Transform = System.Numerics.Matrix3x2.CreateScale(v / 100f);
+        };
+
+        // 1. Initial click at X = 120 (mid-point of slider)
+        var pressE = new Core.Events.PointerEventArgs(new Point(120, 24), Core.Events.PointerButtons.Left);
+        slider.OnPointerPressed(pressE);
+
+        float initialVal = slider.Value;
+        Assert.InRange(initialVal, 130f, 150f);
+
+        // 2. Drag right by +20 screen pixels
+        // Even though root.Transform changes to ~1.4x scale, the drag must remain monotonic and smooth
+        var drag1 = new Core.Events.PointerEventArgs(new Point(140, 24));
+        slider.OnPointerMoved(drag1);
+        float val1 = slider.Value;
+        Assert.True(val1 > initialVal, $"Expected val1 ({val1}) > initialVal ({initialVal})");
+
+        // 3. Drag right another +20 screen pixels
+        var drag2 = new Core.Events.PointerEventArgs(new Point(160, 24));
+        slider.OnPointerMoved(drag2);
+        float val2 = slider.Value;
+        Assert.True(val2 > val1, $"Expected val2 ({val2}) > val1 ({val1})");
+
+        // 4. Drag back left by 10 screen pixels (X = 150)
+        var drag3 = new Core.Events.PointerEventArgs(new Point(150, 24));
+        slider.OnPointerMoved(drag3);
+        float val3 = slider.Value;
+        Assert.True(val3 < val2, $"Expected val3 ({val3}) < val2 ({val2})");
+        Assert.True(val3 > val1, $"Expected val3 ({val3}) > val1 ({val1})");
+
+        // 5. Release pointer capture
+        var releaseE = new Core.Events.PointerEventArgs(new Point(150, 24), Core.Events.PointerButtons.Left);
+        slider.OnPointerReleased(releaseE);
+        Assert.False(slider.IsPointerCaptured);
+    }
+
+    [Fact]
     public void Slider_ValueIndicator_FadesOnPressAndRelease()
     {
         var clock = new Core.Animation.AnimationClock();

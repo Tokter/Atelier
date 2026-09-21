@@ -351,4 +351,29 @@ public class TreeViewTests
         hitHeader.OnPointerReleased(new PointerEventArgs(new Point(100, 12), PointerButtons.Left));
         Assert.True(rootItem.IsExpanded);
     }
+
+    [Fact]
+    public void TreeView_RootObservableCollection_DynamicallyUpdates()
+    {
+        var roots = new ObservableCollection<TestNode>
+        {
+            new("Root 1")
+        };
+
+        var treeView = new TreeView()
+            .ItemsSource(roots)
+            .ChildrenSelector<TestNode>(item => item.Children);
+
+        treeView.Measure(new Size(400, 600));
+        treeView.Arrange(new Rect(0, 0, 400, 600));
+
+        Assert.Single(treeView.GetVisibleItems());
+
+        roots.Add(new TestNode("Root 2"));
+        Assert.Equal(2, treeView.GetVisibleItems().Count);
+
+        roots.RemoveAt(0);
+        Assert.Single(treeView.GetVisibleItems());
+        Assert.Equal("Root 2", (treeView.GetVisibleItems()[0].ItemValue as TestNode)?.Name);
+    }
 }

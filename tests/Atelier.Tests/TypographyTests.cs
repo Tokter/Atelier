@@ -264,6 +264,43 @@ public class TypographyTests
         Assert.Equal(darkColors.OnSurfaceVariant, darkRenderer.GetTextColor(subtextTb));
     }
 
+    [Fact]
+    public void TextBlock_TextWrapping_WrapsWithinConstrainedAvailableWidth()
+    {
+        const string longText = "RenderTransform: Post-layout GPU transform. Card hinges around active pivot pin.";
+
+        var noWrapBlock = new TextBlock(longText) { TextWrapping = TextWrapping.NoWrap };
+        noWrapBlock.Measure(new Size(300, float.PositiveInfinity));
+
+        var wrapBlock = new TextBlock(longText).TextWrapping().ClipToBounds(true);
+        wrapBlock.Measure(new Size(300, float.PositiveInfinity));
+
+        Assert.True(noWrapBlock.DesiredSize.Width > 300, $"Expected noWrapBlock width > 300, was {noWrapBlock.DesiredSize.Width}");
+        Assert.True(wrapBlock.DesiredSize.Width <= 300, $"Expected wrapBlock width <= 300, was {wrapBlock.DesiredSize.Width}");
+        Assert.True(wrapBlock.DesiredSize.Height > noWrapBlock.DesiredSize.Height, "Expected wrapped text to occupy multiple lines with greater height.");
+    }
+
+    [Fact]
+    public void MaterialTextBlockRenderer_ClipToBounds_ExecutesWithoutErrorAndRestoresCanvas()
+    {
+        using var bitmap = new SkiaSharp.SKBitmap(200, 200);
+        using var canvas = new SkiaSharp.SKCanvas(bitmap);
+        using var paintRegistry = new Atelier.Rendering.PaintRegistry();
+        var context = new Atelier.Rendering.DrawingContext(canvas, paintRegistry);
+
+        var colors = MaterialColorScheme.Light();
+        var renderer = new MaterialTextBlockRenderer(colors);
+
+        var textBlock = new TextBlock("Extremely long text that will be clipped to bounds")
+            .ClipToBounds(true);
+        textBlock.Arrange(new Rect(0, 0, 50, 16));
+
+        int initialSaveCount = canvas.SaveCount;
+        renderer.Render(textBlock, ref context);
+
+        Assert.Equal(initialSaveCount, canvas.SaveCount);
+    }
+
     private class TestButtonViewModel : System.ComponentModel.INotifyPropertyChanged
     {
         private bool _isActive;

@@ -33,6 +33,8 @@ namespace Atelier.Gallery.ViewModels
             _pages.Add(new CardsViewModel());
             _pages.Add(new IconsViewModel());
             _pages.Add(new TypographyViewModel());
+            _pages.Add(new TreeViewViewModel());
+            _pages.Add(new TransformationViewModel());
             _currentPage = initialPage;
         }
 

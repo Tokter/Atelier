@@ -783,29 +783,60 @@ public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRend
 
         Color textColor = GetTextColor(textBlock);
 
-        if (textBlock.TextWrapping == TextWrapping.Wrap && textBlock.Bounds.Width > 0)
+        int clipSave = -1;
+        if (textBlock.ClipToBounds && textBlock.Bounds.Width > 0 && textBlock.Bounds.Height > 0)
         {
-            var (_, lines) = TextMeasurer.MeasureWrapped(
-                textBlock.Text,
-                textBlock.Bounds.Width,
-                textBlock.FontSize,
-                textBlock.FontFamily,
-                textBlock.Bold,
-                textBlock.Italic
-            );
+            clipSave = context.Canvas.Save();
+            context.Canvas.ClipRect(new SKRect(0, 0, textBlock.Bounds.Width, textBlock.Bounds.Height), SKClipOperation.Intersect, antialias: true);
+        }
 
-            float lineHeight = TextMeasurer.GetFontSpacing(textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
-            if (lineHeight <= 0) lineHeight = textBlock.FontSize * 1.35f;
-            float textY = textBlock.FontSize;
-
-            for (int i = 0; i < lines.Count; i++)
+        try
+        {
+            if (textBlock.TextWrapping == TextWrapping.Wrap && textBlock.Bounds.Width > 0)
             {
-                string line = lines[i];
+                var (_, lines) = TextMeasurer.MeasureWrapped(
+                    textBlock.Text,
+                    textBlock.Bounds.Width,
+                    textBlock.FontSize,
+                    textBlock.FontFamily,
+                    textBlock.Bold,
+                    textBlock.Italic
+                );
+
+                float lineHeight = TextMeasurer.GetFontSpacing(textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
+                if (lineHeight <= 0) lineHeight = textBlock.FontSize * 1.35f;
+                float textY = textBlock.FontSize;
+
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    string line = lines[i];
+                    float textX = 0;
+
+                    if (textBlock.TextAlignment != TextAlignment.Left)
+                    {
+                        var measured = context.MeasureText(line, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
+                        if (textBlock.TextAlignment == TextAlignment.Center)
+                        {
+                            textX = (textBlock.Bounds.Width - measured.Width) * 0.5f;
+                        }
+                        else if (textBlock.TextAlignment == TextAlignment.Right)
+                        {
+                            textX = textBlock.Bounds.Width - measured.Width;
+                        }
+                    }
+
+                    context.DrawText(line, new Point(textX, textY), textColor, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
+                    textY += lineHeight;
+                }
+            }
+            else
+            {
+                float textY = textBlock.FontSize;
                 float textX = 0;
 
                 if (textBlock.TextAlignment != TextAlignment.Left)
                 {
-                    var measured = context.MeasureText(line, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
+                    var measured = context.MeasureText(textBlock.Text, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
                     if (textBlock.TextAlignment == TextAlignment.Center)
                     {
                         textX = (textBlock.Bounds.Width - measured.Width) * 0.5f;
@@ -816,29 +847,15 @@ public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRend
                     }
                 }
 
-                context.DrawText(line, new Point(textX, textY), textColor, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
-                textY += lineHeight;
+                context.DrawText(textBlock.Text, new Point(textX, textY), textColor, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
             }
         }
-        else
+        finally
         {
-            float textY = textBlock.FontSize;
-            float textX = 0;
-
-            if (textBlock.TextAlignment != TextAlignment.Left)
+            if (clipSave >= 0)
             {
-                var measured = context.MeasureText(textBlock.Text, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
-                if (textBlock.TextAlignment == TextAlignment.Center)
-                {
-                    textX = (textBlock.Bounds.Width - measured.Width) * 0.5f;
-                }
-                else if (textBlock.TextAlignment == TextAlignment.Right)
-                {
-                    textX = textBlock.Bounds.Width - measured.Width;
-                }
+                context.Canvas.RestoreToCount(clipSave);
             }
-
-            context.DrawText(textBlock.Text, new Point(textX, textY), textColor, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
         }
     }
 }

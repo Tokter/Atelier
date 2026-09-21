@@ -29,6 +29,18 @@ public abstract class VisualNode : BindableObject
             Point.Zero,
             (s, o, n) => ((VisualNode)s).OnTransformOriginChanged(o, n));
 
+    public static readonly BindableProperty<Matrix3x2> RenderTransformProperty =
+        BindableProperty.Register<VisualNode, Matrix3x2>(
+            nameof(RenderTransform),
+            Matrix3x2.Identity,
+            (s, o, n) => ((VisualNode)s).OnRenderTransformChanged(o, n));
+
+    public static readonly BindableProperty<Point> RenderTransformOriginProperty =
+        BindableProperty.Register<VisualNode, Point>(
+            nameof(RenderTransformOrigin),
+            new Point(0.5f, 0.5f),
+            (s, o, n) => ((VisualNode)s).OnRenderTransformOriginChanged(o, n));
+
     public Matrix3x2 Transform
     {
         get => GetValue(TransformProperty);
@@ -39,6 +51,18 @@ public abstract class VisualNode : BindableObject
     {
         get => GetValue(TransformOriginProperty);
         set => SetValue(TransformOriginProperty, value);
+    }
+
+    public Matrix3x2 RenderTransform
+    {
+        get => GetValue(RenderTransformProperty);
+        set => SetValue(RenderTransformProperty, value);
+    }
+
+    public Point RenderTransformOrigin
+    {
+        get => GetValue(RenderTransformOriginProperty);
+        set => SetValue(RenderTransformOriginProperty, value);
     }
 
     public event Action? NeedsVisualUpdate;
@@ -54,6 +78,16 @@ public abstract class VisualNode : BindableObject
     {
         InvalidateVisual();
         InvalidateLayout();
+    }
+
+    protected virtual void OnRenderTransformChanged(Matrix3x2 oldValue, Matrix3x2 newValue)
+    {
+        InvalidateVisual();
+    }
+
+    protected virtual void OnRenderTransformOriginChanged(Point oldValue, Point newValue)
+    {
+        InvalidateVisual();
     }
 
     public virtual Matrix3x2 GetEffectiveTransform()
@@ -73,6 +107,20 @@ public abstract class VisualNode : BindableObject
         float oy = height * TransformOrigin.Y;
 
         return Matrix3x2.CreateTranslation(-ox, -oy) * Transform * Matrix3x2.CreateTranslation(ox, oy);
+    }
+
+    public virtual Matrix3x2 GetEffectiveRenderTransform(float width, float height)
+    {
+        if (RenderTransform.IsIdentity)
+            return Matrix3x2.Identity;
+
+        if (width <= 0 && height <= 0)
+            return RenderTransform;
+
+        float ox = width * RenderTransformOrigin.X;
+        float oy = height * RenderTransformOrigin.Y;
+
+        return Matrix3x2.CreateTranslation(-ox, -oy) * RenderTransform * Matrix3x2.CreateTranslation(ox, oy);
     }
 
     public virtual Matrix3x2 GetLocalTransform()
