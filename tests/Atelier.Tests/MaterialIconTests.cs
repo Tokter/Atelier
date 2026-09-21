@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Atelier.Tests;
 
-public class MaterialIconTests
+public partial class MaterialIconTests
 {
     [Fact]
     public void FontManager_LoadsEmbeddedFont_ReturnsValidTypeface()
@@ -302,5 +302,124 @@ public class MaterialIconTests
         Assert.NotNull(icon2.Data);
         Assert.Equal(20f, icon2.Size);
         Assert.Equal(1.5f, icon2.StrokeWidth);
+    }
+
+    public partial class IconBindingTestVM : CommunityToolkit.Mvvm.ComponentModel.ObservableObject
+    {
+        [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+        private MaterialIconKind _kind = MaterialIconKind.Star;
+
+        [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+        private float _fill = 0f;
+
+        [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+        private float _weight = 400f;
+
+        [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+        private float _grade = 0f;
+
+        [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+        private float _opticalSize = 24f;
+
+        [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+        private float _size = 24f;
+
+        [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+        private float _strokeWidth = 1.5f;
+
+        [CommunityToolkit.Mvvm.ComponentModel.ObservableProperty]
+        private string? _pathData = "M0 0h10v10H0z";
+    }
+
+    [Fact]
+    public void Icon_FluentBindings_SyncWithViewModel()
+    {
+        var vm = new IconBindingTestVM();
+        var icon = new Icon()
+            .BindKind(vm, x => x.Kind, (m, v) => m.Kind = v)
+            .BindFill(vm, x => x.Fill, (m, v) => m.Fill = v)
+            .BindWeight(vm, x => x.Weight, (m, v) => m.Weight = v)
+            .BindGrade(vm, x => x.Grade, (m, v) => m.Grade = v)
+            .BindOpticalSize(vm, x => x.OpticalSize, (m, v) => m.OpticalSize = v)
+            .BindSize(vm, x => x.Size, (m, v) => m.Size = v)
+            .BindStrokeWidth(vm, x => x.StrokeWidth, (m, v) => m.StrokeWidth = v)
+            .BindPathData(vm, x => x.PathData, (m, v) => m.PathData = v);
+
+        Assert.Equal(MaterialIconKind.Star, icon.Kind);
+        Assert.Equal(0f, icon.Fill);
+        Assert.Equal(400f, icon.Weight);
+        Assert.Equal(0f, icon.Grade);
+        Assert.Equal(24f, icon.OpticalSize);
+        Assert.Equal(24f, icon.Size);
+        Assert.Equal(1.5f, icon.StrokeWidth);
+        Assert.Equal("M0 0h10v10H0z", icon.PathData);
+
+        // Mutate ViewModel
+        vm.Kind = MaterialIconKind.Favorite;
+        vm.Fill = 1f;
+        vm.Weight = 700f;
+        vm.Grade = 200f;
+        vm.OpticalSize = 48f;
+        vm.Size = 64f;
+        vm.StrokeWidth = 3f;
+        vm.PathData = "M0 0h24v24H0z";
+
+        Assert.Equal(MaterialIconKind.Favorite, icon.Kind);
+        Assert.Equal(1f, icon.Fill);
+        Assert.Equal(700f, icon.Weight);
+        Assert.Equal(200f, icon.Grade);
+        Assert.Equal(48f, icon.OpticalSize);
+        Assert.Equal(64f, icon.Size);
+        Assert.Equal(3f, icon.StrokeWidth);
+        Assert.Equal("M0 0h24v24H0z", icon.PathData);
+    }
+
+    [Fact]
+    public void MaterialIconKind_CatalogSearch_FiltersCorrectly()
+    {
+        var allKinds = Enum.GetValues<MaterialIconKind>();
+        var catalog = new List<(MaterialIconKind Kind, string Name, string DisplayName)>();
+
+        foreach (var kind in allKinds)
+        {
+            if (kind == MaterialIconKind.None) continue;
+            string name = kind.ToString();
+            string displayName = (name.StartsWith("Icon", StringComparison.Ordinal) && name.Length > 4 && char.IsDigit(name[4]))
+                ? name.Substring(4)
+                : name;
+            catalog.Add((kind, name, displayName));
+        }
+
+        Assert.True(catalog.Count >= 2100, $"Expected >= 2100 icons, found {catalog.Count}");
+
+        // Substring & Case-Insensitive search
+        var arrowResults = catalog.FindAll(x =>
+            x.Name.Contains("arrow", StringComparison.OrdinalIgnoreCase) ||
+            x.DisplayName.Contains("arrow", StringComparison.OrdinalIgnoreCase));
+
+        Assert.True(arrowResults.Count > 10, "Expected multiple arrow icons");
+        Assert.Contains(arrowResults, x => x.Kind == MaterialIconKind.ArrowBack);
+        Assert.Contains(arrowResults, x => x.Kind == MaterialIconKind.ArrowForward);
+
+        // Numeric prefix search (e.g. "360" or "Icon360")
+        var numResults = catalog.FindAll(x =>
+            x.Name.Contains("360", StringComparison.OrdinalIgnoreCase) ||
+            x.DisplayName.Contains("360", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Contains(numResults, x => x.Kind == MaterialIconKind.Icon360);
+
+        // Heart / Favorite search
+        var favResults = catalog.FindAll(x =>
+            x.Name.Contains("favorite", StringComparison.OrdinalIgnoreCase) ||
+            x.DisplayName.Contains("favorite", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Contains(favResults, x => x.Kind == MaterialIconKind.Favorite);
+        Assert.Contains(favResults, x => x.Kind == MaterialIconKind.FavoriteBorder);
+
+        // Empty match for nonsense query
+        var noResults = catalog.FindAll(x =>
+            x.Name.Contains("xyznonexistentquery999", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Empty(noResults);
     }
 }

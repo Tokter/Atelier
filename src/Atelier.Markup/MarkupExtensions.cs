@@ -203,6 +203,50 @@ public static class MarkupExtensions
         return panel;
     }
 
+    public static WrapPanel Orientation(this WrapPanel panel, Orientation orientation)
+    {
+        panel.Orientation = orientation;
+        return panel;
+    }
+
+    public static WrapPanel ItemWidth(this WrapPanel panel, float itemWidth)
+    {
+        panel.ItemWidth = itemWidth;
+        return panel;
+    }
+
+    public static WrapPanel ItemHeight(this WrapPanel panel, float itemHeight)
+    {
+        panel.ItemHeight = itemHeight;
+        return panel;
+    }
+
+    public static WrapPanel HorizontalSpacing(this WrapPanel panel, float spacing)
+    {
+        panel.HorizontalSpacing = spacing;
+        return panel;
+    }
+
+    public static WrapPanel VerticalSpacing(this WrapPanel panel, float spacing)
+    {
+        panel.VerticalSpacing = spacing;
+        return panel;
+    }
+
+    public static WrapPanel Spacing(this WrapPanel panel, float horizontal, float vertical)
+    {
+        panel.HorizontalSpacing = horizontal;
+        panel.VerticalSpacing = vertical;
+        return panel;
+    }
+
+    public static WrapPanel Spacing(this WrapPanel panel, float spacing)
+    {
+        panel.HorizontalSpacing = spacing;
+        panel.VerticalSpacing = spacing;
+        return panel;
+    }
+
     public static Grid Rows(this Grid grid, params GridLength[] rows)
     {
         for (int i = 0; i < rows.Length; i++)
@@ -468,6 +512,12 @@ public static class MarkupExtensions
     public static TextBlock TextWrapping(this TextBlock textBlock, Atelier.Controls.TextWrapping wrapping = Atelier.Controls.TextWrapping.Wrap)
     {
         textBlock.TextWrapping = wrapping;
+        return textBlock;
+    }
+
+    public static TextBlock TextAlignment(this TextBlock textBlock, Atelier.Controls.TextAlignment alignment)
+    {
+        textBlock.TextAlignment = alignment;
         return textBlock;
     }
 
@@ -1439,6 +1489,55 @@ public static class MarkupExtensions
         where TSource : class
     {
         icon.SetBinding(Icon.ForegroundProperty, source, getter);
+        return icon;
+    }
+
+    public static Icon BindFill<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+        where TSource : class
+    {
+        icon.SetBinding(Icon.FillProperty, source, getter, setter);
+        return icon;
+    }
+
+    public static Icon BindWeight<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+        where TSource : class
+    {
+        icon.SetBinding(Icon.WeightProperty, source, getter, setter);
+        return icon;
+    }
+
+    public static Icon BindGrade<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+        where TSource : class
+    {
+        icon.SetBinding(Icon.GradeProperty, source, getter, setter);
+        return icon;
+    }
+
+    public static Icon BindOpticalSize<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+        where TSource : class
+    {
+        icon.SetBinding(Icon.OpticalSizeProperty, source, getter, setter);
+        return icon;
+    }
+
+    public static Icon BindSize<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+        where TSource : class
+    {
+        icon.SetBinding(Icon.SizeProperty, source, getter, setter);
+        return icon;
+    }
+
+    public static Icon BindStrokeWidth<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+        where TSource : class
+    {
+        icon.SetBinding(Icon.StrokeWidthProperty, source, getter, setter);
+        return icon;
+    }
+
+    public static Icon BindPathData<TSource>(this Icon icon, TSource source, Func<TSource, string?> getter, Action<TSource, string?>? setter = null)
+        where TSource : class
+    {
+        icon.SetBinding(Icon.PathDataProperty, source, getter, setter);
         return icon;
     }
 
