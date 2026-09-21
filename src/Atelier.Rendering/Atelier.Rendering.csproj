@@ -7,9 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="HarfBuzzSharp" Version="14.2.1.200" />
-    <PackageReference Include="SkiaSharp" Version="4.152.0" />
-    <PackageReference Include="SkiaSharp.HarfBuzz" Version="4.152.0" />
+    <PackageReference Include="HarfBuzzSharp" Version="14.2.1.201" />
+    <PackageReference Include="SkiaSharp" Version="4.152.1" />
+    <PackageReference Include="SkiaSharp.HarfBuzz" Version="4.152.1" />
   </ItemGroup>
 
   <ItemGroup>

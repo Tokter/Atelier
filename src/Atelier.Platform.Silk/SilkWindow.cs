@@ -887,6 +887,57 @@ public class SilkWindow : IDisposable
         }
     }
 
+    private SilkKey _repeatingKey = SilkKey.Unknown;
+    private int _repeatingKeyCode;
+    private IKeyboard? _repeatingKeyboard;
+    private ulong _nextRepeatTime;
+    private const int InitialKeyRepeatDelayMs = 450;
+    private const int KeyRepeatIntervalMs = 35;
+
+    private static bool IsRepeatingKey(SilkKey key) => key switch
+    {
+        SilkKey.Left => true,
+        SilkKey.Right => true,
+        SilkKey.Up => true,
+        SilkKey.Down => true,
+        SilkKey.Backspace => true,
+        SilkKey.Delete => true,
+        SilkKey.Home => true,
+        SilkKey.End => true,
+        SilkKey.PageUp => true,
+        SilkKey.PageDown => true,
+        _ => false
+    };
+
+    private void ProcessKeyRepeat()
+    {
+        if (_repeatingKey == SilkKey.Unknown || _repeatingKeyboard == null)
+            return;
+
+        if (!_repeatingKeyboard.IsKeyPressed(_repeatingKey))
+        {
+            _repeatingKey = SilkKey.Unknown;
+            _repeatingKeyboard = null;
+            return;
+        }
+
+        ulong now = (ulong)Environment.TickCount64;
+        if (now >= _nextRepeatTime)
+        {
+            _nextRepeatTime = now + KeyRepeatIntervalMs;
+
+            var atelierKey = MapKey(_repeatingKey);
+            if (atelierKey != Core.Events.Key.None)
+            {
+                var keyEventArgs = new KeyEventArgs(atelierKey, _repeatingKeyCode, GetModifiers(_repeatingKeyboard), true);
+                if (!PopupManager.HandleKeyDown(keyEventArgs))
+                {
+                    FocusManager.DispatchKeyDown(keyEventArgs, _rootElement);
+                }
+            }
+        }
+    }
+
     private void OnKeyDown(IKeyboard keyboard, SilkKey key, int keyCode)
     {
         // Hot Reload manual trigger: F5 or Ctrl+R
@@ -914,6 +965,14 @@ public class SilkWindow : IDisposable
             return;
         }
 
+        if (IsRepeatingKey(key))
+        {
+            _repeatingKey = key;
+            _repeatingKeyCode = keyCode;
+            _repeatingKeyboard = keyboard;
+            _nextRepeatTime = (ulong)Environment.TickCount64 + InitialKeyRepeatDelayMs;
+        }
+
         var keyEventArgs = new KeyEventArgs(atelierKey, keyCode, GetModifiers(keyboard), true);
         if (PopupManager.HandleKeyDown(keyEventArgs))
         {
@@ -925,6 +984,12 @@ public class SilkWindow : IDisposable
 
     private void OnKeyUp(IKeyboard keyboard, SilkKey key, int keyCode)
     {
+        if (_repeatingKey == key)
+        {
+            _repeatingKey = SilkKey.Unknown;
+            _repeatingKeyboard = null;
+        }
+
         var atelierKey = MapKey(key);
         var keyEventArgs = new KeyEventArgs(atelierKey, keyCode, GetModifiers(keyboard), false);
         FocusManager.DispatchKeyUp(keyEventArgs, _rootElement);
@@ -1033,6 +1098,9 @@ public class SilkWindow : IDisposable
     private void OnUpdate(double deltaTime)
     {
         if (_isDisposed || _isClosing) return;
+
+        // Process key repeat for held navigation & editing keys
+        ProcessKeyRepeat();
 
         // 0. Process thread-safe dispatch queue (e.g. Hot Reload notifications)
         while (_dispatchQueue.TryDequeue(out var action))
