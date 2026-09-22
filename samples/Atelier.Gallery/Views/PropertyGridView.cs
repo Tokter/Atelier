@@ -55,7 +55,6 @@ public class PropertyGridView : Grid
             IsToolbarVisible = _viewModel.IsToolbarVisible,
             ToolbarElevation = _viewModel.ToolbarElevation,
             LabelWidth = _viewModel.LabelWidth,
-            Height = 520
         };
 
         _propertyGrid.PropertyValueChanged += (s, e) =>
@@ -630,7 +629,7 @@ public class PropertyGridView : Grid
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(6, 2),
                 Width = 110,
-                Child = new TextBlock(typeName) { FontSize = 11, Bold = true, Foreground = badgeColor, HorizontalAlignment = HorizontalAlignment.Center }
+                Child = new TextBlock(typeName) { FontSize = 11, Bold = true, Foreground = badgeColor, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
             };
 
             var editorLabel = new TextBlock(editorName).Bold().FontSize(12);

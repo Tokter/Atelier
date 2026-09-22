@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Windows.Input;
+using Atelier.Core.Events;
 using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -8,6 +9,7 @@ using Xunit;
 
 namespace Atelier.Tests;
 
+[Collection("KeybindingTests")]
 public class KeybindingManagerTests
 {
     [Fact]
@@ -37,6 +39,7 @@ public class KeybindingManagerTests
     [Fact]
     public void KeybindingManager_CanExecute_And_ExecuteKeybinding_WorkByKey()
     {
+        KeybindingManager.Initialize();
         bool canExecute = KeybindingManager.CanExecuteKeybinding(KeybindingManager.GlobalDebugKeybinding);
         Assert.True(canExecute);
 
@@ -47,6 +50,7 @@ public class KeybindingManagerTests
     [Fact]
     public void KeybindingManager_CanExecute_And_ExecuteKeybinding_WorkByGroupAndName()
     {
+        KeybindingManager.Initialize();
         bool canExecute = KeybindingManager.CanExecuteKeybinding("Global", "Debug");
         Assert.True(canExecute);
 
@@ -210,6 +214,80 @@ public class KeybindingManagerTests
         Assert.True(KeybindingManager.CanExecuteKeybinding(Atelier.Generated.GeneratedKeybindings.ActionRunKeybinding, actionVm));
         KeybindingManager.ExecuteKeybinding(Atelier.Generated.GeneratedKeybindings.ActionRunKeybinding, actionVm);
         Assert.True(actionVm.DidRun);
+    }
+
+    [Fact]
+    public void KeybindingManager_FindKeybinding_MatchesRegardlessOfModifierOrder()
+    {
+        KeybindingManager.Clear();
+
+        var command = new AtelierRelayCommand(() => { });
+        var descriptor = new KeybindingDescriptor("ClearLogs", "Global", "Ctrl+Shift+L", command);
+        KeybindingManager.RegisterKeybinding(descriptor);
+
+        // Defined as "Ctrl+Shift+L", but queried as "Shift+Ctrl+L"
+        var foundByReversedString = KeybindingManager.FindKeybinding("Global", "Shift+Ctrl+L");
+        Assert.NotNull(foundByReversedString);
+        Assert.Equal("ClearLogs", foundByReversedString.Name);
+
+        // Queried as "Ctrl+Shift+L"
+        var foundByOriginalString = KeybindingManager.FindKeybinding("Global", "Ctrl+Shift+L");
+        Assert.NotNull(foundByOriginalString);
+        Assert.Equal("ClearLogs", foundByOriginalString.Name);
+
+        // Queried as "Shift, Control, L"
+        var foundByCommaFormat = KeybindingManager.FindKeybinding("Global", "Shift, Control, L");
+        Assert.NotNull(foundByCommaFormat);
+        Assert.Equal("ClearLogs", foundByCommaFormat.Name);
+
+        // Queried with Key and Modifiers
+        var foundByKeys = KeybindingManager.FindKeybinding("Global", Key.L, ModifierKeys.Shift | ModifierKeys.Control);
+        Assert.NotNull(foundByKeys);
+        Assert.Equal("ClearLogs", foundByKeys.Name);
+
+        // Defined with reverse order "Shift+Ctrl+K"
+        var reverseDescriptor = new KeybindingDescriptor("TestKey", "Global", "Shift+Ctrl+K", command);
+        KeybindingManager.RegisterKeybinding(reverseDescriptor);
+
+        // KeybindingDescriptor normalizes to standard order
+        Assert.Equal("Ctrl+Shift+K", reverseDescriptor.Keybinding);
+
+        // Queried as "Ctrl+Shift+K"
+        var foundReversed = KeybindingManager.FindKeybinding("Global", "Ctrl+Shift+K");
+        Assert.NotNull(foundReversed);
+        Assert.Equal("TestKey", foundReversed.Name);
+    }
+
+    [Fact]
+    public void KeybindingManager_TryExecuteGesture_StringOverload_MatchesRegardlessOfModifierOrder()
+    {
+        KeybindingManager.Clear();
+
+        bool executed = false;
+        var command = new AtelierRelayCommand(() => executed = true);
+        var descriptor = new KeybindingDescriptor("TestExec", "CustomGroup", "Ctrl+Shift+T", command);
+        KeybindingManager.RegisterKeybinding(descriptor);
+
+        // Execute using "Shift+Ctrl+T"
+        bool result = KeybindingManager.TryExecuteGesture("CustomGroup", "Shift+Ctrl+T");
+        Assert.True(result);
+        Assert.True(executed);
+
+        // Execute across all groups
+        executed = false;
+        bool crossGroupResult = KeybindingManager.TryExecuteGesture("Shift+Ctrl+T");
+        Assert.True(crossGroupResult);
+        Assert.True(executed);
+    }
+
+    [Fact]
+    public void KeybindingManager_GesturesMatch_ComparesCorrectly()
+    {
+        Assert.True(KeybindingManager.GesturesMatch("Ctrl+Shift+L", "Shift+Ctrl+L"));
+        Assert.True(KeybindingManager.GesturesMatch("Ctrl+Alt+Shift+P", "Shift+Ctrl+Alt+P"));
+        Assert.True(KeybindingManager.GesturesMatch("Ctrl-Shift-L", "Shift+Ctrl+L"));
+        Assert.False(KeybindingManager.GesturesMatch("Ctrl+Shift+L", "Ctrl+Shift+P"));
+        Assert.False(KeybindingManager.GesturesMatch("Ctrl+L", "Ctrl+Shift+L"));
     }
 }
 

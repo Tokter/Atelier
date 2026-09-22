@@ -54,13 +54,13 @@ public class Button : ContentControl
     public Button()
     {
         IsFocusable = true;
-        Padding = new Thickness(16, 10);
+        Padding = new Thickness(16, 6);
         CornerRadius = new CornerRadius(20); // MD3 pill shape default
     }
 
     public Button(string text) : this()
     {
-        Content = new TextBlock(text);
+        Content = new TextBlock(text) { VerticalAlignment = VerticalAlignment.Center };
     }
 
     public override void OnPointerPressed(PointerEventArgs e)

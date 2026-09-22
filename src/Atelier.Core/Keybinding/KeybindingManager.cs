@@ -24,6 +24,7 @@ public static partial class KeybindingManager
         }
 
         RegisteredKeybindings[keybindingDescriptor.Group][keybindingDescriptor.Name] = keybindingDescriptor;
+        WarmGestureCache(keybindingDescriptor.Keybinding);
     }
 
     /// <summary>
@@ -42,12 +43,21 @@ public static partial class KeybindingManager
         }
 
         groupKeybindings[keybindingDescriptor.Name] = keybindingDescriptor;
+        WarmGestureCache(keybindingDescriptor.Keybinding);
     }
 
     public static void Clear()
     {
         RegisteredKeybindings.Clear();
         _gestureCache.Clear();
+    }
+
+    private static void WarmGestureCache(string? keybindingStr)
+    {
+        if (!string.IsNullOrWhiteSpace(keybindingStr))
+        {
+            GetParsedGesture(keybindingStr);
+        }
     }
 
     private static KeybindingGesture? GetParsedGesture(string keybindingStr)
@@ -61,6 +71,11 @@ public static partial class KeybindingManager
         if (KeybindingGesture.TryParse(keybindingStr, out var gesture))
         {
             _gestureCache[keybindingStr] = gesture;
+            var normalized = gesture.ToString();
+            if (!string.Equals(keybindingStr, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                _gestureCache[normalized] = gesture;
+            }
             return gesture;
         }
 
@@ -69,7 +84,8 @@ public static partial class KeybindingManager
     }
 
     /// <summary>
-    /// Finds a registered keybinding descriptor in the specified group matching the key and modifiers.
+    /// Finds a registered keybinding descriptor in the specified group matching the key and modifiers,
+    /// regardless of the order in which modifiers were defined in the keybinding.
     /// </summary>
     public static IKeybindingDescriptor? FindKeybinding(string group, Key key, ModifierKeys modifiers)
     {
@@ -86,6 +102,55 @@ public static partial class KeybindingManager
                     return descriptor;
                 }
             }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds a registered keybinding descriptor in the specified group matching the given gesture string,
+    /// regardless of the order in which modifiers are specified (e.g. "Ctrl+Shift+L" matches "Shift+Ctrl+L").
+    /// </summary>
+    public static IKeybindingDescriptor? FindKeybinding(string group, string gestureString)
+    {
+        if (string.IsNullOrEmpty(group) || string.IsNullOrWhiteSpace(gestureString))
+            return null;
+
+        if (KeybindingGesture.TryParse(gestureString, out var gesture))
+        {
+            return FindKeybinding(group, gesture.Key, gesture.Modifiers);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds a registered keybinding descriptor in any group matching the key and modifiers.
+    /// </summary>
+    public static IKeybindingDescriptor? FindKeybinding(Key key, ModifierKeys modifiers)
+    {
+        foreach (var group in RegisteredKeybindings.Keys)
+        {
+            var descriptor = FindKeybinding(group, key, modifiers);
+            if (descriptor != null)
+                return descriptor;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds a registered keybinding descriptor in any group matching the given gesture string,
+    /// regardless of modifier ordering (e.g. "Ctrl+Shift+L" matches "Shift+Ctrl+L").
+    /// </summary>
+    public static IKeybindingDescriptor? FindKeybinding(string gestureString)
+    {
+        if (string.IsNullOrWhiteSpace(gestureString))
+            return null;
+
+        if (KeybindingGesture.TryParse(gestureString, out var gesture))
+        {
+            return FindKeybinding(gesture.Key, gesture.Modifiers);
         }
 
         return null;
@@ -115,6 +180,67 @@ public static partial class KeybindingManager
     {
         if (e == null) return false;
         return TryExecuteGesture(group, e.Key, e.Modifiers, target);
+    }
+
+    /// <summary>
+    /// Attempts to find and execute a registered keybinding matching the gesture string in the specified group,
+    /// regardless of modifier order (e.g. "Ctrl+Shift+L" matches "Shift+Ctrl+L").
+    /// </summary>
+    public static bool TryExecuteGesture(string group, string gestureString, object? target = null)
+    {
+        if (string.IsNullOrEmpty(group) || string.IsNullOrWhiteSpace(gestureString))
+            return false;
+
+        if (KeybindingGesture.TryParse(gestureString, out var gesture))
+        {
+            return TryExecuteGesture(group, gesture.Key, gesture.Modifiers, target);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Attempts to find and execute a registered keybinding matching the gesture string across any group,
+    /// regardless of modifier order.
+    /// </summary>
+    public static bool TryExecuteGesture(string gestureString, object? target = null)
+    {
+        if (string.IsNullOrWhiteSpace(gestureString))
+            return false;
+
+        if (KeybindingGesture.TryParse(gestureString, out var gesture))
+        {
+            foreach (var group in RegisteredKeybindings.Keys)
+            {
+                if (TryExecuteGesture(group, gesture.Key, gesture.Modifiers, target))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Determines whether two gesture strings represent the same keyboard shortcut,
+    /// regardless of modifier order, casing, or spacing (e.g. "Ctrl+Shift+L" matches "Shift+Ctrl+L").
+    /// </summary>
+    public static bool MatchesGesture(string? gestureA, string? gestureB)
+    {
+        return KeybindingGesture.Matches(gestureA, gestureB);
+    }
+
+    /// <summary>
+    /// Determines whether two gesture strings represent the same keyboard shortcut,
+    /// regardless of modifier order, casing, or spacing (e.g. "Ctrl+Shift+L" matches "Shift+Ctrl+L").
+    /// </summary>
+    public static bool GesturesMatch(string? gestureA, string? gestureB) => MatchesGesture(gestureA, gestureB);
+
+    /// <summary>
+    /// Normalizes a gesture string to canonical form with modifiers in standard order (e.g. "Shift+Ctrl+L" -> "Ctrl+Shift+L").
+    /// </summary>
+    public static string NormalizeGesture(string? gestureString)
+    {
+        return KeybindingGesture.Normalize(gestureString);
     }
 
     public static bool CanExecuteKeybinding(string group, string name, object? target = null)

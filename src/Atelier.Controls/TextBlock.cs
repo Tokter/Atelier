@@ -1,4 +1,5 @@
 using System;
+using Atelier.Core;
 using Atelier.Core.Primitives;
 using Atelier.Core.Properties;
 using Atelier.Core.Tree;
@@ -105,6 +106,11 @@ public class TextBlock : UIElement
     public TextBlock(string text) : this()
     {
         Text = text;
+
+        if (Text.ContainsEmoji())
+        {
+            FontFamily = "Segoe UI Emoji";
+        }
     }
 
     protected override Size MeasureOverride(Size availableSize)

@@ -1,4 +1,6 @@
 using Atelier.Controls;
+using Atelier.Core.Events;
+using Atelier.Core.Keybinding;
 using Atelier.Core.Primitives;
 using Atelier.Core.Tree;
 using Atelier.Gallery.ViewModels;
@@ -33,6 +35,22 @@ namespace Atelier.Gallery.Views
                 Identifier = "RootHost",
                 Content = windowLayout
             };
+        }
+
+        public override void OnKeyDown(KeyEventArgs e)
+        {
+            base.OnKeyDown(e);
+            if (e.Handled) return;
+
+            // When focus is outside the active page (e.g. sidebar navigation or window chrome),
+            // allow the active page ViewModel to handle matching global keybindings
+            if (_viewModel.CurrentPage != null)
+            {
+                if (KeybindingManager.TryExecuteGesture(Group, e.Key, e.Modifiers, _viewModel.CurrentPage))
+                {
+                    e.Handled = true;
+                }
+            }
         }
 
         private TitleBar CreateTitlebar()

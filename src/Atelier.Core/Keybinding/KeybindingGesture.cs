@@ -5,10 +5,13 @@ using Atelier.Core.Events;
 namespace Atelier.Core.Keybinding;
 
 /// <summary>
-/// Represents a keyboard gesture consisting of a key and modifier keys (e.g. "Ctrl+S", "F12").
+/// Represents a keyboard gesture consisting of a key and modifier keys (e.g. "Ctrl+S", "Ctrl+Shift+L").
+/// Supports order-independent parsing and comparison of modifier keys.
 /// </summary>
 public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
 {
+    private static readonly char[] GestureDelimiters = new[] { '+', '-', ',', '|', ';', ' ' };
+
     public Key Key { get; }
     public ModifierKeys Modifiers { get; }
 
@@ -29,13 +32,64 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
         return Matches(e.Key, e.Modifiers);
     }
 
+    public bool Matches(KeybindingGesture other)
+    {
+        return Key == other.Key && Modifiers == other.Modifiers;
+    }
+
+    public bool Matches(string? gestureString)
+    {
+        if (TryParse(gestureString, out var other))
+        {
+            return Matches(other);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Compares two gesture strings to check if they represent the same shortcut,
+    /// regardless of modifier ordering, casing, or delimiter style (e.g. "Ctrl+Shift+L" == "Shift+Ctrl+L").
+    /// </summary>
+    public static bool Matches(string? gestureA, string? gestureB)
+    {
+        if (string.IsNullOrWhiteSpace(gestureA) || string.IsNullOrWhiteSpace(gestureB))
+            return false;
+
+        if (TryParse(gestureA, out var ga) && TryParse(gestureB, out var gb))
+        {
+            return ga.Equals(gb);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks if two gesture strings represent the same shortcut regardless of modifier order.
+    /// </summary>
+    public static bool AreEquivalent(string? gestureA, string? gestureB) => Matches(gestureA, gestureB);
+
+    /// <summary>
+    /// Normalizes a gesture string to canonical standard format ("Ctrl+Alt+Shift+Win+Key").
+    /// </summary>
+    public static string Normalize(string? gestureString)
+    {
+        if (TryParse(gestureString, out var gesture))
+        {
+            return gesture.ToString();
+        }
+        return gestureString ?? string.Empty;
+    }
+
     public static bool TryParse(string? text, out KeybindingGesture gesture)
     {
         gesture = default;
         if (string.IsNullOrWhiteSpace(text))
             return false;
 
-        var parts = text!.Split('+');
+        var parts = text!.Split(GestureDelimiters, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0)
+            return false;
+
         var modifiers = ModifierKeys.None;
         var key = Key.None;
 
@@ -45,25 +99,19 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
             if (string.IsNullOrEmpty(part))
                 continue;
 
-            // If it's not the last part, or if it matches a modifier name
-            if (i < parts.Length - 1 || IsModifier(part))
+            if (TryMapModifier(part, out var mod))
             {
-                if (TryMapModifier(part, out var mod))
-                {
-                    modifiers |= mod;
-                    continue;
-                }
+                modifiers |= mod;
+                continue;
             }
 
-            // Otherwise, it's the key part
             if (TryMapKey(part, out var parsedKey))
             {
                 key = parsedKey;
+                continue;
             }
-            else
-            {
-                return false;
-            }
+
+            return false;
         }
 
         if (key == Key.None)
@@ -86,10 +134,14 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
             || token.Equals("control", StringComparison.OrdinalIgnoreCase)
             || token.Equals("shift", StringComparison.OrdinalIgnoreCase)
             || token.Equals("alt", StringComparison.OrdinalIgnoreCase)
+            || token.Equals("opt", StringComparison.OrdinalIgnoreCase)
+            || token.Equals("option", StringComparison.OrdinalIgnoreCase)
             || token.Equals("win", StringComparison.OrdinalIgnoreCase)
             || token.Equals("windows", StringComparison.OrdinalIgnoreCase)
             || token.Equals("cmd", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("meta", StringComparison.OrdinalIgnoreCase);
+            || token.Equals("command", StringComparison.OrdinalIgnoreCase)
+            || token.Equals("meta", StringComparison.OrdinalIgnoreCase)
+            || token.Equals("super", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryMapModifier(string token, out ModifierKeys mod)
@@ -105,7 +157,9 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
             mod = ModifierKeys.Shift;
             return true;
         }
-        if (token.Equals("alt", StringComparison.OrdinalIgnoreCase))
+        if (token.Equals("alt", StringComparison.OrdinalIgnoreCase) ||
+            token.Equals("opt", StringComparison.OrdinalIgnoreCase) ||
+            token.Equals("option", StringComparison.OrdinalIgnoreCase))
         {
             mod = ModifierKeys.Alt;
             return true;
@@ -113,7 +167,9 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
         if (token.Equals("win", StringComparison.OrdinalIgnoreCase) ||
             token.Equals("windows", StringComparison.OrdinalIgnoreCase) ||
             token.Equals("cmd", StringComparison.OrdinalIgnoreCase) ||
-            token.Equals("meta", StringComparison.OrdinalIgnoreCase))
+            token.Equals("command", StringComparison.OrdinalIgnoreCase) ||
+            token.Equals("meta", StringComparison.OrdinalIgnoreCase) ||
+            token.Equals("super", StringComparison.OrdinalIgnoreCase))
         {
             mod = ModifierKeys.Windows;
             return true;
@@ -137,6 +193,12 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
         if (token.Equals("return", StringComparison.OrdinalIgnoreCase))
         {
             key = Key.Enter;
+            return true;
+        }
+        if (token.Equals("space", StringComparison.OrdinalIgnoreCase) ||
+            token.Equals("spacebar", StringComparison.OrdinalIgnoreCase))
+        {
+            key = Key.Space;
             return true;
         }
         if (token.Length == 1 && token[0] >= '0' && token[0] <= '9')

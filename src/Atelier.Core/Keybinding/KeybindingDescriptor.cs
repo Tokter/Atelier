@@ -6,6 +6,7 @@ namespace Atelier.Core.Keybinding;
 /// <summary>
 /// A statically registered descriptor of a command with an associated keybinding, wrapping an <see cref="ICommand"/> instance.
 /// Compatible with Native AOT without runtime reflection.
+/// Normalizes keybinding gestures to canonical modifier order upon creation.
 /// </summary>
 public sealed class KeybindingDescriptor : IKeybindingDescriptor
 {
@@ -27,7 +28,7 @@ public sealed class KeybindingDescriptor : IKeybindingDescriptor
     {
         Name = name ?? throw new ArgumentNullException(nameof(name));
         Group = group ?? throw new ArgumentNullException(nameof(group));
-        Keybinding = keybinding ?? string.Empty;
+        Keybinding = KeybindingGesture.Normalize(keybinding);
         Command = command ?? throw new ArgumentNullException(nameof(command));
     }
 }

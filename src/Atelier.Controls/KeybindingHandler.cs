@@ -45,14 +45,48 @@ public class KeybindingHandler : ContentControl
             return;
 
         // Resolve target parameter:
-        // 1. DataContext of the initially focused element that originated the key event
-        // 2. Fall back to this KeybindingHandler's own DataContext
+        // 1. Try DataContext of the initially focused element that originated the key event
         var initialElement = e.OriginalSource as UIElement;
-        object? target = initialElement?.DataContext ?? DataContext;
+        object? initialTarget = initialElement?.DataContext;
 
-        if (KeybindingManager.TryExecuteGesture(Group, e.Key, e.Modifiers, target))
+        if (initialTarget != null && KeybindingManager.TryExecuteGesture(Group, e.Key, e.Modifiers, initialTarget))
         {
             e.Handled = true;
+            return;
+        }
+
+        // 2. Walk up the visual ancestor chain from initialElement up to this KeybindingHandler,
+        // trying each ancestor's distinct DataContext (e.g. subviews, pages, cards)
+        var current = initialElement?.Parent as UIElement;
+        while (current != null && current != this)
+        {
+            if (current.DataContext != null && !ReferenceEquals(current.DataContext, initialTarget))
+            {
+                if (KeybindingManager.TryExecuteGesture(Group, e.Key, e.Modifiers, current.DataContext))
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+            current = current.Parent as UIElement;
+        }
+
+        // 3. Fall back to this KeybindingHandler's own DataContext
+        if (DataContext != null && !ReferenceEquals(DataContext, initialTarget))
+        {
+            if (KeybindingManager.TryExecuteGesture(Group, e.Key, e.Modifiers, DataContext))
+            {
+                e.Handled = true;
+                return;
+            }
+        }
+        else if (initialTarget == null && DataContext == null)
+        {
+            // 4. Try null target (for parameterless or class-level [Keybinding] commands)
+            if (KeybindingManager.TryExecuteGesture(Group, e.Key, e.Modifiers, null))
+            {
+                e.Handled = true;
+            }
         }
     }
 }
