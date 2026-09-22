@@ -113,7 +113,16 @@ public class Grid : Panel
         {
             if (Children[i] is UIElement child)
             {
-                child.Measure(availableSize);
+                int colIdx = Math.Clamp(GetColumn(child), 0, cols.Count - 1);
+                int rowIdx = Math.Clamp(GetRow(child), 0, rows.Count - 1);
+
+                float w = cols[colIdx].Width.IsAuto ? float.PositiveInfinity : availableSize.Width;
+                if (cols[colIdx].Width.IsAbsolute) w = cols[colIdx].Width.Value;
+
+                float h = rows[rowIdx].Height.IsAuto ? float.PositiveInfinity : availableSize.Height;
+                if (rows[rowIdx].Height.IsAbsolute) h = rows[rowIdx].Height.Value;
+
+                child.Measure(new Size(w, h));
             }
         }
 
@@ -198,7 +207,28 @@ public class Grid : Panel
                     childWidth += (colSpan - 1) * ColumnSpacing;
                 }
 
-                child.Measure(new Size(childWidth, availableSize.Height));
+                int rowIdx = Math.Clamp(GetRow(child), 0, rows.Count - 1);
+                int rowSpan = Math.Clamp(GetRowSpan(child), 1, rows.Count - rowIdx);
+
+                float childHeight = availableSize.Height;
+                bool isAutoRow = true;
+                float totalAbsoluteH = 0f;
+                for (int r = 0; r < rowSpan; r++)
+                {
+                    if (!rows[rowIdx + r].Height.IsAuto) isAutoRow = false;
+                    if (rows[rowIdx + r].Height.IsAbsolute) totalAbsoluteH += rows[rowIdx + r].Height.Value;
+                }
+
+                if (isAutoRow)
+                {
+                    childHeight = float.PositiveInfinity;
+                }
+                else if (totalAbsoluteH > 0 && !rows[rowIdx].Height.IsStar)
+                {
+                    childHeight = totalAbsoluteH;
+                }
+
+                child.Measure(new Size(childWidth, childHeight));
             }
         }
 

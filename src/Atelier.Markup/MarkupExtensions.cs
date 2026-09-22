@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Windows.Input;
 using SkiaSharp;
 using Atelier.Controls;
+using Atelier.Core.Animation;
 using Atelier.Core.Primitives;
 using Atelier.Core.Properties;
 using Atelier.Core.Styling;
@@ -2037,6 +2038,22 @@ public static class MarkupExtensions
     {
         handler.Group = group;
         return handler;
+    }
+
+    #endregion
+
+    #region TransitioningContentControl Extensions
+
+    public static T Transition<T>(this T control, ITransition? transition) where T : TransitioningContentControl
+    {
+        control.Transition = transition;
+        return control;
+    }
+
+    public static T TransitionDuration<T>(this T control, TimeSpan duration) where T : TransitioningContentControl
+    {
+        control.Duration = duration;
+        return control;
     }
 
     #endregion

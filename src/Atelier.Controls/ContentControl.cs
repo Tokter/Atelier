@@ -62,7 +62,7 @@ public class ContentControl : Control
         set => SetValue(ViewLocatorProperty, value);
     }
 
-    private UIElement? _currentView;
+    protected UIElement? _currentView;
 
     /// <summary>
     /// Gets the visual element currently instantiated and mounted to display the content.
@@ -94,23 +94,12 @@ public class ContentControl : Control
     }
 
     /// <summary>
-    /// Updates the child view matching the current <see cref="Content"/>.
+    /// Resolves or creates a visual element for the given content using the explicit template, direct UIElement casting,
+    /// or configured <see cref="IViewLocator"/>.
     /// </summary>
-    protected virtual void UpdateContentDisplay()
+    public virtual UIElement? ResolveContentView(object? content)
     {
-        if (_currentView != null)
-        {
-            RemoveChild(_currentView);
-            _currentView = null;
-        }
-
-        var content = Content;
-        if (content == null)
-        {
-            InvalidateMeasure();
-            InvalidateVisual();
-            return;
-        }
+        if (content == null) return null;
 
         UIElement? view = null;
 
@@ -142,7 +131,33 @@ public class ContentControl : Control
             {
                 view.DataContext = content;
             }
+        }
 
+        return view;
+    }
+
+    /// <summary>
+    /// Updates the child view matching the current <see cref="Content"/>.
+    /// </summary>
+    protected virtual void UpdateContentDisplay()
+    {
+        if (_currentView != null)
+        {
+            RemoveChild(_currentView);
+            _currentView = null;
+        }
+
+        var content = Content;
+        if (content == null)
+        {
+            InvalidateMeasure();
+            InvalidateVisual();
+            return;
+        }
+
+        var view = ResolveContentView(content);
+        if (view != null)
+        {
             _currentView = view;
             AddChild(view);
         }

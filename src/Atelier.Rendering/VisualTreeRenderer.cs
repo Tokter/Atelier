@@ -39,6 +39,14 @@ public static class VisualTreeRenderer
 
         using var transformScope = context.PushTransform(transform);
 
+        int opacitySave = -1;
+        if (element.Opacity < 1.0f && element.Opacity > 0f)
+        {
+            byte alpha = (byte)Math.Clamp((int)MathF.Round(element.Opacity * 255f), 0, 255);
+            using var alphaPaint = new SKPaint { Color = new SKColor(255, 255, 255, alpha) };
+            opacitySave = context.Canvas.SaveLayer(alphaPaint);
+        }
+
         // Delegate rendering of the element itself (background, border, shadow) to the presenter
         // This ensures drop shadows cast outside bounds are not clipped by the element's own ClipToBounds
         presenter?.Render(element, ref context);
@@ -111,9 +119,14 @@ public static class VisualTreeRenderer
             {
                 context.Canvas.RestoreToCount(clipSave);
             }
-        }
 
-        // Render overlay on top of children (e.g. scrollbars)
-        presenter?.RenderOverlay(element, ref context);
+            // Render overlay on top of children (e.g. scrollbars) within the element's opacity layer
+            presenter?.RenderOverlay(element, ref context);
+
+            if (opacitySave >= 0)
+            {
+                context.Canvas.RestoreToCount(opacitySave);
+            }
+        }
     }
 }

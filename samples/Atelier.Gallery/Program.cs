@@ -42,7 +42,8 @@ internal static class Program
             .Register<DialogHostViewModel>(vm => new DialogHostView(vm))
             .Register<PropertyGridViewModel>(vm => new PropertyGridView(vm))
             .Register<LayoutViewModel>(vm => new LayoutView(vm))
-            .Register<KeybindingViewModel>(vm => new KeybindingView(vm));
+            .Register<KeybindingViewModel>(vm => new KeybindingView(vm))
+            .Register<TransitionsViewModel>(vm => new TransitionsView(vm));
 
         // 1. Initialize ViewModel (state is preserved across Hot Reload passes)
         var vm = new MainViewModel();

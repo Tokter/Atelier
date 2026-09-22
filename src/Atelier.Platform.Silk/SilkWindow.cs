@@ -562,6 +562,7 @@ public class SilkWindow : IDisposable
         TextBox.SetGlobalAnimationClock(_animationClock);
         Slider.SetGlobalAnimationClock(_animationClock);
         ScrollViewer.SetGlobalAnimationClock(_animationClock);
+        TransitioningContentControl.SetGlobalAnimationClock(_animationClock);
         DialogHost.RootVisualProvider = () => Current?.Content;
 
         HotReloadManager.HotReloadTriggered += OnHotReloadTriggered;
@@ -1414,6 +1415,7 @@ public class SilkWindow : IDisposable
         TextBox.SetGlobalAnimationClock(null!);
         Slider.SetGlobalAnimationClock(null!);
         ScrollViewer.SetGlobalAnimationClock(null!);
+        TransitioningContentControl.SetGlobalAnimationClock(null!);
         DialogHost.RootVisualProvider = null;
 
         try
