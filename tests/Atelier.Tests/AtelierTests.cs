@@ -491,7 +491,7 @@ public class AtelierCoreTests
         Assert.Equal("{0:0}", sliderDefault.ValueFormat);
 
         sliderDefault.Measure(new Size(500, 500));
-        Assert.Equal(48f, sliderDefault.DesiredSize.Height);
+        Assert.Equal(32f, sliderDefault.DesiredSize.Height);
 
         var sliderNoIndicator = new Slider { ShowValueIndicator = false };
         sliderNoIndicator.Measure(new Size(500, 500));

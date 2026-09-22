@@ -31,12 +31,7 @@ public class Slider : Control
         BindableProperty.Register<Slider, bool>(
             nameof(ShowValueIndicator),
             true,
-            (s, o, n) =>
-            {
-                var slider = (Slider)s;
-                slider.InvalidateMeasure();
-                slider.InvalidateVisual();
-            }
+            (s, o, n) => ((Slider)s).InvalidateVisual()
         );
 
     public static readonly BindableProperty<string> ValueFormatProperty =
@@ -260,8 +255,7 @@ public class Slider : Control
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        float height = ShowValueIndicator ? 48f : 32f;
-        return new Size(Math.Min(180, availableSize.Width), height);
+        return new Size(Math.Min(180, availableSize.Width), 32f);
     }
 }
 

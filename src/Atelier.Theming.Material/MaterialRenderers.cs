@@ -649,10 +649,8 @@ public class MaterialSliderRenderer(MaterialColorScheme colors) : ControlRendere
         float trackHeight = 6f;
         float handleRadius = 10f;
 
-        // Position track: if ShowValueIndicator, leave headroom for the floating value bubble
-        float trackCenterY = slider.ShowValueIndicator && bounds.Height >= 36f
-            ? bounds.Height - 14f
-            : bounds.Height * 0.5f;
+        // Track is always vertically centered in the Slider's bounds
+        float trackCenterY = bounds.Height * 0.5f;
         float trackY = trackCenterY - trackHeight * 0.5f;
 
         float progress = slider.NormalizedValue;
@@ -693,8 +691,7 @@ public class MaterialSliderRenderer(MaterialColorScheme colors) : ControlRendere
 
             // Center bubble above knob, clamping horizontally within bounds
             float bubbleX = Math.Clamp(handleX - bubbleWidth * 0.5f, bounds.Left, bounds.Right - bubbleWidth);
-            float bubbleY = handleCenter.Y - handleRadius - 4f - bubbleHeight;
-            if (bubbleY < bounds.Top) bubbleY = bounds.Top;
+            float bubbleY = handleCenter.Y - handleRadius - 6f - bubbleHeight;
 
             var bubbleRect = new Rect(bubbleX, bubbleY, bubbleWidth, bubbleHeight);
 
