@@ -17,13 +17,13 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          global-json-file: global.json
 
       - name: Restore dependencies
         run: dotnet restore Atelier.slnx
 
       - name: Build solution (Release)
-        run: dotnet build Atelier.slnx --configuration Release --no-restore
+        run: dotnet build Atelier.slnx --configuration Release
 
       - name: Run unit tests
         run: dotnet test tests/Atelier.Tests/Atelier.Tests.csproj --configuration Release --no-build --verbosity normal
