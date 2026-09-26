@@ -27,6 +27,12 @@ namespace Atelier.Core.Keybinding
         /// </summary>
         public string DefaultKeybinding { get; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="KeybindingAttribute"/> class.
+        /// </summary>
+        /// <param name="name">The command name.</param>
+        /// <param name="group">The logical category group of the command.</param>
+        /// <param name="defaultKeybinding">The default keyboard shortcut, or an empty string for none; <see langword="null"/> is treated as empty.</param>
         public KeybindingAttribute(string name, string group, string defaultKeybinding = "")
         {
             Name = name;

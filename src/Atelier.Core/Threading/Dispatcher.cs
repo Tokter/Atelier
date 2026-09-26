@@ -34,6 +34,12 @@ public static class Dispatcher
     /// <summary>
     /// Gets or sets the UI thread dispatcher instance.
     /// </summary>
+    /// <remarks>
+    /// The platform layer sets this while a window runs (see <c>SilkWindow.Run</c>). When nothing is set, for example in
+    /// unit tests, headless use, or before the window starts, <see cref="ImmediateDispatcher"/> is used: it reports every
+    /// thread as the UI thread and runs posted work immediately on the calling thread. Work posted from a background
+    /// thread in that state therefore runs on that background thread.
+    /// </remarks>
     public static IDispatcher UIThread
     {
         get => _uiThread ?? ImmediateDispatcher.Instance;
@@ -130,10 +136,16 @@ public static class Dispatcher
     /// </summary>
     public sealed class ImmediateDispatcher : IDispatcher
     {
+        /// <summary>The shared instance.</summary>
         public static readonly ImmediateDispatcher Instance = new();
 
+        /// <summary>Always returns <c>true</c>: every thread is treated as the UI thread.</summary>
         public bool CheckAccess() => true;
+
+        /// <summary>Runs <paramref name="action"/> immediately on the calling thread.</summary>
         public void Post(Action action) => action();
+
+        /// <summary>Runs <paramref name="action"/> immediately on the calling thread.</summary>
         public void Send(Action action) => action();
     }
 }

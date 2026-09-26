@@ -6,95 +6,166 @@ using Atelier.Core.Properties;
 
 namespace Atelier.Core.Tree;
 
+/// <summary>
+/// Base class for nodes in the visual tree: owns the parent/child links, layout and render transforms, coordinate
+/// conversion, and upward propagation of visual and layout invalidation.
+/// </summary>
+/// <remarks>
+/// The visual tree is also the inheritance tree for inheritable bindable properties, so attaching, moving or removing
+/// a child re-evaluates the inherited values of its subtree.
+/// </remarks>
 public abstract class VisualNode : BindableObject
 {
     private VisualNode? _parent;
     private readonly List<VisualNode> _children = [];
 
+    /// <summary>Gets the parent node, or <c>null</c> if this node is a root or detached.</summary>
     public VisualNode? Parent => _parent;
+    /// <summary>Gets the child nodes in insertion order, which is also the render order (last is topmost).</summary>
     public IReadOnlyList<VisualNode> Children => _children;
 
+    /// <inheritdoc/>
     protected override BindableObject? InheritanceParent => _parent;
-    protected override IEnumerable<BindableObject> InheritanceChildren => _children;
+    /// <inheritdoc/>
+    protected override IReadOnlyList<BindableObject> InheritanceChildren => _children;
 
+    /// <summary>Identifies the <see cref="Transform"/> bindable property.</summary>
     public static readonly BindableProperty<Matrix3x2> TransformProperty =
         BindableProperty.Register<VisualNode, Matrix3x2>(
             nameof(Transform),
             Matrix3x2.Identity,
             (s, o, n) => ((VisualNode)s).OnTransformChanged(o, n));
 
+    /// <summary>Identifies the <see cref="TransformOrigin"/> bindable property.</summary>
     public static readonly BindableProperty<Point> TransformOriginProperty =
         BindableProperty.Register<VisualNode, Point>(
             nameof(TransformOrigin),
             Point.Zero,
             (s, o, n) => ((VisualNode)s).OnTransformOriginChanged(o, n));
 
+    /// <summary>Identifies the <see cref="RenderTransform"/> bindable property.</summary>
     public static readonly BindableProperty<Matrix3x2> RenderTransformProperty =
         BindableProperty.Register<VisualNode, Matrix3x2>(
             nameof(RenderTransform),
             Matrix3x2.Identity,
             (s, o, n) => ((VisualNode)s).OnRenderTransformChanged(o, n));
 
+    /// <summary>Identifies the <see cref="RenderTransformOrigin"/> bindable property.</summary>
     public static readonly BindableProperty<Point> RenderTransformOriginProperty =
         BindableProperty.Register<VisualNode, Point>(
             nameof(RenderTransformOrigin),
             new Point(0.5f, 0.5f),
             (s, o, n) => ((VisualNode)s).OnRenderTransformOriginChanged(o, n));
 
+    /// <summary>
+    /// Gets or sets the layout transform, applied about <see cref="TransformOrigin"/>. The default is the identity.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="RenderTransform"/>, this transform takes part in layout: changing it invalidates both
+    /// rendering and layout, and <see cref="UIElement"/> measures and arranges using the transformed bounds.
+    /// </remarks>
     public Matrix3x2 Transform
     {
         get => GetValue(TransformProperty);
         set => SetValue(TransformProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the origin of <see cref="Transform"/> as a fraction of the node's size, where (0, 0) is the top-left
+    /// and (1, 1) the bottom-right corner. The default is <see cref="Point.Zero"/>. Changing it invalidates rendering and layout.
+    /// </summary>
     public Point TransformOrigin
     {
         get => GetValue(TransformOriginProperty);
         set => SetValue(TransformOriginProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets a transform applied after layout, about <see cref="RenderTransformOrigin"/>. The default is the identity.
+    /// </summary>
+    /// <remarks>
+    /// It affects rendering, hit testing and coordinate conversion but not layout: changing it only invalidates rendering.
+    /// </remarks>
     public Matrix3x2 RenderTransform
     {
         get => GetValue(RenderTransformProperty);
         set => SetValue(RenderTransformProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the origin of <see cref="RenderTransform"/> as a fraction of the node's size. The default is (0.5, 0.5),
+    /// the center. Changing it only invalidates rendering.
+    /// </summary>
     public Point RenderTransformOrigin
     {
         get => GetValue(RenderTransformOriginProperty);
         set => SetValue(RenderTransformOriginProperty, value);
     }
 
+    /// <summary>
+    /// Occurs when <see cref="InvalidateVisual"/> is called on this node or on any of its descendants.
+    /// </summary>
     public event Action? NeedsVisualUpdate;
+    /// <summary>
+    /// Occurs when <see cref="InvalidateLayout"/> is called on this node or on any of its descendants, including when
+    /// children are added or removed.
+    /// </summary>
     public event Action? NeedsLayoutUpdate;
 
+    /// <summary>Called when <see cref="Transform"/> changes. The base implementation invalidates rendering and layout.</summary>
+    /// <param name="oldValue">The previous transform.</param>
+    /// <param name="newValue">The new transform.</param>
     protected virtual void OnTransformChanged(Matrix3x2 oldValue, Matrix3x2 newValue)
     {
         InvalidateVisual();
         InvalidateLayout();
     }
 
+    /// <summary>Called when <see cref="TransformOrigin"/> changes. The base implementation invalidates rendering and layout.</summary>
+    /// <param name="oldValue">The previous origin.</param>
+    /// <param name="newValue">The new origin.</param>
     protected virtual void OnTransformOriginChanged(Point oldValue, Point newValue)
     {
         InvalidateVisual();
         InvalidateLayout();
     }
 
+    /// <summary>Called when <see cref="RenderTransform"/> changes. The base implementation invalidates rendering only.</summary>
+    /// <param name="oldValue">The previous transform.</param>
+    /// <param name="newValue">The new transform.</param>
     protected virtual void OnRenderTransformChanged(Matrix3x2 oldValue, Matrix3x2 newValue)
     {
         InvalidateVisual();
     }
 
+    /// <summary>Called when <see cref="RenderTransformOrigin"/> changes. The base implementation invalidates rendering only.</summary>
+    /// <param name="oldValue">The previous origin.</param>
+    /// <param name="newValue">The new origin.</param>
     protected virtual void OnRenderTransformOriginChanged(Point oldValue, Point newValue)
     {
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Gets the layout transform as it applies to this node. The base implementation returns <see cref="Transform"/>
+    /// without taking <see cref="TransformOrigin"/> into account; <see cref="UIElement"/> applies the origin using its bounds.
+    /// </summary>
+    /// <returns>The effective layout transform.</returns>
     public virtual Matrix3x2 GetEffectiveTransform()
     {
         return Transform;
     }
 
+    /// <summary>
+    /// Gets <see cref="Transform"/> applied about <see cref="TransformOrigin"/> for a node of the given size.
+    /// </summary>
+    /// <remarks>
+    /// Returns <see cref="Transform"/> unchanged when the origin is <see cref="Point.Zero"/> or both dimensions are
+    /// zero or negative.
+    /// </remarks>
+    /// <param name="width">The node width used to resolve the relative origin.</param>
+    /// <param name="height">The node height used to resolve the relative origin.</param>
+    /// <returns>The layout transform, including the translation to and from the origin.</returns>
     public virtual Matrix3x2 GetEffectiveTransform(float width, float height)
     {
         if (Transform.IsIdentity)
@@ -109,6 +180,13 @@ public abstract class VisualNode : BindableObject
         return Matrix3x2.CreateTranslation(-ox, -oy) * Transform * Matrix3x2.CreateTranslation(ox, oy);
     }
 
+    /// <summary>
+    /// Gets <see cref="RenderTransform"/> applied about <see cref="RenderTransformOrigin"/> for a node of the given size.
+    /// </summary>
+    /// <remarks>Returns <see cref="RenderTransform"/> unchanged when both dimensions are zero or negative.</remarks>
+    /// <param name="width">The node width used to resolve the relative origin.</param>
+    /// <param name="height">The node height used to resolve the relative origin.</param>
+    /// <returns>The render transform, including the translation to and from the origin.</returns>
     public virtual Matrix3x2 GetEffectiveRenderTransform(float width, float height)
     {
         if (RenderTransform.IsIdentity)
@@ -123,11 +201,27 @@ public abstract class VisualNode : BindableObject
         return Matrix3x2.CreateTranslation(-ox, -oy) * RenderTransform * Matrix3x2.CreateTranslation(ox, oy);
     }
 
+    /// <summary>
+    /// Gets the transform that maps this node's local coordinates into its parent's coordinates.
+    /// The base implementation returns <see cref="GetEffectiveTransform()"/>.
+    /// </summary>
+    /// <returns>The local-to-parent transform.</returns>
     public virtual Matrix3x2 GetLocalTransform()
     {
         return GetEffectiveTransform();
     }
 
+    /// <summary>
+    /// Gets the transform that maps this node's local coordinates into the coordinates of <paramref name="ancestor"/>,
+    /// by composing <see cref="GetLocalTransform"/> of this node and each intermediate ancestor.
+    /// </summary>
+    /// <remarks>
+    /// The walk stops after an overlay <see cref="UIElement"/> (see <see cref="UIElement.IsOverlayElement"/>), whose
+    /// local transform already positions it in window coordinates. If <paramref name="ancestor"/> is not an ancestor,
+    /// the result maps to the root.
+    /// </remarks>
+    /// <param name="ancestor">The ancestor whose coordinate space is the target, or <c>null</c> for the root.</param>
+    /// <returns>The composed transform.</returns>
     public Matrix3x2 GetTransformToAncestor(VisualNode? ancestor)
     {
         var matrix = Matrix3x2.Identity;
@@ -144,8 +238,13 @@ public abstract class VisualNode : BindableObject
         return matrix;
     }
 
+    /// <summary>Gets the transform that maps this node's local coordinates into root (window) coordinates.</summary>
+    /// <returns>The composed transform; see <see cref="GetTransformToAncestor"/>.</returns>
     public Matrix3x2 GetTransformToRoot() => GetTransformToAncestor(null);
 
+    /// <summary>Converts a point from this node's local coordinates to root (window) coordinates.</summary>
+    /// <param name="localPoint">The point in local coordinates.</param>
+    /// <returns>The point in window coordinates.</returns>
     public Point PointToScreen(Point localPoint)
     {
         var matrix = GetTransformToRoot();
@@ -153,6 +252,9 @@ public abstract class VisualNode : BindableObject
         return new Point(v.X, v.Y);
     }
 
+    /// <summary>Converts a point from root (window) coordinates to this node's local coordinates.</summary>
+    /// <param name="screenPoint">The point in window coordinates.</param>
+    /// <returns>The point in local coordinates, or <paramref name="screenPoint"/> unchanged if the transform to the root is not invertible.</returns>
     public Point PointToClient(Point screenPoint)
     {
         var matrix = GetTransformToRoot();
@@ -164,14 +266,36 @@ public abstract class VisualNode : BindableObject
         return screenPoint;
     }
 
+    /// <summary>Converts a point from this node's local coordinates to another node's local coordinates, via window coordinates.</summary>
+    /// <param name="localPoint">The point in this node's coordinates.</param>
+    /// <param name="targetNode">The node whose coordinate space is the target.</param>
+    /// <returns>The point in <paramref name="targetNode"/>'s coordinates.</returns>
     public Point PointToNode(Point localPoint, VisualNode targetNode)
     {
         var screenPoint = PointToScreen(localPoint);
         return targetNode.PointToClient(screenPoint);
     }
 
+    /// <summary>
+    /// Appends <paramref name="child"/> to <see cref="Children"/>, first removing it from its current parent if it has one.
+    /// </summary>
+    /// <remarks>
+    /// Inherited property values of the child's subtree are re-evaluated, raising one change notification per value that
+    /// actually changes. Then <see cref="OnChildAdded"/> is called and layout is invalidated.
+    /// </remarks>
+    /// <param name="child">The node to add.</param>
     public void AddChild(VisualNode child) => AttachChild(null, child);
 
+    /// <summary>
+    /// Inserts <paramref name="child"/> into <see cref="Children"/> at <paramref name="index"/>, first removing it from
+    /// its current parent if it has one. Otherwise behaves like <see cref="AddChild"/>.
+    /// </summary>
+    /// <remarks>
+    /// When the child is moved within the same parent, it is removed before inserting, so <paramref name="index"/>
+    /// refers to the list without the child.
+    /// </remarks>
+    /// <param name="index">The position to insert at.</param>
+    /// <param name="child">The node to insert.</param>
     public void InsertChild(int index, VisualNode child) => AttachChild(index, child);
 
     private void AttachChild(int? index, VisualNode child)
@@ -191,6 +315,12 @@ public abstract class VisualNode : BindableObject
         InvalidateLayout();
     }
 
+    /// <summary>
+    /// Removes <paramref name="child"/> from this node, calls <see cref="OnChildRemoved"/>, invalidates layout and
+    /// re-evaluates the inherited property values of the removed subtree.
+    /// </summary>
+    /// <param name="child">The node to remove.</param>
+    /// <returns><c>true</c> if the child was removed; <c>false</c> if it is not a child of this node.</returns>
     public bool RemoveChild(VisualNode child)
     {
         if (child._parent != this)
@@ -214,6 +344,7 @@ public abstract class VisualNode : BindableObject
         InvalidateLayout();
     }
 
+    /// <summary>Removes all children, last to first, as if by calling <see cref="RemoveChild"/> for each.</summary>
     public void ClearChildren()
     {
         while (_children.Count > 0)
@@ -222,9 +353,22 @@ public abstract class VisualNode : BindableObject
         }
     }
 
+    /// <summary>
+    /// Called after <paramref name="child"/> has been linked to this node and its inherited values updated, before
+    /// layout is invalidated. The base implementation does nothing.
+    /// </summary>
+    /// <param name="child">The added child.</param>
     protected virtual void OnChildAdded(VisualNode child) { }
+    /// <summary>
+    /// Called after <paramref name="child"/> has been unlinked from this node, before layout is invalidated and before
+    /// the child's inherited values are updated. The base implementation does nothing.
+    /// </summary>
+    /// <param name="child">The removed child.</param>
     protected virtual void OnChildRemoved(VisualNode child) { }
 
+    /// <summary>Determines whether this node is a strict descendant of <paramref name="ancestor"/>.</summary>
+    /// <param name="ancestor">The candidate ancestor.</param>
+    /// <returns><c>true</c> if <paramref name="ancestor"/> is found among this node's parents; <c>false</c> otherwise, including when it is this node.</returns>
     public bool IsDescendantOf(VisualNode ancestor)
     {
         var current = _parent;
@@ -236,12 +380,22 @@ public abstract class VisualNode : BindableObject
         return false;
     }
 
+    /// <summary>
+    /// Requests a redraw: raises <see cref="NeedsVisualUpdate"/> on this node and then on every ancestor up to the root.
+    /// </summary>
     public virtual void InvalidateVisual()
     {
         NeedsVisualUpdate?.Invoke();
         _parent?.InvalidateVisual();
     }
 
+    /// <summary>
+    /// Requests a layout pass: raises <see cref="NeedsLayoutUpdate"/> on this node and then on every ancestor up to the root.
+    /// </summary>
+    /// <remarks>
+    /// This only notifies listeners; it does not mark measure or arrange as invalid. On a <see cref="UIElement"/>, use
+    /// <see cref="UIElement.InvalidateMeasure"/> or <see cref="UIElement.InvalidateArrange"/> to do that.
+    /// </remarks>
     public virtual void InvalidateLayout()
     {
         NeedsLayoutUpdate?.Invoke();

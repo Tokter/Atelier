@@ -38,6 +38,15 @@ public sealed class PropertyDescriptor<TTarget, TProp> : IPropertyDescriptor
     /// </summary>
     public Action<TTarget, TProp>? Setter => _setter;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PropertyDescriptor{TTarget, TProp}"/> class.
+    /// </summary>
+    /// <param name="name">The property name.</param>
+    /// <param name="displayName">The display name; <see langword="null"/> falls back to <paramref name="name"/>.</param>
+    /// <param name="category">The category; <see langword="null"/> falls back to <c>"General"</c>.</param>
+    /// <param name="getter">Reads the property value from a target.</param>
+    /// <param name="setter">Writes the property value to a target, or <see langword="null"/> for a read-only property.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> or <paramref name="getter"/> is <see langword="null"/>.</exception>
     public PropertyDescriptor(
         string name,
         string displayName,
@@ -55,11 +64,16 @@ public sealed class PropertyDescriptor<TTarget, TProp> : IPropertyDescriptor
     /// <summary>
     /// Reads the property value without boxing.
     /// </summary>
+    /// <param name="target">The object to read from.</param>
+    /// <returns>The property value.</returns>
     public TProp GetTypedValue(TTarget target) => _getter(target);
 
     /// <summary>
     /// Sets the property value without unboxing.
     /// </summary>
+    /// <param name="target">The object to write to.</param>
+    /// <param name="value">The value to set.</param>
+    /// <exception cref="InvalidOperationException">The property is read-only.</exception>
     public void SetTypedValue(TTarget target, TProp value)
     {
         if (_setter is null)

@@ -28,10 +28,18 @@ public sealed class InspectablePropertyAttribute : Attribute
     /// </summary>
     public bool IsReadOnly { get; set; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InspectablePropertyAttribute"/> class with no display name or category.
+    /// </summary>
     public InspectablePropertyAttribute()
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InspectablePropertyAttribute"/> class.
+    /// </summary>
+    /// <param name="displayName">The display name shown in UI inspectors.</param>
+    /// <param name="category">The category used for grouping; defaults to <c>"General"</c>.</param>
     public InspectablePropertyAttribute(string displayName, string category = "General")
     {
         DisplayName = displayName;

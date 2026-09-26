@@ -45,7 +45,7 @@ public class BindableObject : INotifyPropertyChanged
 
     // Allocated on first use: most objects are never animated or observed per property.
     private Dictionary<int, object?>? _animatedValues;
-    private Dictionary<int, List<PropertySubscription>>? _subscriptions;
+    private Dictionary<int, PropertySubscription[]>? _subscriptions;
 
     // Uncoerced values, kept only for entries where coercion changed the value, so CoerceValue() can re-evaluate them.
     private Dictionary<int, object?>? _localBaseValues;
@@ -93,7 +93,7 @@ public class BindableObject : INotifyPropertyChanged
     /// Gets the collection of child <see cref="BindableObject"/> instances that should receive propagation notifications
     /// when an inheritable property value changes on this object.
     /// </summary>
-    protected virtual IEnumerable<BindableObject> InheritanceChildren => Array.Empty<BindableObject>();
+    protected virtual IReadOnlyList<BindableObject> InheritanceChildren => Array.Empty<BindableObject>();
 
     /// <summary>
     /// Determines whether a local (explicit) value has been set on this object for the specified bindable property.
@@ -206,8 +206,23 @@ public class BindableObject : INotifyPropertyChanged
     private bool SetValueTyped<T>(BindableProperty<T> property, T value)
     {
         property.ValidateTyped(value);
+
+        // Fast path: setting the value it already has must not box (bindings and animations do this constantly).
+        // With coercion the uncoerced base value still has to be tracked, so that case takes the regular path.
+        if (property.CoerceValue == null && HasEqualValue(_localValues, property.Id, value))
+        {
+            return false;
+        }
+
         object? coerced = property.CoerceValue != null ? property.CoerceValue(this, value) : value;
         return SetLocalValueCore(property, value, coerced);
+    }
+
+    private static bool HasEqualValue<T>(Dictionary<int, object?>? layer, int id, T value)
+    {
+        return layer != null
+            && layer.TryGetValue(id, out var current)
+            && (current is T typed ? EqualityComparer<T>.Default.Equals(typed, value) : current is null && value is null);
     }
 
     /// <summary>
@@ -363,7 +378,7 @@ public class BindableObject : INotifyPropertyChanged
     {
         property.ValidateTyped(value);
 
-        if (_animatedValues != null && _animatedValues.TryGetValue(property.Id, out var current) && Equals(current, value))
+        if (HasEqualValue(_animatedValues, property.Id, value))
         {
             return;
         }
@@ -407,25 +422,38 @@ public class BindableObject : INotifyPropertyChanged
         ArgumentNullException.ThrowIfNull(handler);
 
         var subscription = new PropertySubscription(this, property.Id, (sender, o, n) => handler(sender, (T)o!, (T)n!));
+
+        // Copy-on-write arrays: subscribing is rare, notifying is frequent and must not allocate.
         _subscriptions ??= new();
-        if (!_subscriptions.TryGetValue(property.Id, out var list))
-        {
-            _subscriptions[property.Id] = list = new List<PropertySubscription>();
-        }
-        list.Add(subscription);
+        _subscriptions[property.Id] = _subscriptions.TryGetValue(property.Id, out var existing)
+            ? [.. existing, subscription]
+            : [subscription];
         return subscription;
     }
 
     private void Unsubscribe(PropertySubscription subscription)
     {
-        if (_subscriptions != null && _subscriptions.TryGetValue(subscription.PropertyId, out var list))
+        if (_subscriptions == null || !_subscriptions.TryGetValue(subscription.PropertyId, out var existing))
         {
-            list.Remove(subscription);
-            if (list.Count == 0)
-            {
-                _subscriptions.Remove(subscription.PropertyId);
-            }
+            return;
         }
+
+        int index = Array.IndexOf(existing, subscription);
+        if (index < 0)
+        {
+            return;
+        }
+
+        if (existing.Length == 1)
+        {
+            _subscriptions.Remove(subscription.PropertyId);
+            return;
+        }
+
+        var remaining = new PropertySubscription[existing.Length - 1];
+        Array.Copy(existing, 0, remaining, 0, index);
+        Array.Copy(existing, index + 1, remaining, index, existing.Length - index - 1);
+        _subscriptions[subscription.PropertyId] = remaining;
     }
 
     private sealed class PropertySubscription : IDisposable
@@ -450,71 +478,127 @@ public class BindableObject : INotifyPropertyChanged
         }
     }
 
+    // Scratch collections for SetStyleValues. A call takes ownership (sets the field to null) and hands it back
+    // when done, so a re-entrant call from a change callback simply allocates its own instead of sharing one.
+    [ThreadStatic] private static Dictionary<int, Setter>? t_styleSetterScratch;
+    [ThreadStatic] private static List<int>? t_removedStyleIdScratch;
+
+    private const int MaxStyleInheritanceDepth = 64;
+
     /// <summary>
-    /// Replaces the complete set of styled values on this object. Properties no longer present revert to their
-    /// inherited or default value; notifications are raised only for properties whose effective value changed.
+    /// Replaces the complete set of styled values on this object with the setters of <paramref name="style"/> and its
+    /// <see cref="Style.BasedOn"/> chain (derived setters win). Properties no longer styled revert to their inherited or
+    /// default value; notifications are raised only for properties whose effective value changed.
     /// </summary>
-    /// <param name="setters">The effective setters, later entries winning over earlier ones for the same property; <c>null</c> clears all styled values.</param>
-    internal void SetStyleValues(IEnumerable<Setter>? setters)
+    /// <param name="style">The resolved style, or <c>null</c> to clear all styled values.</param>
+    /// <exception cref="InvalidOperationException">The <see cref="Style.BasedOn"/> chain is circular.</exception>
+    internal void SetStyleValues(Style? style)
     {
-        Dictionary<int, Setter>? next = null;
-        if (setters != null)
-        {
-            next = new Dictionary<int, Setter>();
-            foreach (var setter in setters)
-            {
-                next[setter.Property.Id] = setter;
-            }
-        }
-
-        if (_styleValues.Count > 0)
-        {
-            List<int>? removed = null;
-            foreach (var id in _styleValues.Keys)
-            {
-                if (next == null || !next.ContainsKey(id))
-                {
-                    (removed ??= new()).Add(id);
-                }
-            }
-
-            if (removed != null)
-            {
-                foreach (var id in removed)
-                {
-                    var property = BindableProperty.FromId(id);
-                    _styleBaseValues?.Remove(id);
-
-                    var change = BeginChange(property, captureDescendants: !_localValues.ContainsKey(id));
-                    _styleValues.Remove(id);
-                    EndChange(property, change);
-                }
-            }
-        }
-
-        if (next == null)
+        if (style == null && _styleValues.Count == 0)
         {
             return;
         }
 
-        foreach (var setter in next.Values)
+        Dictionary<int, Setter>? next = null;
+        List<int>? removed = null;
+        try
         {
-            var property = setter.Property;
-            object? coerced = property.CoerceUntyped(this, setter.Value);
-
-            if (property.HasCoercion)
+            if (style != null)
             {
-                TrackBaseValue(ref _styleBaseValues, property.Id, setter.Value, coerced);
+                next = t_styleSetterScratch ?? new Dictionary<int, Setter>();
+                t_styleSetterScratch = null;
+                CollectSetters(style, next, depth: 0);
             }
 
-            if (_styleValues.TryGetValue(property.Id, out var current) && Equals(current, coerced))
+            if (_styleValues.Count > 0)
             {
-                continue;
+                foreach (var id in _styleValues.Keys)
+                {
+                    if (next == null || !next.ContainsKey(id))
+                    {
+                        if (removed == null)
+                        {
+                            removed = t_removedStyleIdScratch ?? new List<int>();
+                            t_removedStyleIdScratch = null;
+                        }
+                        removed.Add(id);
+                    }
+                }
+
+                if (removed != null)
+                {
+                    for (int i = 0; i < removed.Count; i++)
+                    {
+                        int id = removed[i];
+                        var property = BindableProperty.FromId(id);
+                        _styleBaseValues?.Remove(id);
+
+                        var change = BeginChange(property, captureDescendants: !_localValues.ContainsKey(id));
+                        _styleValues.Remove(id);
+                        EndChange(property, change);
+                    }
+                }
             }
 
-            var change = BeginChange(property, captureDescendants: !_localValues.ContainsKey(property.Id));
-            _styleValues[property.Id] = coerced;
-            EndChange(property, change);
+            if (next == null)
+            {
+                return;
+            }
+
+            foreach (var setter in next.Values)
+            {
+                var property = setter.Property;
+                object? coerced = property.CoerceUntyped(this, setter.Value);
+
+                if (property.HasCoercion)
+                {
+                    TrackBaseValue(ref _styleBaseValues, property.Id, setter.Value, coerced);
+                }
+
+                if (_styleValues.TryGetValue(property.Id, out var current) && Equals(current, coerced))
+                {
+                    continue;
+                }
+
+                var change = BeginChange(property, captureDescendants: !_localValues.ContainsKey(property.Id));
+                _styleValues[property.Id] = coerced;
+                EndChange(property, change);
+            }
+        }
+        finally
+        {
+            if (next != null)
+            {
+                next.Clear();
+                t_styleSetterScratch = next;
+            }
+
+            if (removed != null)
+            {
+                removed.Clear();
+                t_removedStyleIdScratch = removed;
+            }
+        }
+    }
+
+    // Base styles first, so that setters of derived styles overwrite them.
+    private static void CollectSetters(Style style, Dictionary<int, Setter> into, int depth)
+    {
+        if (depth > MaxStyleInheritanceDepth)
+        {
+            throw new InvalidOperationException(
+                $"Style.BasedOn chain is deeper than {MaxStyleInheritanceDepth} levels; it is probably circular.");
+        }
+
+        if (style.BasedOn != null)
+        {
+            CollectSetters(style.BasedOn, into, depth + 1);
+        }
+
+        var setters = style.Setters;
+        for (int i = 0; i < setters.Count; i++)
+        {
+            into[setters[i].Property.Id] = setters[i];
         }
     }
 
@@ -554,9 +638,11 @@ public class BindableObject : INotifyPropertyChanged
         List<InheritedValueEntry>? descendants = null;
         if (captureDescendants && property.Inherits)
         {
-            foreach (var child in InheritanceChildren)
+            // Indexed loops over IReadOnlyList: foreach over the interface would box the enumerator on every change.
+            var children = InheritanceChildren;
+            for (int i = 0; i < children.Count; i++)
             {
-                CaptureSubtree(child, property.InheritanceDependents, ref descendants);
+                CaptureSubtree(children[i], property.InheritanceDependents, ref descendants);
             }
         }
 
@@ -579,10 +665,10 @@ public class BindableObject : INotifyPropertyChanged
         property.InvokePropertyChangedUntyped(this, oldValue, newValue);
         OnPropertyValueChanged(property, oldValue, newValue);
 
-        if (_subscriptions != null && _subscriptions.TryGetValue(property.Id, out var list))
+        if (_subscriptions != null && _subscriptions.TryGetValue(property.Id, out var subscriptions))
         {
-            // Copy so handlers may subscribe or unsubscribe while being notified.
-            foreach (var subscription in list.ToArray())
+            // The array is never mutated, so handlers may subscribe or unsubscribe while being notified.
+            foreach (var subscription in subscriptions)
             {
                 if (!subscription.IsDisposed)
                 {
@@ -662,9 +748,10 @@ public class BindableObject : INotifyPropertyChanged
             return;
         }
 
-        foreach (var child in node.InheritanceChildren)
+        var children = node.InheritanceChildren;
+        for (int i = 0; i < children.Count; i++)
         {
-            CaptureSubtree(child, properties, ref entries);
+            CaptureSubtree(children[i], properties, ref entries);
         }
     }
 

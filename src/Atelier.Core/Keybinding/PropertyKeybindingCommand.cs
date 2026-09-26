@@ -13,14 +13,32 @@ public sealed class PropertyKeybindingCommand<TTarget> : ICommand where TTarget 
     private readonly Func<TTarget, ICommand?> _commandGetter;
     private readonly string _name;
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Raised only by <see cref="RaiseCanExecuteChanged"/>; changes reported by the target's own command are not forwarded.
+    /// </remarks>
     public event EventHandler? CanExecuteChanged;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PropertyKeybindingCommand{TTarget}"/> class.
+    /// </summary>
+    /// <param name="name">The keybinding name, used in error messages.</param>
+    /// <param name="commandGetter">Returns the command property of a target instance.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/> or <paramref name="commandGetter"/> is <see langword="null"/>.</exception>
     public PropertyKeybindingCommand(string name, Func<TTarget, ICommand?> commandGetter)
     {
         _name = name ?? throw new ArgumentNullException(nameof(name));
         _commandGetter = commandGetter ?? throw new ArgumentNullException(nameof(commandGetter));
     }
 
+    /// <summary>
+    /// Determines whether the target's command can execute.
+    /// </summary>
+    /// <param name="parameter">The target instance of type <typeparamref name="TTarget"/>.</param>
+    /// <returns>
+    /// The result of the target command's <see cref="ICommand.CanExecute"/> (called with a <see langword="null"/> parameter);
+    /// <see langword="false"/> if <paramref name="parameter"/> is not a <typeparamref name="TTarget"/> or the command is <see langword="null"/>.
+    /// </returns>
     public bool CanExecute(object? parameter)
     {
         if (parameter is not TTarget target)
@@ -30,6 +48,13 @@ public sealed class PropertyKeybindingCommand<TTarget> : ICommand where TTarget 
         return cmd?.CanExecute(null) ?? false;
     }
 
+    /// <summary>
+    /// Executes the target's command with a <see langword="null"/> parameter.
+    /// </summary>
+    /// <param name="parameter">The target instance of type <typeparamref name="TTarget"/>.</param>
+    /// <exception cref="InvalidOperationException">
+    /// <paramref name="parameter"/> is not a <typeparamref name="TTarget"/>, or the target's command property is <see langword="null"/>.
+    /// </exception>
     public void Execute(object? parameter)
     {
         if (parameter is not TTarget target)
@@ -48,6 +73,9 @@ public sealed class PropertyKeybindingCommand<TTarget> : ICommand where TTarget 
         cmd.Execute(null);
     }
 
+    /// <summary>
+    /// Raises <see cref="CanExecuteChanged"/>.
+    /// </summary>
     public void RaiseCanExecuteChanged()
     {
         CanExecuteChanged?.Invoke(this, EventArgs.Empty);

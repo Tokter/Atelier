@@ -46,17 +46,30 @@ public interface ITransition
 /// </summary>
 public abstract class TransitionBase : ITransition
 {
+    /// <inheritdoc/>
     public TimeSpan Duration { get; set; }
+    /// <inheritdoc/>
     public Func<float, float>? Easing { get; set; }
 
+    /// <summary>
+    /// Initializes the transition with the given duration and easing.
+    /// </summary>
+    /// <param name="duration">The duration; defaults to 300 ms.</param>
+    /// <param name="easing">The easing function; defaults to <see cref="Atelier.Core.Animation.Easing.Emphasized"/>.</param>
     protected TransitionBase(TimeSpan? duration = null, Func<float, float>? easing = null)
     {
         Duration = duration ?? TimeSpan.FromMilliseconds(300);
         Easing = easing ?? Atelier.Core.Animation.Easing.Emphasized;
     }
 
+    /// <inheritdoc/>
     public abstract void Apply(UIElement? from, UIElement? to, float progress, Size bounds);
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// The base implementation clears the animated opacity, render transform and render transform origin of both
+    /// elements (see <see cref="ClearAnimatedValues"/>).
+    /// </remarks>
     public virtual void Reset(UIElement? from, UIElement? to)
     {
         ClearAnimatedValues(from);

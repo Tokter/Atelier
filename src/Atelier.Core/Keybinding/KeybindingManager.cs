@@ -5,11 +5,27 @@ using Atelier.Core.Events;
 
 namespace Atelier.Core.Keybinding;
 
+/// <summary>
+/// Global registry of keybindings, organized by group and name, with lookup and execution by gesture.
+/// </summary>
+/// <remarks>
+/// Registered descriptors (and the commands they hold) live until they are removed with
+/// <see cref="UnregisterKeybinding(string, string)"/> or <see cref="Clear"/>. Unregister keybindings whose commands
+/// reference short-lived objects such as views or view models.
+/// </remarks>
 public static partial class KeybindingManager
 {
+    /// <summary>
+    /// Gets the registered keybindings, keyed by group and then by name.
+    /// </summary>
     public static Dictionary<string, Dictionary<string, IKeybindingDescriptor>> RegisteredKeybindings { get; } = new Dictionary<string, Dictionary<string, IKeybindingDescriptor>>();
     private static readonly Dictionary<string, KeybindingGesture?> _gestureCache = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Registers a keybinding descriptor.
+    /// </summary>
+    /// <exception cref="ArgumentNullException"><paramref name="keybindingDescriptor"/> is <c>null</c>.</exception>
+    /// <exception cref="InvalidOperationException">A keybinding with the same group and name is already registered.</exception>
     public static void RegisterKeybinding(IKeybindingDescriptor keybindingDescriptor)
     {
         if (keybindingDescriptor == null)
@@ -46,6 +62,44 @@ public static partial class KeybindingManager
         WarmGestureCache(keybindingDescriptor.Keybinding);
     }
 
+    /// <summary>
+    /// Removes a registered keybinding, releasing its command.
+    /// </summary>
+    /// <param name="group">The keybinding group.</param>
+    /// <param name="name">The keybinding name within the group.</param>
+    /// <returns><c>true</c> if a keybinding was removed.</returns>
+    public static bool UnregisterKeybinding(string group, string name)
+    {
+        if (!RegisteredKeybindings.TryGetValue(group, out var groupKeybindings) || !groupKeybindings.Remove(name))
+        {
+            return false;
+        }
+
+        if (groupKeybindings.Count == 0)
+        {
+            RegisteredKeybindings.Remove(group);
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Removes a registered keybinding, releasing its command.
+    /// </summary>
+    /// <param name="keybindingDescriptor">The descriptor to remove; matched by group and name, and only if it is the registered instance.</param>
+    /// <returns><c>true</c> if the descriptor was registered and has been removed.</returns>
+    public static bool UnregisterKeybinding(IKeybindingDescriptor keybindingDescriptor)
+    {
+        ArgumentNullException.ThrowIfNull(keybindingDescriptor);
+
+        return RegisteredKeybindings.TryGetValue(keybindingDescriptor.Group, out var groupKeybindings)
+            && groupKeybindings.TryGetValue(keybindingDescriptor.Name, out var registered)
+            && ReferenceEquals(registered, keybindingDescriptor)
+            && UnregisterKeybinding(keybindingDescriptor.Group, keybindingDescriptor.Name);
+    }
+
+    /// <summary>
+    /// Removes all registered keybindings and cached parsed gestures.
+    /// </summary>
     public static void Clear()
     {
         RegisteredKeybindings.Clear();
@@ -243,6 +297,9 @@ public static partial class KeybindingManager
         return KeybindingGesture.Normalize(gestureString);
     }
 
+    /// <summary>
+    /// Determines whether the keybinding <paramref name="name"/> in <paramref name="group"/> exists and can run for <paramref name="target"/>.
+    /// </summary>
     public static bool CanExecuteKeybinding(string group, string name, object? target = null)
     {
         if (RegisteredKeybindings.TryGetValue(group, out var groupKeybindings) && groupKeybindings.TryGetValue(name, out var keybindingDescriptor))
@@ -252,6 +309,11 @@ public static partial class KeybindingManager
         return false;
     }
 
+    /// <summary>
+    /// Determines whether the keybinding identified by <paramref name="key"/> (<c>"Group_Name"</c>, as in the generated
+    /// constants) exists and can run for <paramref name="target"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="key"/> is not in <c>"Group_Name"</c> form.</exception>
     public static bool CanExecuteKeybinding(string key, object? target = null)
     {
         if (string.IsNullOrEmpty(key))
@@ -266,6 +328,11 @@ public static partial class KeybindingManager
         return CanExecuteKeybinding(group, name, target);
     }
 
+    /// <summary>
+    /// Runs the keybinding <paramref name="name"/> in <paramref name="group"/> for <paramref name="target"/>.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">No such keybinding is registered.</exception>
+    /// <exception cref="InvalidOperationException">The command cannot run for <paramref name="target"/>.</exception>
     public static void ExecuteKeybinding(string group, string name, object? target = null)
     {
         if (RegisteredKeybindings.TryGetValue(group, out var groupKeybindings) && groupKeybindings.TryGetValue(name, out var keybindingDescriptor))
@@ -285,6 +352,12 @@ public static partial class KeybindingManager
         }
     }
 
+    /// <summary>
+    /// Runs the keybinding identified by <paramref name="key"/> (<c>"Group_Name"</c>) for <paramref name="target"/>.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="key"/> is not in <c>"Group_Name"</c> form.</exception>
+    /// <exception cref="KeyNotFoundException">No such keybinding is registered.</exception>
+    /// <exception cref="InvalidOperationException">The command cannot run for <paramref name="target"/>.</exception>
     public static void ExecuteKeybinding(string key, object? target = null)
     {
         if (string.IsNullOrEmpty(key))
@@ -299,16 +372,19 @@ public static partial class KeybindingManager
         ExecuteKeybinding(group, name, target);
     }
 
+    /// <summary>Gets the names of all groups that have registered keybindings.</summary>
     public static IEnumerable<string> GetKeybindingGroups()
     {
         return RegisteredKeybindings.Keys;
     }
 
+    /// <summary>Gets all registered keybindings across all groups.</summary>
     public static IEnumerable<IKeybindingDescriptor> GetKeybindings()
     {
         return RegisteredKeybindings.Values.SelectMany(group => group.Values);
     }
 
+    /// <summary>Gets the keybindings registered in <paramref name="group"/>, or an empty sequence.</summary>
     public static IEnumerable<IKeybindingDescriptor> GetKeybindings(string group)
     {
         if (RegisteredKeybindings.TryGetValue(group, out var groupKeybindings))

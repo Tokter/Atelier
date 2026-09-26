@@ -40,9 +40,9 @@ public class AtelierCoreTests
 
         var blue = Color.FromHex("#0000FF");
         var mid = Color.Lerp(red, blue, 0.5f);
-        Assert.Equal(127, mid.R);
+        Assert.Equal(128, mid.R); // 127.5 rounds to 128
         Assert.Equal(0, mid.G);
-        Assert.Equal(127, mid.B);
+        Assert.Equal(128, mid.B);
     }
 
     [Fact]

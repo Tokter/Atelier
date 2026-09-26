@@ -12,31 +12,41 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
 {
     private static readonly char[] GestureDelimiters = new[] { '+', '-', ',', '|', ';', ' ' };
 
+    /// <summary>Gets the non-modifier key of the gesture.</summary>
     public Key Key { get; }
+
+    /// <summary>Gets the modifier keys that must be held.</summary>
     public ModifierKeys Modifiers { get; }
 
+    /// <summary>
+    /// Creates a gesture from a key and modifiers.
+    /// </summary>
     public KeybindingGesture(Key key, ModifierKeys modifiers = ModifierKeys.None)
     {
         Key = key;
         Modifiers = modifiers;
     }
 
+    /// <summary>Determines whether the key and the exact set of modifiers match this gesture.</summary>
     public bool Matches(Key key, ModifierKeys modifiers)
     {
         return Key == key && Modifiers == modifiers;
     }
 
+    /// <summary>Determines whether a key event matches this gesture.</summary>
     public bool Matches(KeyEventArgs e)
     {
         if (e == null) return false;
         return Matches(e.Key, e.Modifiers);
     }
 
+    /// <summary>Determines whether two gestures are the same shortcut.</summary>
     public bool Matches(KeybindingGesture other)
     {
         return Key == other.Key && Modifiers == other.Modifiers;
     }
 
+    /// <summary>Determines whether a gesture string (e.g. <c>"Shift+Ctrl+L"</c>) is the same shortcut; invalid strings never match.</summary>
     public bool Matches(string? gestureString)
     {
         if (TryParse(gestureString, out var other))
@@ -80,6 +90,14 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
         return gestureString ?? string.Empty;
     }
 
+    /// <summary>
+    /// Parses a gesture such as <c>"Ctrl+Shift+L"</c>. Modifiers may appear in any order and any case; <c>+</c>, <c>-</c>,
+    /// <c>,</c>, <c>|</c>, <c>;</c> and spaces separate tokens. Common aliases (<c>Control</c>, <c>Cmd</c>, <c>Esc</c>, <c>Del</c>,
+    /// <c>Return</c>) are accepted. Exactly one non-modifier key is required; if several are given, the last one wins.
+    /// </summary>
+    /// <param name="text">The gesture string.</param>
+    /// <param name="gesture">The parsed gesture, or <c>default</c> on failure.</param>
+    /// <returns><c>true</c> if the string is a valid gesture.</returns>
     public static bool TryParse(string? text, out KeybindingGesture gesture)
     {
         gesture = default;
@@ -121,27 +139,15 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
         return true;
     }
 
+    /// <summary>
+    /// Parses a gesture string; see <see cref="TryParse"/> for the accepted format.
+    /// </summary>
+    /// <exception cref="FormatException">The string is not a valid gesture.</exception>
     public static KeybindingGesture Parse(string text)
     {
         if (!TryParse(text, out var gesture))
             throw new FormatException($"Invalid keybinding gesture string: '{text}'.");
         return gesture;
-    }
-
-    private static bool IsModifier(string token)
-    {
-        return token.Equals("ctrl", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("control", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("shift", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("alt", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("opt", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("option", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("win", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("windows", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("cmd", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("command", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("meta", StringComparison.OrdinalIgnoreCase)
-            || token.Equals("super", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryMapModifier(string token, out ModifierKeys mod)
@@ -207,9 +213,17 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
             return true;
         }
 
-        return Enum.TryParse(token, true, out key) && key != Key.None;
+        // Enum.TryParse also accepts numeric strings ("42" would become (Key)42), so only accept key names.
+        if (char.IsDigit(token[0]) || token[0] == '-' || token[0] == '+')
+        {
+            key = Key.None;
+            return false;
+        }
+
+        return Enum.TryParse(token, true, out key) && key != Key.None && Enum.IsDefined(key);
     }
 
+    /// <summary>Formats the gesture in canonical form, e.g. <c>"Ctrl+Alt+Shift+Win+K"</c>.</summary>
     public override string ToString()
     {
         var sb = new StringBuilder();
@@ -221,9 +235,18 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
         return sb.ToString();
     }
 
+    /// <inheritdoc/>
     public bool Equals(KeybindingGesture other) => Key == other.Key && Modifiers == other.Modifiers;
+
+    /// <inheritdoc/>
     public override bool Equals(object? obj) => obj is KeybindingGesture other && Equals(other);
+
+    /// <inheritdoc/>
     public override int GetHashCode() => ((int)Key * 397) ^ (int)Modifiers;
+
+    /// <summary>Determines whether two gestures are the same shortcut.</summary>
     public static bool operator ==(KeybindingGesture left, KeybindingGesture right) => left.Equals(right);
+
+    /// <summary>Determines whether two gestures differ.</summary>
     public static bool operator !=(KeybindingGesture left, KeybindingGesture right) => !left.Equals(right);
 }

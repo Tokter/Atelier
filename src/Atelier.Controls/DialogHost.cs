@@ -126,7 +126,6 @@ public class DialogHost : Control
     #endregion
 
     private readonly DialogScrim _scrim;
-    private UIElement? _previousFocused;
 
     public DialogHost()
     {
@@ -190,7 +189,6 @@ public class DialogHost : Control
                 AddChild(newVal);
             }
 
-            _previousFocused = FocusManager.CurrentFocused;
             FocusManager.PushModal(newVal);
         }
         else
@@ -199,12 +197,6 @@ public class DialogHost : Control
             if (Children.Contains(_scrim))
             {
                 RemoveChild(_scrim);
-            }
-
-            if (_previousFocused != null)
-            {
-                FocusManager.SetFocus(_previousFocused);
-                _previousFocused = null;
             }
         }
 

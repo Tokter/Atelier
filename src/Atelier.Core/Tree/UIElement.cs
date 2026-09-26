@@ -8,49 +8,67 @@ using Atelier.Core.Styling;
 
 namespace Atelier.Core.Tree;
 
+/// <summary>
+/// Base class for elements that take part in layout, styling and input: adds size constraints, alignment, visibility,
+/// the two-pass measure/arrange layout, hit testing, focus, pointer capture and input event hooks.
+/// </summary>
 public abstract class UIElement : VisualNode
 {
     #region Bindable Properties
 
+    /// <summary>Identifies the <see cref="Width"/> bindable property.</summary>
     public static readonly BindableProperty<float> WidthProperty =
         BindableProperty.Register<UIElement, float>(nameof(Width), float.NaN, options: PropertyOptions.AffectsMeasure);
 
+    /// <summary>Identifies the <see cref="Height"/> bindable property.</summary>
     public static readonly BindableProperty<float> HeightProperty =
         BindableProperty.Register<UIElement, float>(nameof(Height), float.NaN, options: PropertyOptions.AffectsMeasure);
 
+    /// <summary>Identifies the <see cref="MinWidth"/> bindable property.</summary>
     public static readonly BindableProperty<float> MinWidthProperty =
         BindableProperty.Register<UIElement, float>(nameof(MinWidth), 0f, options: PropertyOptions.AffectsMeasure);
 
+    /// <summary>Identifies the <see cref="MaxWidth"/> bindable property.</summary>
     public static readonly BindableProperty<float> MaxWidthProperty =
         BindableProperty.Register<UIElement, float>(nameof(MaxWidth), float.PositiveInfinity, options: PropertyOptions.AffectsMeasure);
 
+    /// <summary>Identifies the <see cref="MinHeight"/> bindable property.</summary>
     public static readonly BindableProperty<float> MinHeightProperty =
         BindableProperty.Register<UIElement, float>(nameof(MinHeight), 0f, options: PropertyOptions.AffectsMeasure);
 
+    /// <summary>Identifies the <see cref="MaxHeight"/> bindable property.</summary>
     public static readonly BindableProperty<float> MaxHeightProperty =
         BindableProperty.Register<UIElement, float>(nameof(MaxHeight), float.PositiveInfinity, options: PropertyOptions.AffectsMeasure);
 
+    /// <summary>Identifies the <see cref="Margin"/> bindable property.</summary>
     public static readonly BindableProperty<Thickness> MarginProperty =
         BindableProperty.Register<UIElement, Thickness>(nameof(Margin), Thickness.Zero, options: PropertyOptions.AffectsMeasure);
 
+    /// <summary>Identifies the <see cref="HorizontalAlignment"/> bindable property.</summary>
     public static readonly BindableProperty<HorizontalAlignment> HorizontalAlignmentProperty =
         BindableProperty.Register<UIElement, HorizontalAlignment>(nameof(HorizontalAlignment), HorizontalAlignment.Stretch, options: PropertyOptions.AffectsArrange);
 
+    /// <summary>Identifies the <see cref="VerticalAlignment"/> bindable property.</summary>
     public static readonly BindableProperty<VerticalAlignment> VerticalAlignmentProperty =
         BindableProperty.Register<UIElement, VerticalAlignment>(nameof(VerticalAlignment), VerticalAlignment.Stretch, options: PropertyOptions.AffectsArrange);
 
+    /// <summary>Identifies the <see cref="Visibility"/> bindable property.</summary>
     public static readonly BindableProperty<Visibility> VisibilityProperty =
         BindableProperty.Register<UIElement, Visibility>(nameof(Visibility), Visibility.Visible, options: PropertyOptions.AffectsMeasure);
 
+    /// <summary>Identifies the <see cref="Opacity"/> bindable property.</summary>
     public static readonly BindableProperty<float> OpacityProperty =
         BindableProperty.Register<UIElement, float>(nameof(Opacity), 1.0f, options: PropertyOptions.AffectsRender);
 
+    /// <summary>Identifies the <see cref="IsEnabled"/> bindable property.</summary>
     public static readonly BindableProperty<bool> IsEnabledProperty =
         BindableProperty.Register<UIElement, bool>(nameof(IsEnabled), true, options: PropertyOptions.AffectsRender, inherits: true);
 
+    /// <summary>Identifies the <see cref="ClipToBounds"/> bindable property.</summary>
     public static readonly BindableProperty<bool> ClipToBoundsProperty =
         BindableProperty.Register<UIElement, bool>(nameof(ClipToBounds), false, options: PropertyOptions.AffectsRender);
 
+    /// <summary>Identifies the <see cref="StyleKey"/> bindable property.</summary>
     public static readonly BindableProperty<string?> StyleKeyProperty =
         BindableProperty.Register<UIElement, string?>(
             nameof(StyleKey),
@@ -61,22 +79,91 @@ public abstract class UIElement : VisualNode
 
     #region Property Accessors
 
+    /// <summary>
+    /// Gets or sets the explicit width, excluding <see cref="Margin"/>. The default, <see cref="float.NaN"/>, sizes the
+    /// element to its content (or stretches it, per <see cref="HorizontalAlignment"/>). Clamped by <see cref="MinWidth"/>
+    /// and <see cref="MaxWidth"/>. Changing it invalidates measure.
+    /// </summary>
     public float Width { get => GetValue(WidthProperty); set => SetValue(WidthProperty, value); }
+    /// <summary>
+    /// Gets or sets the explicit height, excluding <see cref="Margin"/>. The default, <see cref="float.NaN"/>, sizes the
+    /// element to its content (or stretches it, per <see cref="VerticalAlignment"/>). Clamped by <see cref="MinHeight"/>
+    /// and <see cref="MaxHeight"/>. Changing it invalidates measure.
+    /// </summary>
     public float Height { get => GetValue(HeightProperty); set => SetValue(HeightProperty, value); }
+    /// <summary>
+    /// Gets or sets the minimum width. The default is 0. When it exceeds <see cref="MaxWidth"/>, the minimum wins.
+    /// Changing it invalidates measure.
+    /// </summary>
     public float MinWidth { get => GetValue(MinWidthProperty); set => SetValue(MinWidthProperty, value); }
+    /// <summary>
+    /// Gets or sets the maximum width. The default is <see cref="float.PositiveInfinity"/>. Changing it invalidates measure.
+    /// </summary>
     public float MaxWidth { get => GetValue(MaxWidthProperty); set => SetValue(MaxWidthProperty, value); }
+    /// <summary>
+    /// Gets or sets the minimum height. The default is 0. When it exceeds <see cref="MaxHeight"/>, the minimum wins.
+    /// Changing it invalidates measure.
+    /// </summary>
     public float MinHeight { get => GetValue(MinHeightProperty); set => SetValue(MinHeightProperty, value); }
+    /// <summary>
+    /// Gets or sets the maximum height. The default is <see cref="float.PositiveInfinity"/>. Changing it invalidates measure.
+    /// </summary>
     public float MaxHeight { get => GetValue(MaxHeightProperty); set => SetValue(MaxHeightProperty, value); }
+    /// <summary>
+    /// Gets or sets the outer space around the element. It is included in <see cref="DesiredSize"/> but not in
+    /// <see cref="Bounds"/>. The default is <see cref="Thickness.Zero"/>. Changing it invalidates measure.
+    /// </summary>
     public Thickness Margin { get => GetValue(MarginProperty); set => SetValue(MarginProperty, value); }
+    /// <summary>
+    /// Gets or sets how the element is positioned horizontally within the slot its parent arranges it in. The default,
+    /// <see cref="HorizontalAlignment.Stretch"/>, fills the slot width. Changing it invalidates arrange.
+    /// </summary>
     public HorizontalAlignment HorizontalAlignment { get => GetValue(HorizontalAlignmentProperty); set => SetValue(HorizontalAlignmentProperty, value); }
+    /// <summary>
+    /// Gets or sets how the element is positioned vertically within the slot its parent arranges it in. The default,
+    /// <see cref="VerticalAlignment.Stretch"/>, fills the slot height. Changing it invalidates arrange.
+    /// </summary>
     public VerticalAlignment VerticalAlignment { get => GetValue(VerticalAlignmentProperty); set => SetValue(VerticalAlignmentProperty, value); }
+    /// <summary>
+    /// Gets or sets whether the element is shown. The default is <see cref="Visibility.Visible"/>. Changing it invalidates measure.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="Visibility.Collapsed"/> element measures to zero size and arranges to <see cref="Rect.Zero"/>.
+    /// A <see cref="Visibility.Hidden"/> element is still measured and arranged, so it keeps its layout space, but it is
+    /// not rendered and <see cref="HitTest"/> ignores it.
+    /// </remarks>
     public Visibility Visibility { get => GetValue(VisibilityProperty); set => SetValue(VisibilityProperty, value); }
+    /// <summary>
+    /// Gets or sets the opacity of the element and its children, from 0 (transparent) to 1 (opaque). The default is 1.
+    /// Changing it invalidates rendering.
+    /// </summary>
     public float Opacity { get => GetValue(OpacityProperty); set => SetValue(OpacityProperty, value); }
+    /// <summary>
+    /// Gets or sets whether the element accepts user interaction. The default is <c>true</c>. Changing it invalidates rendering.
+    /// </summary>
+    /// <remarks>
+    /// This property is inherited: unless set locally, a descendant takes the value of its nearest ancestor. Disabled
+    /// elements are skipped by keyboard focus navigation (<see cref="FocusManager.FocusNext"/>); input is still delivered
+    /// to them, and controls check this property themselves before reacting.
+    /// </remarks>
     public bool IsEnabled { get => GetValue(IsEnabledProperty); set => SetValue(IsEnabledProperty, value); }
+    /// <summary>
+    /// Gets or sets whether the rendering of the element's children is clipped to its bounds (the element's own
+    /// background and shadow are not clipped). The default is <c>false</c>. Changing it invalidates rendering.
+    /// </summary>
     public bool ClipToBounds { get => GetValue(ClipToBoundsProperty); set => SetValue(ClipToBoundsProperty, value); }
+    /// <summary>
+    /// Gets or sets the key of the style to apply, looked up in this element's and its ancestors' <see cref="Styles"/>
+    /// and then in <see cref="StyleManager.GlobalStyles"/>. The default is <c>null</c>, which selects the implicit style
+    /// for the element's type. Ignored when <see cref="Style"/> is set. Changing it re-applies styles.
+    /// </summary>
     public string? StyleKey { get => GetValue(StyleKeyProperty); set => SetValue(StyleKeyProperty, value); }
 
     private Style? _style;
+    /// <summary>
+    /// Gets or sets an explicit style for this element, which takes precedence over <see cref="StyleKey"/> and implicit
+    /// styles. Setting a different value re-applies styles to this element (not its descendants).
+    /// </summary>
     public Style? Style
     {
         get => _style;
@@ -90,53 +177,44 @@ public abstract class UIElement : VisualNode
         }
     }
 
-    public StyleCollection Styles { get; } = new();
+    private StyleCollection? _styles;
+
+    /// <summary>
+    /// Gets the styles defined on this element, which apply to it and its descendants.
+    /// </summary>
+    /// <remarks>Created on first access: most elements never define local styles.</remarks>
+    public StyleCollection Styles
+    {
+        get
+        {
+            if (_styles == null)
+            {
+                _styles = new StyleCollection();
+                _styles.StylesChanged += ApplyStylesToTree;
+            }
+            return _styles;
+        }
+    }
 
     #endregion
-
-    public UIElement()
-    {
-        Styles.StylesChanged += () => ApplyStylesToTree();
-    }
 
     private void OnStyleKeyChanged(string? oldValue, string? newValue)
     {
         ApplyStyles();
     }
 
+    /// <summary>
+    /// Resolves this element's style (see <see cref="ResolveStyle"/>) and applies its setters, including those of its
+    /// <see cref="Styling.Style.BasedOn"/> chain. Only properties whose effective value changes raise notifications.
+    /// </summary>
     public void ApplyStyles()
     {
-        Style? resolvedStyle = ResolveStyle();
-        if (resolvedStyle != null)
-        {
-            var chain = new List<Style>();
-            var cur = resolvedStyle;
-            while (cur != null)
-            {
-                chain.Add(cur);
-                cur = cur.BasedOn;
-            }
-            chain.Reverse();
-
-            var effectiveSetters = new Dictionary<int, Setter>();
-            for (int i = 0; i < chain.Count; i++)
-            {
-                var s = chain[i];
-                for (int j = 0; j < s.Setters.Count; j++)
-                {
-                    var setter = s.Setters[j];
-                    effectiveSetters[setter.Property.Id] = setter;
-                }
-            }
-
-            SetStyleValues(effectiveSetters.Values);
-        }
-        else
-        {
-            SetStyleValues(null);
-        }
+        SetStyleValues(ResolveStyle());
     }
 
+    /// <summary>
+    /// Applies styles to this element and all descendant elements.
+    /// </summary>
     public void ApplyStylesToTree()
     {
         ApplyStyles();
@@ -149,6 +227,12 @@ public abstract class UIElement : VisualNode
         }
     }
 
+    /// <summary>
+    /// Finds the style that applies to this element: the explicit <see cref="Style"/> if set; otherwise the nearest style
+    /// matching <see cref="StyleKey"/> (or, without a key, the nearest implicit style for this element's type) in this
+    /// element's or an ancestor's <see cref="Styles"/>, falling back to <see cref="StyleManager.GlobalStyles"/>.
+    /// </summary>
+    /// <returns>The resolved style, or <c>null</c> if none applies.</returns>
     protected virtual Style? ResolveStyle()
     {
         if (_style != null) return _style;
@@ -159,9 +243,11 @@ public abstract class UIElement : VisualNode
             UIElement? current = this;
             while (current != null)
             {
-                for (int i = 0; i < current.Styles.Count; i++)
+                // Read the field, not the property, so walking ancestors doesn't create their style collections.
+                var styles = current._styles;
+                for (int i = 0; styles != null && i < styles.Count; i++)
                 {
-                    var s = current.Styles[i];
+                    var s = styles[i];
                     if (s.Key == key && (s.TargetType == null || s.TargetType.IsInstanceOfType(this)))
                     {
                         return s;
@@ -186,9 +272,10 @@ public abstract class UIElement : VisualNode
         UIElement? curr = this;
         while (curr != null)
         {
-            for (int i = 0; i < curr.Styles.Count; i++)
+            var styles = curr._styles;
+            for (int i = 0; styles != null && i < styles.Count; i++)
             {
-                var s = curr.Styles[i];
+                var s = styles[i];
                 if (string.IsNullOrEmpty(s.Key) && s.TargetType != null && s.TargetType.IsAssignableFrom(controlType))
                 {
                     return s;
@@ -209,6 +296,12 @@ public abstract class UIElement : VisualNode
         return null;
     }
 
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Applies the property's <see cref="PropertyOptions"/>: <see cref="PropertyOptions.AffectsMeasure"/> invalidates
+    /// measure (which also covers arrange), otherwise <see cref="PropertyOptions.AffectsArrange"/> invalidates arrange;
+    /// <see cref="PropertyOptions.AffectsRender"/> additionally invalidates rendering.
+    /// </remarks>
     protected override void OnPropertyValueChanged(BindableProperty property, object? oldValue, object? newValue)
     {
         base.OnPropertyValueChanged(property, oldValue, newValue);
@@ -238,27 +331,57 @@ public abstract class UIElement : VisualNode
     {
         base.OnInheritanceParentChanged(oldParent, newParent);
 
+        if (newParent == null)
+        {
+            // Removed from the tree: static input state must not keep the detached subtree alive or keep routing to it.
+            FocusManager.OnSubtreeDetached(this);
+            if (CapturedElement != null && (CapturedElement == this || CapturedElement.IsDescendantOf(this)))
+            {
+                ReleaseCurrentPointerCapture();
+            }
+        }
+
         // Style resolution walks up the tree, so the whole moved subtree may resolve different styles now.
         ApplyStylesToTree();
     }
 
+    /// <inheritdoc/>
+    /// <remarks>This implementation also invalidates measure.</remarks>
     protected override void OnChildAdded(VisualNode child)
     {
         base.OnChildAdded(child);
         InvalidateMeasure();
     }
 
+    /// <inheritdoc/>
+    /// <remarks>This implementation also invalidates measure.</remarks>
     protected override void OnChildRemoved(VisualNode child)
     {
         base.OnChildRemoved(child);
         InvalidateMeasure();
     }
 
+    /// <summary>
+    /// Gets the size computed by the last <see cref="Measure"/>, including <see cref="Margin"/> and, for a non-root
+    /// element, the bounding box of its <see cref="VisualNode.Transform"/>.
+    /// </summary>
     public Size DesiredSize { get; private set; } = Size.Zero;
+    /// <summary>
+    /// Gets the untransformed layout rectangle assigned by the last <see cref="Arrange"/>, in the parent's coordinates
+    /// and excluding <see cref="Margin"/>. <see cref="Rect.Zero"/> when collapsed.
+    /// </summary>
     public Rect Bounds { get; private set; } = Rect.Zero;
+    /// <summary>Gets the arranged size of the element, i.e. the size of <see cref="Bounds"/>.</summary>
     public Size RenderSize => Bounds.Size;
 
+    /// <summary>
+    /// Gets a value indicating whether <see cref="DesiredSize"/> is up to date. Cleared by <see cref="InvalidateMeasure"/>.
+    /// </summary>
     public bool IsMeasureValid { get; private set; }
+    /// <summary>
+    /// Gets a value indicating whether <see cref="Bounds"/> is up to date. Cleared by <see cref="InvalidateArrange"/> and
+    /// <see cref="InvalidateMeasure"/>.
+    /// </summary>
     public bool IsArrangeValid { get; private set; }
 
     private static readonly BindablePropertyKey<bool> IsHoveredPropertyKey =
@@ -275,19 +398,56 @@ public abstract class UIElement : VisualNode
     /// <summary>Identifies the read-only <see cref="IsFocused"/> property.</summary>
     public static readonly BindableProperty<bool> IsFocusedProperty = IsFocusedPropertyKey.Property;
 
+    /// <summary>
+    /// Gets a value indicating whether the pointer is over the element. Set by <see cref="OnPointerEntered"/> and
+    /// cleared by <see cref="OnPointerExited"/>.
+    /// </summary>
     public bool IsHovered { get => GetValue(IsHoveredProperty); internal set => SetValue(IsHoveredPropertyKey, value); }
+    /// <summary>
+    /// Gets a value indicating whether a pointer button is pressed on the element. Set by <see cref="OnPointerPressed"/>
+    /// and cleared by <see cref="OnPointerReleased"/> or <see cref="OnPointerExited"/>.
+    /// </summary>
     public bool IsPressed { get => GetValue(IsPressedProperty); internal set => SetValue(IsPressedPropertyKey, value); }
+    /// <summary>
+    /// Gets a value indicating whether the element has keyboard focus. Set by <see cref="OnGotFocus"/> and cleared by
+    /// <see cref="OnLostFocus"/>.
+    /// </summary>
     public bool IsFocused { get => GetValue(IsFocusedProperty); internal set => SetValue(IsFocusedPropertyKey, value); }
+    /// <summary>
+    /// Gets or sets whether the element can receive keyboard focus. The default is <c>false</c>; focusing a
+    /// non-focusable element moves focus to its nearest focusable ancestor.
+    /// </summary>
     public bool IsFocusable { get; set; } = false;
+    /// <summary>
+    /// Gets or sets whether <see cref="HitTest"/> can return this element or any of its descendants. The default is <c>true</c>.
+    /// </summary>
     public bool IsHitTestVisible { get; set; } = true;
+    /// <summary>
+    /// Gets a value indicating whether this element is an overlay (such as a popup) that is positioned in window
+    /// coordinates at <see cref="OverlayOrigin"/> rather than within its parent.
+    /// </summary>
+    /// <remarks>
+    /// Overlay elements are skipped by their parent's <see cref="HitTest"/>, end the coordinate walk in
+    /// <see cref="VisualNode.GetTransformToAncestor"/>, and stop pointer and key events from bubbling past them.
+    /// </remarks>
     public bool IsOverlayElement { get; protected set; } = false;
+    /// <summary>
+    /// Gets the window-coordinate position of an overlay element; used instead of <see cref="Bounds"/> for the
+    /// translation in <see cref="GetLocalTransform"/> when <see cref="IsOverlayElement"/> is <c>true</c>.
+    /// The base implementation returns <see cref="Point.Zero"/>.
+    /// </summary>
     public virtual Point OverlayOrigin => Point.Zero;
 
+    /// <summary>
+    /// Gives keyboard focus to this element, or to its nearest focusable ancestor if <see cref="IsFocusable"/> is
+    /// <c>false</c>, via <see cref="FocusManager.SetFocus"/>. Ignored if a modal scope in the same tree excludes it.
+    /// </summary>
     public void Focus()
     {
         FocusManager.SetFocus(this);
     }
 
+    /// <summary>Clears keyboard focus if this element currently has it; otherwise does nothing.</summary>
     public void Unfocus()
     {
         if (FocusManager.CurrentFocused == this)
@@ -296,10 +456,25 @@ public abstract class UIElement : VisualNode
         }
     }
 
+    /// <summary>
+    /// Occurs when pointer capture moves to another element or is released (the argument is then <c>null</c>).
+    /// </summary>
+    /// <remarks>This is a static event: subscribers stay alive until they unsubscribe.</remarks>
     public static event Action<UIElement?>? PointerCaptureChanged;
+
+    /// <summary>
+    /// Gets the element that currently receives all pointer input, or <c>null</c>. Capture is released automatically
+    /// when the capturing element is removed from the tree.
+    /// </summary>
     public static UIElement? CapturedElement { get; private set; }
+
+    /// <summary>Gets a value indicating whether this element currently has pointer capture.</summary>
     public bool IsPointerCaptured => CapturedElement == this;
 
+    /// <summary>
+    /// Routes all pointer input to this element until <see cref="ReleasePointerCapture"/> is called (typically for drags).
+    /// </summary>
+    /// <returns>Always <c>true</c>.</returns>
     public bool CapturePointer()
     {
         if (CapturedElement != this)
@@ -310,6 +485,9 @@ public abstract class UIElement : VisualNode
         return true;
     }
 
+    /// <summary>
+    /// Releases pointer capture if this element holds it, raising <see cref="PointerCaptureChanged"/>; otherwise does nothing.
+    /// </summary>
     public void ReleasePointerCapture()
     {
         if (CapturedElement == this)
@@ -319,6 +497,9 @@ public abstract class UIElement : VisualNode
         }
     }
 
+    /// <summary>
+    /// Releases pointer capture held by any element, raising <see cref="PointerCaptureChanged"/> if there was one.
+    /// </summary>
     public static void ReleaseCurrentPointerCapture()
     {
         if (CapturedElement != null)
@@ -328,23 +509,39 @@ public abstract class UIElement : VisualNode
         }
     }
 
+    /// <inheritdoc/>
+    /// <remarks>This implementation also invalidates measure.</remarks>
     protected override void OnTransformChanged(Matrix3x2 oldValue, Matrix3x2 newValue)
     {
         base.OnTransformChanged(oldValue, newValue);
         InvalidateMeasure();
     }
 
+    /// <inheritdoc/>
+    /// <remarks>This implementation also invalidates measure.</remarks>
     protected override void OnTransformOriginChanged(Point oldValue, Point newValue)
     {
         base.OnTransformOriginChanged(oldValue, newValue);
         InvalidateMeasure();
     }
 
+    /// <summary>
+    /// Gets <see cref="VisualNode.Transform"/> applied about <see cref="VisualNode.TransformOrigin"/>, resolved against
+    /// the current <see cref="Bounds"/> size.
+    /// </summary>
+    /// <returns>The effective layout transform.</returns>
     public override Matrix3x2 GetEffectiveTransform()
     {
         return GetEffectiveTransform(Bounds.Width, Bounds.Height);
     }
 
+    /// <summary>
+    /// Computes the axis-aligned bounding box of a <paramref name="width"/> by <paramref name="height"/> rectangle at the
+    /// origin after applying the effective layout transform (see <see cref="VisualNode.GetEffectiveTransform(float, float)"/>).
+    /// </summary>
+    /// <param name="width">The untransformed width.</param>
+    /// <param name="height">The untransformed height.</param>
+    /// <returns>The transformed bounding box; its position can be negative.</returns>
     public Rect ComputeTransformedBounds(float width, float height)
     {
         var eff = GetEffectiveTransform(width, height);
@@ -366,6 +563,12 @@ public abstract class UIElement : VisualNode
         return new Rect(minX, minY, MathF.Max(0, maxX - minX), MathF.Max(0, maxY - minY));
     }
 
+    /// <summary>
+    /// Gets the transform that maps this element's local coordinates into its parent's coordinates: the effective render
+    /// transform, then the effective layout transform, then the translation to <see cref="Bounds"/> (or to
+    /// <see cref="OverlayOrigin"/> for an overlay element).
+    /// </summary>
+    /// <returns>The local-to-parent transform.</returns>
     public override Matrix3x2 GetLocalTransform()
     {
         var translation = IsOverlayElement
@@ -382,6 +585,11 @@ public abstract class UIElement : VisualNode
         return renderEff.IsIdentity ? baseTransform : (renderEff * baseTransform);
     }
 
+    /// <summary>
+    /// Transforms a rectangle from this element's local coordinates to root (window) coordinates.
+    /// </summary>
+    /// <param name="localRect">The rectangle in local coordinates.</param>
+    /// <returns>The axis-aligned bounding box of the transformed rectangle.</returns>
     public Rect TransformRectToScreen(Rect localRect)
     {
         var m = GetTransformToRoot();
@@ -403,35 +611,55 @@ public abstract class UIElement : VisualNode
         return new Rect(minX, minY, maxX - minX, maxY - minY);
     }
 
+    /// <summary>Gets the element's arranged area in root (window) coordinates, as an axis-aligned bounding box.</summary>
+    /// <returns>The window-space bounding box of (0, 0, <see cref="Bounds"/> width, height).</returns>
     public Rect GetScreenBounds() => TransformRectToScreen(new Rect(0, 0, Bounds.Width, Bounds.Height));
 
+    /// <summary>
+    /// Raises a pointer event on this element and then on each ancestor until a handler sets
+    /// <see cref="RoutedEventArgs.Handled"/>, an overlay element (such as a popup) is reached, or the root is reached.
+    /// </summary>
+    /// <remarks>
+    /// The same <paramref name="e"/> instance is passed to every handler, with <see cref="PointerEventArgs.Position"/>
+    /// updated to each receiving element's local coordinates. Handlers that need the position later must copy it,
+    /// not keep the args object. The local position is mapped up one level at a time, so dispatch costs O(depth).
+    /// </remarks>
+    /// <typeparam name="T">The pointer event args type.</typeparam>
+    /// <param name="e">The event args, with <see cref="PointerEventArgs.ScreenPosition"/> in window coordinates.</param>
+    /// <param name="action">Invokes the handler for one element, e.g. <c>(el, args) =&gt; el.OnPointerPressed(args)</c>.</param>
     public void DispatchBubblePointerEvent<T>(T e, Action<UIElement, T> action) where T : PointerEventArgs
     {
-        UIElement? current = this;
-        while (current != null)
+        e.Source ??= this;
+        e.OriginalSource ??= this;
+
+        Point localPos = PointToClient(e.ScreenPosition);
+        UIElement current = this;
+        while (true)
         {
-            Point localPos = current.PointToClient(e.ScreenPosition);
-            var localE = (T)e.WithPosition(localPos);
-            localE.Source ??= this;
-            localE.OriginalSource ??= this;
+            e.Position = localPos;
+            action(current, e);
 
-            action(current, localE);
-
-            if (localE.Handled)
-            {
-                e.Handled = true;
-                break;
-            }
-
-            if (current.IsOverlayElement)
+            if (e.Handled || current.IsOverlayElement || current.Parent is not UIElement parent)
             {
                 break;
             }
 
-            current = current.Parent as UIElement;
+            // The local transform maps this element's coordinates into its parent's coordinates.
+            var v = Vector2.Transform(new Vector2(localPos.X, localPos.Y), current.GetLocalTransform());
+            localPos = new Point(v.X, v.Y);
+            current = parent;
         }
     }
 
+    /// <summary>
+    /// Raises a keyboard or text event on this element and then on each ancestor until a handler sets
+    /// <see cref="RoutedEventArgs.Handled"/>, the current modal root (<see cref="FocusManager.CurrentModal"/>) or an
+    /// overlay element has been processed, or the root is reached.
+    /// </summary>
+    /// <typeparam name="T">The event args type.</typeparam>
+    /// <param name="e">The event args, shared by all handlers. <see cref="RoutedEventArgs.Source"/> and
+    /// <see cref="RoutedEventArgs.OriginalSource"/> default to this element if not already set.</param>
+    /// <param name="action">Invokes the handler for one element, e.g. <c>(el, args) =&gt; el.OnKeyDown(args)</c>.</param>
     public void DispatchBubbleKeyEvent<T>(T e, Action<UIElement, T> action) where T : RoutedEventArgs
     {
         e.Source ??= this;
@@ -459,8 +687,20 @@ public abstract class UIElement : VisualNode
     private Size _previousAvailableSize = Size.Zero;
     private Rect _previousFinalRect = Rect.Zero;
     private Size _untransformedDesiredSize = Size.Zero;
+    /// <summary>
+    /// Gets the size computed by the last <see cref="Measure"/> before applying <see cref="VisualNode.Transform"/> and
+    /// adding <see cref="Margin"/>.
+    /// </summary>
     public Size UntransformedDesiredSize => _untransformedDesiredSize;
 
+    /// <summary>
+    /// Marks this element's measure and arrange as invalid, so the next <see cref="Measure"/> and <see cref="Arrange"/>
+    /// recompute them, and raises <see cref="VisualNode.NeedsLayoutUpdate"/> up to the root.
+    /// </summary>
+    /// <remarks>
+    /// Ancestors are marked invalid too, stopping at the first one whose measure and arrange are both already invalid.
+    /// Does nothing if measure is already invalid.
+    /// </remarks>
     public void InvalidateMeasure()
     {
         if (IsMeasureValid)
@@ -482,6 +722,14 @@ public abstract class UIElement : VisualNode
         }
     }
 
+    /// <summary>
+    /// Marks this element's arrange as invalid, so the next <see cref="Arrange"/> recomputes it, and raises
+    /// <see cref="VisualNode.NeedsLayoutUpdate"/> up to the root.
+    /// </summary>
+    /// <remarks>
+    /// Ancestors' arrange is marked invalid too, stopping at the first one whose arrange is already invalid.
+    /// Does nothing if arrange is already invalid.
+    /// </remarks>
     public void InvalidateArrange()
     {
         if (IsArrangeValid)
@@ -501,6 +749,17 @@ public abstract class UIElement : VisualNode
         }
     }
 
+    /// <summary>
+    /// Computes <see cref="DesiredSize"/> for the given available space. Called by the parent during the measure pass.
+    /// </summary>
+    /// <remarks>
+    /// The available size is reduced by <see cref="Margin"/>, adjusted for a non-identity <see cref="VisualNode.Transform"/>,
+    /// and constrained by <see cref="Width"/>, <see cref="Height"/> and the min/max properties before being passed to
+    /// <see cref="MeasureOverride"/>; the result is clamped the same way. The work is skipped when measure is still
+    /// valid and <paramref name="availableSize"/> equals the previous call's. A collapsed element gets a zero size
+    /// without calling <see cref="MeasureOverride"/>.
+    /// </remarks>
+    /// <param name="availableSize">The space the parent offers, including margin; may be infinite.</param>
     public void Measure(Size availableSize)
     {
         if (Visibility == Visibility.Collapsed)
@@ -547,8 +806,8 @@ public abstract class UIElement : VisualNode
         float constraintWidth = !float.IsNaN(Width) ? Width : childAvailable.Width;
         float constraintHeight = !float.IsNaN(Height) ? Height : childAvailable.Height;
 
-        constraintWidth = Math.Clamp(constraintWidth, MinWidth, MaxWidth);
-        constraintHeight = Math.Clamp(constraintHeight, MinHeight, MaxHeight);
+        constraintWidth = LayoutMath.ClampMinWins(constraintWidth, MinWidth, MaxWidth);
+        constraintHeight = LayoutMath.ClampMinWins(constraintHeight, MinHeight, MaxHeight);
 
         Size measured = MeasureOverride(new Size(constraintWidth, constraintHeight));
 
@@ -556,8 +815,8 @@ public abstract class UIElement : VisualNode
         float finalWidth = !float.IsNaN(Width) ? Width : measured.Width;
         float finalHeight = !float.IsNaN(Height) ? Height : measured.Height;
 
-        finalWidth = Math.Clamp(finalWidth, MinWidth, MaxWidth);
-        finalHeight = Math.Clamp(finalHeight, MinHeight, MaxHeight);
+        finalWidth = LayoutMath.ClampMinWins(finalWidth, MinWidth, MaxWidth);
+        finalHeight = LayoutMath.ClampMinWins(finalHeight, MinHeight, MaxHeight);
 
         _untransformedDesiredSize = new Size(finalWidth, finalHeight);
 
@@ -574,6 +833,20 @@ public abstract class UIElement : VisualNode
         IsMeasureValid = true;
     }
 
+    /// <summary>
+    /// Positions and sizes the element within <paramref name="finalRect"/> and sets <see cref="Bounds"/>. Called by the
+    /// parent during the arrange pass, after <see cref="Measure"/>.
+    /// </summary>
+    /// <remarks>
+    /// The rectangle is reduced by <see cref="Margin"/>, then the element is sized and placed according to
+    /// <see cref="HorizontalAlignment"/>, <see cref="VerticalAlignment"/>, <see cref="Width"/>, <see cref="Height"/> and
+    /// the min/max properties, calling <see cref="ArrangeOverride"/> to arrange the content. With a non-identity
+    /// <see cref="VisualNode.Transform"/>, alignment applies to the transformed bounding box, and a stretched element is
+    /// centered rather than resized. The work is skipped when arrange is still valid and <paramref name="finalRect"/>
+    /// equals the previous call's. A collapsed element gets <see cref="Rect.Zero"/> bounds without calling
+    /// <see cref="ArrangeOverride"/>.
+    /// </remarks>
+    /// <param name="finalRect">The slot assigned by the parent, in the parent's coordinates and including margin.</param>
     public void Arrange(Rect finalRect)
     {
         if (Visibility == Visibility.Collapsed)
@@ -608,11 +881,11 @@ public abstract class UIElement : VisualNode
             float childWidth = !float.IsNaN(Width) ? Width : DesiredSize.Width - margin.Horizontal;
             float childHeight = !float.IsNaN(Height) ? Height : DesiredSize.Height - margin.Vertical;
 
-            childWidth = Math.Clamp(childWidth, MinWidth, MaxWidth);
-            childHeight = Math.Clamp(childHeight, MinHeight, MaxHeight);
+            childWidth = LayoutMath.ClampMinWins(childWidth, MinWidth, MaxWidth);
+            childHeight = LayoutMath.ClampMinWins(childHeight, MinHeight, MaxHeight);
 
-            float maxArrangeWidth = Math.Clamp(innerRect.Width, MinWidth, MaxWidth);
-            float maxArrangeHeight = Math.Clamp(innerRect.Height, MinHeight, MaxHeight);
+            float maxArrangeWidth = LayoutMath.ClampMinWins(innerRect.Width, MinWidth, MaxWidth);
+            float maxArrangeHeight = LayoutMath.ClampMinWins(innerRect.Height, MinHeight, MaxHeight);
 
             Size arrangeSize = new Size(maxArrangeWidth, maxArrangeHeight);
 
@@ -630,12 +903,12 @@ public abstract class UIElement : VisualNode
 
             // Calculate final positioned rect within innerRect based on alignment and constraints
             float width = HorizontalAlignment == HorizontalAlignment.Stretch
-                ? Math.Clamp(innerRect.Width, MinWidth, MaxWidth)
-                : Math.Clamp(arrangedContentSize.Width, MinWidth, MaxWidth);
+                ? LayoutMath.ClampMinWins(innerRect.Width, MinWidth, MaxWidth)
+                : LayoutMath.ClampMinWins(arrangedContentSize.Width, MinWidth, MaxWidth);
 
             float height = VerticalAlignment == VerticalAlignment.Stretch
-                ? Math.Clamp(innerRect.Height, MinHeight, MaxHeight)
-                : Math.Clamp(arrangedContentSize.Height, MinHeight, MaxHeight);
+                ? LayoutMath.ClampMinWins(innerRect.Height, MinHeight, MaxHeight)
+                : LayoutMath.ClampMinWins(arrangedContentSize.Height, MinHeight, MaxHeight);
 
             float x = innerRect.X;
             float y = innerRect.Y;
@@ -669,8 +942,8 @@ public abstract class UIElement : VisualNode
         float unWidth = !float.IsNaN(Width) ? Width : _untransformedDesiredSize.Width;
         float unHeight = !float.IsNaN(Height) ? Height : _untransformedDesiredSize.Height;
 
-        unWidth = Math.Clamp(unWidth, MinWidth, MaxWidth);
-        unHeight = Math.Clamp(unHeight, MinHeight, MaxHeight);
+        unWidth = LayoutMath.ClampMinWins(unWidth, MinWidth, MaxWidth);
+        unHeight = LayoutMath.ClampMinWins(unHeight, MinHeight, MaxHeight);
 
         Size childArrangeSize = new Size(unWidth, unHeight);
         Size contentSize = ArrangeOverride(childArrangeSize);
@@ -678,8 +951,8 @@ public abstract class UIElement : VisualNode
         float finalUnWidth = !float.IsNaN(Width) ? Width : contentSize.Width;
         float finalUnHeight = !float.IsNaN(Height) ? Height : contentSize.Height;
 
-        finalUnWidth = Math.Clamp(finalUnWidth, MinWidth, MaxWidth);
-        finalUnHeight = Math.Clamp(finalUnHeight, MinHeight, MaxHeight);
+        finalUnWidth = LayoutMath.ClampMinWins(finalUnWidth, MinWidth, MaxWidth);
+        finalUnHeight = LayoutMath.ClampMinWins(finalUnHeight, MinHeight, MaxHeight);
 
         var transBounds = ComputeTransformedBounds(finalUnWidth, finalUnHeight);
 
@@ -724,6 +997,13 @@ public abstract class UIElement : VisualNode
         IsArrangeValid = true;
     }
 
+    /// <summary>
+    /// Measures the element's content and returns the size it needs. Override to implement custom layout; the base
+    /// implementation measures every child with <paramref name="availableSize"/> and returns the largest desired width
+    /// and height.
+    /// </summary>
+    /// <param name="availableSize">The space available for content, excluding margin and already constrained by the size properties.</param>
+    /// <returns>The desired content size, excluding margin.</returns>
     protected virtual Size MeasureOverride(Size availableSize)
     {
         Size size = Size.Zero;
@@ -738,6 +1018,12 @@ public abstract class UIElement : VisualNode
         return size;
     }
 
+    /// <summary>
+    /// Arranges the element's content within the given size. Override to implement custom layout; the base
+    /// implementation arranges every child in a rectangle at (0, 0) of size <paramref name="finalSize"/>.
+    /// </summary>
+    /// <param name="finalSize">The size available for content, excluding margin.</param>
+    /// <returns>The size actually used; with non-stretch alignment it determines the element's final size.</returns>
     protected virtual Size ArrangeOverride(Size finalSize)
     {
         for (int i = 0; i < Children.Count; i++)
@@ -750,6 +1036,16 @@ public abstract class UIElement : VisualNode
         return finalSize;
     }
 
+    /// <summary>
+    /// Finds the topmost element at <paramref name="point"/> in this element's subtree.
+    /// </summary>
+    /// <remarks>
+    /// Returns <c>null</c> if this element is not <see cref="Visibility.Visible"/>, has <see cref="IsHitTestVisible"/>
+    /// set to <c>false</c>, or does not contain the point (after applying its transforms). Children are tested last to
+    /// first, so later children win; overlay children are skipped. Children outside this element's bounds are not found.
+    /// </remarks>
+    /// <param name="point">The point in the parent's coordinates.</param>
+    /// <returns>The deepest element containing the point, this element if no child does, or <c>null</c>.</returns>
     public virtual UIElement? HitTest(Point point)
     {
         if (Visibility != Visibility.Visible || !IsHitTestVisible)
@@ -808,16 +1104,30 @@ public abstract class UIElement : VisualNode
 
     #region Input Event Handlers (Virtual Hooks)
 
+    /// <summary>Occurs when the pointer enters the element; raised by <see cref="OnPointerEntered"/>.</summary>
     public event EventHandler<PointerEventArgs>? PointerEntered;
+    /// <summary>Occurs when the pointer leaves the element; raised by <see cref="OnPointerExited"/>.</summary>
     public event EventHandler<PointerEventArgs>? PointerExited;
+    /// <summary>Occurs when a pointer button is pressed on the element; raised by <see cref="OnPointerPressed"/>.</summary>
     public event EventHandler<PointerEventArgs>? PointerPressed;
+    /// <summary>Occurs when a pointer button is released on the element; raised by <see cref="OnPointerReleased"/>.</summary>
     public event EventHandler<PointerEventArgs>? PointerReleased;
+    /// <summary>Occurs when the pointer moves over the element; raised by <see cref="OnPointerMoved"/>.</summary>
     public event EventHandler<PointerEventArgs>? PointerMoved;
+    /// <summary>Occurs when the pointer wheel is scrolled over the element; raised by <see cref="OnPointerWheel"/>.</summary>
     public event EventHandler<PointerWheelEventArgs>? PointerWheel;
+    /// <summary>Occurs when a key is pressed while the element or a descendant has focus; raised by <see cref="OnKeyDown"/>.</summary>
     public event EventHandler<KeyEventArgs>? KeyDown;
+    /// <summary>Occurs when a key is released while the element or a descendant has focus; raised by <see cref="OnKeyUp"/>.</summary>
     public event EventHandler<KeyEventArgs>? KeyUp;
+    /// <summary>Occurs when text is entered while the element or a descendant has focus; raised by <see cref="OnTextInput"/>.</summary>
     public event EventHandler<TextInputEventArgs>? TextInput;
 
+    /// <summary>
+    /// Called when the pointer enters the element. The base implementation sets <see cref="IsHovered"/>, raises
+    /// <see cref="PointerEntered"/> and invalidates rendering.
+    /// </summary>
+    /// <param name="e">The event data.</param>
     public virtual void OnPointerEntered(PointerEventArgs e)
     {
         IsHovered = true;
@@ -825,6 +1135,11 @@ public abstract class UIElement : VisualNode
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Called when the pointer leaves the element. The base implementation clears <see cref="IsHovered"/> and
+    /// <see cref="IsPressed"/>, raises <see cref="PointerExited"/> and invalidates rendering.
+    /// </summary>
+    /// <param name="e">The event data.</param>
     public virtual void OnPointerExited(PointerEventArgs e)
     {
         IsHovered = false;
@@ -833,6 +1148,11 @@ public abstract class UIElement : VisualNode
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Called when a pointer button is pressed on the element or bubbles up from a descendant. The base implementation
+    /// sets <see cref="IsPressed"/>, raises <see cref="PointerPressed"/> and invalidates rendering.
+    /// </summary>
+    /// <param name="e">The event data, with <see cref="PointerEventArgs.Position"/> in this element's coordinates.</param>
     public virtual void OnPointerPressed(PointerEventArgs e)
     {
         IsPressed = true;
@@ -840,6 +1160,11 @@ public abstract class UIElement : VisualNode
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Called when a pointer button is released on the element or bubbles up from a descendant. The base implementation
+    /// clears <see cref="IsPressed"/>, raises <see cref="PointerReleased"/> and invalidates rendering.
+    /// </summary>
+    /// <param name="e">The event data, with <see cref="PointerEventArgs.Position"/> in this element's coordinates.</param>
     public virtual void OnPointerReleased(PointerEventArgs e)
     {
         IsPressed = false;
@@ -847,19 +1172,35 @@ public abstract class UIElement : VisualNode
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Called when the pointer moves over the element or the event bubbles up from a descendant. The base implementation
+    /// raises <see cref="PointerMoved"/>.
+    /// </summary>
+    /// <param name="e">The event data, with <see cref="PointerEventArgs.Position"/> in this element's coordinates.</param>
     public virtual void OnPointerMoved(PointerEventArgs e)
     {
         PointerMoved?.Invoke(this, e);
     }
 
+    /// <summary>
+    /// Called when the pointer wheel is scrolled over the element or the event bubbles up from a descendant. The base
+    /// implementation raises <see cref="PointerWheel"/>.
+    /// </summary>
+    /// <param name="e">The event data.</param>
     public virtual void OnPointerWheel(PointerWheelEventArgs e)
     {
         PointerWheel?.Invoke(this, e);
     }
 
+    /// <summary>Occurs when the element receives keyboard focus; raised by <see cref="OnGotFocus"/>.</summary>
     public event EventHandler? GotFocus;
+    /// <summary>Occurs when the element loses keyboard focus; raised by <see cref="OnLostFocus"/>.</summary>
     public event EventHandler? LostFocus;
 
+    /// <summary>
+    /// Called by <see cref="FocusManager"/> when the element receives keyboard focus. The base implementation sets
+    /// <see cref="IsFocused"/>, raises <see cref="GotFocus"/> and invalidates rendering.
+    /// </summary>
     public virtual void OnGotFocus()
     {
         IsFocused = true;
@@ -867,6 +1208,10 @@ public abstract class UIElement : VisualNode
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Called by <see cref="FocusManager"/> when the element loses keyboard focus. The base implementation clears
+    /// <see cref="IsFocused"/>, raises <see cref="LostFocus"/> and invalidates rendering.
+    /// </summary>
     public virtual void OnLostFocus()
     {
         IsFocused = false;
@@ -874,16 +1219,31 @@ public abstract class UIElement : VisualNode
         InvalidateVisual();
     }
 
+    /// <summary>
+    /// Called when a key is pressed while this element or a descendant has focus. The base implementation raises
+    /// <see cref="KeyDown"/>.
+    /// </summary>
+    /// <param name="e">The event data; set <see cref="RoutedEventArgs.Handled"/> to stop bubbling.</param>
     public virtual void OnKeyDown(KeyEventArgs e)
     {
         KeyDown?.Invoke(this, e);
     }
 
+    /// <summary>
+    /// Called when a key is released while this element or a descendant has focus. The base implementation raises
+    /// <see cref="KeyUp"/>.
+    /// </summary>
+    /// <param name="e">The event data; set <see cref="RoutedEventArgs.Handled"/> to stop bubbling.</param>
     public virtual void OnKeyUp(KeyEventArgs e)
     {
         KeyUp?.Invoke(this, e);
     }
 
+    /// <summary>
+    /// Called when text is entered while this element or a descendant has focus. The base implementation raises
+    /// <see cref="TextInput"/>.
+    /// </summary>
+    /// <param name="e">The event data; set <see cref="RoutedEventArgs.Handled"/> to stop bubbling.</param>
     public virtual void OnTextInput(TextInputEventArgs e)
     {
         TextInput?.Invoke(this, e);

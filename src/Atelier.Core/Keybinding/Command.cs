@@ -1,63 +1,92 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Input;
 
-namespace Atelier.Core.Keybinding
+namespace Atelier.Core.Keybinding;
+
+/// <summary>
+/// Base class for commands implemented as classes, such as those discovered through <see cref="KeybindingAttribute"/>.
+/// </summary>
+public abstract class AtelierCommand : ICommand
 {
-    public class AtelierCommand : ICommand
+    /// <inheritdoc/>
+    /// <remarks>
+    /// This event keeps its subscribers alive for as long as the command lives. Long-lived commands
+    /// (for example registered keybindings) should only be observed by objects that unsubscribe.
+    /// </remarks>
+    public event EventHandler? CanExecuteChanged;
+
+    /// <summary>
+    /// Determines whether the command can run for <paramref name="parameter"/>. Returns <c>true</c> unless overridden.
+    /// </summary>
+    public virtual bool CanExecute(object? parameter)
     {
-        public event EventHandler? CanExecuteChanged;
-
-        public virtual bool CanExecute(object? parameter)
-        {
-            return true;
-        }
-
-        public virtual void Execute(object? parameter)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void RaiseCanExecuteChanged()
-        {
-            CanExecuteChanged?.Invoke(this, EventArgs.Empty);
-        }
+        return true;
     }
 
-    public class AtelierRelayCommand : ICommand
+    /// <summary>
+    /// Runs the command.
+    /// </summary>
+    /// <param name="parameter">The command parameter, for keybindings typically the target object.</param>
+    public abstract void Execute(object? parameter);
+
+    /// <summary>
+    /// Raises <see cref="CanExecuteChanged"/> so that bound controls re-query <see cref="CanExecute"/>.
+    /// </summary>
+    public void RaiseCanExecuteChanged()
     {
-        private readonly Action<object?> _execute;
-        private readonly Func<object?, bool>? _canExecute;
+        CanExecuteChanged?.Invoke(this, EventArgs.Empty);
+    }
+}
 
-        public AtelierRelayCommand(Action execute, Func<bool>? canExecute = null)
-            : this(_ => execute(), canExecute != null ? _ => canExecute() : null)
-        {
-        }
+/// <summary>
+/// An <see cref="ICommand"/> that delegates to an action and an optional can-execute predicate.
+/// </summary>
+public class AtelierRelayCommand : ICommand
+{
+    private readonly Action<object?> _execute;
+    private readonly Func<object?, bool>? _canExecute;
 
-        public AtelierRelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null)
-        {
-            _execute = execute ?? throw new ArgumentNullException(nameof(execute));
-            _canExecute = canExecute;
-        }
+    /// <summary>
+    /// Creates a command that ignores its parameter.
+    /// </summary>
+    /// <param name="execute">The action to run.</param>
+    /// <param name="canExecute">An optional predicate; the command can always run when <c>null</c>.</param>
+    public AtelierRelayCommand(Action execute, Func<bool>? canExecute = null)
+        : this(_ => execute(), canExecute != null ? _ => canExecute() : null)
+    {
+    }
 
-        public event EventHandler? CanExecuteChanged;
+    /// <summary>
+    /// Creates a command that receives its parameter.
+    /// </summary>
+    /// <param name="execute">The action to run.</param>
+    /// <param name="canExecute">An optional predicate; the command can always run when <c>null</c>.</param>
+    public AtelierRelayCommand(Action<object?> execute, Func<object?, bool>? canExecute = null)
+    {
+        _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+        _canExecute = canExecute;
+    }
 
-        public bool CanExecute(object? parameter)
-        {
-            return _canExecute?.Invoke(parameter) ?? true;
-        }
+    /// <inheritdoc/>
+    public event EventHandler? CanExecuteChanged;
 
-        public void Execute(object? parameter)
-        {
-            _execute(parameter);
-        }
+    /// <inheritdoc/>
+    public bool CanExecute(object? parameter)
+    {
+        return _canExecute?.Invoke(parameter) ?? true;
+    }
 
-        public void RaiseCanExecuteChanged()
-        {
-            CanExecuteChanged?.Invoke(this, EventArgs.Empty);
-        }
+    /// <inheritdoc/>
+    public void Execute(object? parameter)
+    {
+        _execute(parameter);
+    }
+
+    /// <summary>
+    /// Raises <see cref="CanExecuteChanged"/> so that bound controls re-query <see cref="CanExecute"/>.
+    /// </summary>
+    public void RaiseCanExecuteChanged()
+    {
+        CanExecuteChanged?.Invoke(this, EventArgs.Empty);
     }
 }

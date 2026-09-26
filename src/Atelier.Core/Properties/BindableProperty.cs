@@ -478,6 +478,11 @@ public sealed class BindableProperty<T> : BindableProperty
     private volatile Dictionary<Type, T>? _defaultOverrides;
     private readonly ConcurrentDictionary<Type, T> _resolvedDefaults = new();
 
+    // Boxed once and shared: the untyped paths read defaults on every change, and boxing each time would allocate.
+    // Sharing is safe because boxes stored in the property system are never mutated.
+    private readonly object? _boxedDefault;
+    private readonly ConcurrentDictionary<Type, object?> _boxedResolvedDefaults = new();
+
     /// <summary>
     /// Gets the strongly-typed default value returned when no local, styled, or inherited value is present.
     /// Individual types may override it with <see cref="OverrideDefaultValue{TDerived}(T)"/>; see <see cref="GetDefaultValue(Type)"/>.
@@ -527,6 +532,7 @@ public sealed class BindableProperty<T> : BindableProperty
         }
 
         DefaultValue = defaultValue;
+        _boxedDefault = defaultValue;
         PropertyChanged = propertyChanged;
         CoerceValue = coerceValue;
         ValidateValueCallback = validateValue;
@@ -562,6 +568,7 @@ public sealed class BindableProperty<T> : BindableProperty
             overrides[typeof(TDerived)] = defaultValue;
             _defaultOverrides = overrides;
             _resolvedDefaults.Clear();
+            _boxedResolvedDefaults.Clear();
         }
     }
 
@@ -618,7 +625,15 @@ public sealed class BindableProperty<T> : BindableProperty
         PropertyChanged?.Invoke(sender, (T)oldValue!, (T)newValue!);
     }
 
-    internal override object? GetDefaultValueUntyped(Type objectType) => GetDefaultValue(objectType);
+    internal override object? GetDefaultValueUntyped(Type objectType)
+    {
+        if (_defaultOverrides == null)
+        {
+            return _boxedDefault;
+        }
+
+        return _boxedResolvedDefaults.GetOrAdd(objectType, static (type, self) => self.GetDefaultValue(type), this);
+    }
 
     internal override object? CoerceUntyped(BindableObject sender, object? value)
     {
