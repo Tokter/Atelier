@@ -29,29 +29,12 @@ public class TextBlock : UIElement
             options: PropertyOptions.AffectsMeasure
         );
 
-    public static readonly BindableProperty<float> FontSizeProperty =
-        BindableProperty.Register<TextBlock, float>(
-            nameof(FontSize),
-            14f,
-            options: PropertyOptions.AffectsMeasure,
-            inherits: true
-        );
+    // Shared with Control, so a style, local value or inherited value set through either field affects both.
+    public static readonly BindableProperty<float> FontSizeProperty = Control.FontSizeProperty.AddOwner<TextBlock>();
 
-    public static readonly BindableProperty<Color> ForegroundProperty =
-        BindableProperty.Register<TextBlock, Color>(
-            nameof(Foreground),
-            Color.Black,
-            options: PropertyOptions.AffectsRender,
-            inherits: true
-        );
+    public static readonly BindableProperty<Color> ForegroundProperty = Control.ForegroundProperty.AddOwner<TextBlock>();
 
-    public static readonly BindableProperty<string?> FontFamilyProperty =
-        BindableProperty.Register<TextBlock, string?>(
-            nameof(FontFamily),
-            null,
-            options: PropertyOptions.AffectsMeasure,
-            inherits: true
-        );
+    public static readonly BindableProperty<string?> FontFamilyProperty = Control.FontFamilyProperty.AddOwner<TextBlock>();
 
     public static readonly BindableProperty<TextAlignment> TextAlignmentProperty =
         BindableProperty.Register<TextBlock, TextAlignment>(

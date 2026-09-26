@@ -103,10 +103,10 @@ public class PropertySystemTests
     }
 
     [Fact]
-    public void Reparent_AliasedPropertyCallbacksOnlyRunOnMatchingTypes()
+    public void Reparent_InheritedValueFromGrandparent_ReachesControls()
     {
-        // TextBlock.FontSizeProperty's callback casts the sender to TextBlock; it must not run for a Button.
-        // Previously threw InvalidCastException once the aliased value came from a grandparent.
+        // Inherited change notifications only run for nodes that carry the property (see BindableProperty.AppliesTo).
+        // Previously threw InvalidCastException once the value came from a grandparent.
         var root = new StackPanel();
         root.SetValue(Control.FontSizeProperty, 30f);
         var middle = new StackPanel();

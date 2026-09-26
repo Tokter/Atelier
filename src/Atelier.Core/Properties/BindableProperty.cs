@@ -93,16 +93,15 @@ public enum ValueSource
 ///   <item><description>Reactive change notifications (<see cref="PropertyChangedCallback{T}"/>) and value coercion (<see cref="CoerceValueCallback{T}"/>).</description></item>
 /// </list>
 /// <para>
-/// Inheritable properties that share a <see cref="Name"/> act as aliases of each other: a child reading
-/// <c>TextBlock.FontSizeProperty</c> inherits a value set through <c>Control.FontSizeProperty</c> on an ancestor,
-/// provided the ancestor's property type is assignable to the child's.
+/// Unrelated types that need the same property (e.g. <c>Control</c> and <c>TextBlock</c> both exposing <c>FontSize</c>)
+/// share one property object through <see cref="BindableProperty{T}.AddOwner{TNewOwner}()"/>, so that styles, local
+/// values and inherited values set through either type's field affect both.
 /// </para>
 /// </remarks>
 public abstract class BindableProperty
 {
     private static readonly object _registrationLock = new();
     private static readonly ConcurrentDictionary<string, BindableProperty> _registry = new();
-    private static readonly ConcurrentDictionary<string, BindableProperty[]> _inheritablePropertiesByName = new();
     private static int _nextId = 0;
     private static volatile BindableProperty?[] _byId = new BindableProperty?[64];
     private static volatile BindableProperty[] _allInheritable = Array.Empty<BindableProperty>();
@@ -127,8 +126,25 @@ public abstract class BindableProperty
     /// <summary>
     /// Gets the <see cref="Type"/> of objects this property applies to. For regular properties this equals
     /// <see cref="OwnerType"/>; for attached properties it is the host type the property can be set on.
+    /// Types added with <see cref="BindableProperty{T}.AddOwner{TNewOwner}()"/> are listed in <see cref="TargetTypes"/>.
     /// </summary>
     public Type TargetType { get; }
+
+    // Replaced (never mutated) under _registrationLock, so readers need no lock.
+    private volatile Type[] _targetTypes;
+    private volatile Type[] _ownerTypes;
+
+    /// <summary>
+    /// Gets every type this property applies to: <see cref="TargetType"/> plus the types added with
+    /// <see cref="BindableProperty{T}.AddOwner{TNewOwner}()"/> (attached properties keep their single target type).
+    /// </summary>
+    public IReadOnlyList<Type> TargetTypes => _targetTypes;
+
+    /// <summary>
+    /// Gets every type this property is registered on: <see cref="OwnerType"/> plus the types added with
+    /// <see cref="BindableProperty{T}.AddOwner{TNewOwner}()"/>. <see cref="FindByName"/> finds the property through each.
+    /// </summary>
+    public IReadOnlyList<Type> OwnerTypes => _ownerTypes;
 
     /// <summary>
     /// Gets the <see cref="Type"/> of values stored and returned by this bindable property.
@@ -158,18 +174,6 @@ public abstract class BindableProperty
     /// Gets the side effects applied automatically when this property's effective value changes.
     /// </summary>
     public PropertyOptions Options { get; }
-
-    /// <summary>
-    /// The properties consulted, in order, on each ancestor when resolving an inherited value for this property:
-    /// this property first, then same-named inheritable properties whose values are assignable to it.
-    /// </summary>
-    internal BindableProperty[] InheritanceSources { get; private set; }
-
-    /// <summary>
-    /// The properties whose inherited value can change when this property changes on an ancestor:
-    /// this property plus every same-named inheritable property that lists it in <see cref="InheritanceSources"/>.
-    /// </summary>
-    internal BindableProperty[] InheritanceDependents { get; private set; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BindableProperty"/> class and registers it in the internal static registry.
@@ -204,8 +208,8 @@ public abstract class BindableProperty
         IsAttached = isAttached;
         IsReadOnly = isReadOnly;
         Options = options;
-        InheritanceSources = new[] { this };
-        InheritanceDependents = new[] { this };
+        _targetTypes = [targetType];
+        _ownerTypes = [ownerType];
 
         lock (_registrationLock)
         {
@@ -228,38 +232,72 @@ public abstract class BindableProperty
 
             if (inherits)
             {
-                RegisterInheritable();
+                // Replaced (never mutated) so readers need no lock.
+                _allInheritable = [.. _allInheritable, this];
             }
         }
     }
 
-    // Must be called under _registrationLock. Arrays are replaced (never mutated) so readers need no lock.
-    private void RegisterInheritable()
+    /// <summary>
+    /// Registers this property on <paramref name="newOwner"/> as well; see <see cref="BindableProperty{T}.AddOwner{TNewOwner}()"/>.
+    /// </summary>
+    private protected void AddOwnerCore(Type newOwner)
     {
-        _allInheritable = [.. _allInheritable, this];
-
-        var sameName = _inheritablePropertiesByName.TryGetValue(Name, out var existing)
-            ? existing
-            : Array.Empty<BindableProperty>();
-
-        foreach (var other in sameName)
+        lock (_registrationLock)
         {
-            // A value stored under 'this' can be inherited by readers of 'other'.
-            if (other.PropertyType.IsAssignableFrom(PropertyType))
+            string key = $"{newOwner.FullName}.{Name}";
+            if (!_registry.TryAdd(key, this))
             {
-                other.InheritanceSources = [.. other.InheritanceSources, this];
-                InheritanceDependents = [.. InheritanceDependents, other];
+                if (ReferenceEquals(_registry[key], this))
+                {
+                    return; // already an owner
+                }
+
+                throw new InvalidOperationException(
+                    $"A bindable property named '{Name}' is already registered on '{newOwner.FullName}'.");
             }
 
-            // A value stored under 'other' can be inherited by readers of 'this'.
-            if (PropertyType.IsAssignableFrom(other.PropertyType))
+            _ownerTypes = [.. _ownerTypes, newOwner];
+
+            // Attached properties can already be set on any object of their target type; only the lookup name is new.
+            if (!IsAttached && !AppliesTo(newOwner))
             {
-                InheritanceSources = [.. InheritanceSources, other];
-                other.InheritanceDependents = [.. other.InheritanceDependents, this];
+                _targetTypes = [.. _targetTypes, newOwner];
             }
         }
+    }
 
-        _inheritablePropertiesByName[Name] = [.. sameName, this];
+    /// <summary>
+    /// Determines whether objects of <paramref name="type"/> carry this property: <paramref name="type"/> is, or derives
+    /// from, one of the <see cref="TargetTypes"/>.
+    /// </summary>
+    /// <param name="type">The object type to test.</param>
+    /// <returns><c>true</c> if the property applies to objects of <paramref name="type"/>; otherwise, <c>false</c>.</returns>
+    public bool AppliesTo(Type type)
+    {
+        var targets = _targetTypes;
+        for (int i = 0; i < targets.Length; i++)
+        {
+            if (targets[i].IsAssignableFrom(type))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Instance form of AppliesTo, used when capturing inherited change notifications.
+    internal bool AppliesTo(BindableObject target)
+    {
+        var targets = _targetTypes;
+        for (int i = 0; i < targets.Length; i++)
+        {
+            if (targets[i].IsInstanceOfType(target))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>
@@ -270,20 +308,9 @@ public abstract class BindableProperty
     internal static BindableProperty[] AllInheritableArray => _allInheritable;
 
     /// <summary>
-    /// Retrieves all registered inheritable bindable properties that share the specified property name.
-    /// </summary>
-    /// <param name="name">The name of the inheritable property to look up (e.g., <c>"DataContext"</c>, <c>"FontSize"</c>).</param>
-    /// <returns>A read-only list containing all matching inheritable <see cref="BindableProperty"/> instances.</returns>
-    public static IReadOnlyList<BindableProperty> GetInheritablePropertiesByName(string name)
-    {
-        return _inheritablePropertiesByName.TryGetValue(name, out var list)
-            ? list
-            : Array.Empty<BindableProperty>();
-    }
-
-    /// <summary>
     /// Finds a registered bindable property for a given owner type or any of its base classes by name.
     /// Attached properties are found only through their declaring type (e.g. <c>FindByName(typeof(Grid), "Row")</c>).
+    /// Properties shared with <see cref="BindableProperty{T}.AddOwner{TNewOwner}()"/> are found through every owner.
     /// </summary>
     /// <param name="ownerType">The owner type or derived type to start searching from.</param>
     /// <param name="name">The name of the bindable property.</param>
@@ -574,6 +601,48 @@ public sealed class BindableProperty<T> : BindableProperty
     }
 
     /// <summary>
+    /// Shares this property with <typeparamref name="TNewOwner"/>, an additional type that exposes it without deriving
+    /// from <see cref="BindableProperty.OwnerType"/>. The result is this same property object, so a value that is set,
+    /// styled or inherited through either type's field is one and the same value.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Assign the result to the new owner's own static field, e.g.
+    /// <c>public static readonly BindableProperty&lt;float&gt; FontSizeProperty = Control.FontSizeProperty.AddOwner&lt;TextBlock&gt;();</c>
+    /// </para>
+    /// <para>
+    /// The <see cref="PropertyChanged"/>, <see cref="CoerceValue"/> and <see cref="ValidateValueCallback"/> callbacks are
+    /// shared as well and also run for <typeparamref name="TNewOwner"/> instances, so they must not assume the original
+    /// owner type. For per-type side effects use <see cref="BindableProperty.Options"/> or override
+    /// <see cref="BindableObject.OnPropertyValueChanged{T}"/>.
+    /// </para>
+    /// </remarks>
+    /// <typeparam name="TNewOwner">The additional owner type.</typeparam>
+    /// <returns>This property.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// A different property with the same name is already registered on <typeparamref name="TNewOwner"/>.
+    /// </exception>
+    public BindableProperty<T> AddOwner<TNewOwner>() where TNewOwner : BindableObject
+    {
+        AddOwnerCore(typeof(TNewOwner));
+        return this;
+    }
+
+    /// <summary>
+    /// Shares this property with <typeparamref name="TNewOwner"/> (see <see cref="AddOwner{TNewOwner}()"/>), using a
+    /// different default value for <typeparamref name="TNewOwner"/> and its subclasses.
+    /// </summary>
+    /// <typeparam name="TNewOwner">The additional owner type.</typeparam>
+    /// <param name="defaultValue">The default value for <typeparamref name="TNewOwner"/>.</param>
+    /// <returns>This property.</returns>
+    public BindableProperty<T> AddOwner<TNewOwner>(T defaultValue) where TNewOwner : BindableObject
+    {
+        AddOwnerCore(typeof(TNewOwner));
+        OverrideDefaultValue<TNewOwner>(defaultValue);
+        return this;
+    }
+
+    /// <summary>
     /// Overrides the default value of this property for objects of type <typeparamref name="TDerived"/> and its subclasses.
     /// </summary>
     /// <remarks>
@@ -586,10 +655,10 @@ public sealed class BindableProperty<T> : BindableProperty
     /// <exception cref="ArgumentException"><typeparamref name="TDerived"/> cannot carry this property, or the value is invalid.</exception>
     public void OverrideDefaultValue<TDerived>(T defaultValue) where TDerived : BindableObject
     {
-        if (!TargetType.IsAssignableFrom(typeof(TDerived)))
+        if (!AppliesTo(typeof(TDerived)))
         {
             throw new ArgumentException(
-                $"'{typeof(TDerived).Name}' does not derive from '{TargetType.Name}', so it cannot override the default of '{OwnerType.Name}.{Name}'.");
+                $"'{typeof(TDerived).Name}' does not derive from a target type of '{OwnerType.Name}.{Name}', so it cannot override its default.");
         }
 
         if (!IsValidValue(defaultValue))

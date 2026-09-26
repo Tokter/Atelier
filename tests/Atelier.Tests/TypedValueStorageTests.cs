@@ -17,20 +17,6 @@ public class SlotTestObject : BindableObject
     public float Value { get => GetValue(ValueProperty); set => SetValue(ValueProperty, value); }
 }
 
-// Two inheritable properties named "SlotAlias": a float one and an object one. The object one can inherit the float
-// value (object is assignable from float), which exercises reading a typed slot through a differently-typed alias.
-public class SlotAliasFloatOwner : StackPanel
-{
-    public static readonly BindableProperty<float> SlotAliasProperty =
-        BindableProperty.Register<SlotAliasFloatOwner, float>("SlotAlias", 0f, inherits: true);
-}
-
-public class SlotAliasObjectOwner : StackPanel
-{
-    public static readonly BindableProperty<object?> SlotAliasProperty =
-        BindableProperty.Register<SlotAliasObjectOwner, object?>("SlotAlias", null, inherits: true);
-}
-
 public class TypedValueStorageTests
 {
     private static long AllocatedBy(Action action)
@@ -91,14 +77,15 @@ public class TypedValueStorageTests
     }
 
     [Fact]
-    public void SlotValue_InheritedThroughDifferentlyTypedAlias_IsReadCorrectly()
+    public void SlotValue_InheritedByAnotherOwnerOfTheProperty_IsReadCorrectly()
     {
-        var parent = new SlotAliasFloatOwner();
-        parent.SetValue(SlotAliasFloatOwner.SlotAliasProperty, 4.5f); // no children yet: stored in a typed slot
-        var child = new SlotAliasObjectOwner();
+        var parent = new StackPanel();
+        parent.SetValue(Control.FontSizeProperty, 4.5f); // no children yet: stored in a typed slot
+        var child = new TextBlock("child");
         parent.Add(child);
 
-        Assert.Equal(4.5f, child.GetValue(SlotAliasObjectOwner.SlotAliasProperty));
+        Assert.Equal(4.5f, child.FontSize);
+        Assert.Equal(4.5f, child.GetValueUntyped(TextBlock.FontSizeProperty));
     }
 
     [Fact]

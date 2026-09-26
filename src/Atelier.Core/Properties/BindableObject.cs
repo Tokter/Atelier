@@ -809,7 +809,7 @@ public class BindableObject : INotifyPropertyChanged
             var children = InheritanceChildren;
             for (int i = 0; i < children.Count; i++)
             {
-                CaptureSubtree(children[i], property.InheritanceDependents, ref descendants);
+                CaptureSubtree(children[i], property, ref descendants);
             }
         }
 
@@ -929,25 +929,47 @@ public class BindableObject : INotifyPropertyChanged
         }
     }
 
+    private static void CaptureSubtree(BindableObject node, BindableProperty property, ref List<InheritedValueEntry>? entries)
+    {
+        // If this node supplies its own value, neither it nor anything below it can change.
+        if (node.HasOwnValue(property.Id))
+        {
+            return;
+        }
+
+        // Only nodes that actually carry the property are notified; this also keeps typed callbacks such as
+        // (s, o, n) => ((Control)s).UpdateVisualState() from being invoked on unrelated node types.
+        if (property.AppliesTo(node))
+        {
+            (entries ??= RentEntries()).Add(new InheritedValueEntry(node, property, node.GetValueUntyped(property)));
+        }
+
+        var children = node.InheritanceChildren;
+        for (int i = 0; i < children.Count; i++)
+        {
+            CaptureSubtree(children[i], property, ref entries);
+        }
+    }
+
+    // Multi-property form used on reparenting: one walk captures every inheritable property, in pre-order.
     private static void CaptureSubtree(BindableObject node, BindableProperty[] properties, ref List<InheritedValueEntry>? entries)
     {
         bool shadowsAll = true;
         foreach (var property in properties)
         {
-            // Only nodes that actually carry the property are notified; this also keeps typed callbacks such as
-            // (s, o, n) => ((TextBlock)s).InvalidateMeasure() from being invoked on unrelated node types.
-            if (!node.HasOwnValue(property.Id) && property.TargetType.IsInstanceOfType(node))
+            if (node.HasOwnValue(property.Id))
+            {
+                continue;
+            }
+
+            shadowsAll = false;
+            if (property.AppliesTo(node))
             {
                 (entries ??= RentEntries()).Add(new InheritedValueEntry(node, property, node.GetValueUntyped(property)));
             }
-
-            if (shadowsAll && !node.HasOwnValueForAny(property.InheritanceSources))
-            {
-                shadowsAll = false;
-            }
         }
 
-        // If this node supplies its own value for every affected property, nothing below it can change.
+        // If this node supplies its own value for every property, nothing below it can change.
         if (shadowsAll)
         {
             return;
@@ -978,30 +1000,14 @@ public class BindableObject : INotifyPropertyChanged
         || (_coercedValues != null && _coercedValues.ContainsKey(id))
         || _localValues.ContainsKey(id) || _styleValues.ContainsKey(id);
 
-    private bool HasOwnValueForAny(BindableProperty[] properties)
-    {
-        foreach (var property in properties)
-        {
-            if (HasOwnValue(property.Id))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private bool TryGetInheritedStored(BindableProperty property, out object? value)
     {
-        var sources = property.InheritanceSources;
+        int id = property.Id;
         for (var current = InheritanceParent; current != null; current = current.InheritanceParent)
         {
-            // The property itself first, then same-named aliases (e.g. Control.FontSize for TextBlock.FontSize).
-            for (int i = 0; i < sources.Length; i++)
+            if (current.TryGetOwnStored(id, out value))
             {
-                if (current.TryGetOwnStored(sources[i].Id, out value))
-                {
-                    return true;
-                }
+                return true;
             }
         }
 
