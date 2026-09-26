@@ -346,9 +346,10 @@ public class TreeViewTests
         Assert.Equal(root, treeView.SelectedItem);
         Assert.False(rootItem.IsExpanded);
 
-        // Rapid second click (double-click within 400ms -> toggles expansion)
-        hitHeader.OnPointerPressed(new PointerEventArgs(new Point(100, 12), PointerButtons.Left));
-        hitHeader.OnPointerReleased(new PointerEventArgs(new Point(100, 12), PointerButtons.Left));
+        // Second click of a double click (ClickCount = 2, reported by the platform) toggles expansion
+        var p = new Point(100, 12);
+        hitHeader.OnPointerPressed(new PointerEventArgs(p, p, PointerButtons.Left, 0, ModifierKeys.None, clickCount: 2));
+        hitHeader.OnPointerReleased(new PointerEventArgs(p, p, PointerButtons.Left, 0, ModifierKeys.None, clickCount: 2));
         Assert.True(rootItem.IsExpanded);
     }
 
