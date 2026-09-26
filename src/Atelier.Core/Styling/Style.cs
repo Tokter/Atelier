@@ -149,15 +149,20 @@ public class StyleCollection : Collection<Style>
     /// Occurs after every insertion, replacement, removal or clear.
     /// </summary>
     /// <remarks>
-    /// Raised once per item by <see cref="AddRange"/>. Changes to the setters of a contained style do not raise it.
+    /// Raised once for a whole <see cref="AddRange"/> call. Changes to the setters of a contained style do not raise it.
     /// </remarks>
     public event Action? StylesChanged;
+
+    private bool _suppressChanged;
 
     /// <inheritdoc/>
     protected override void InsertItem(int index, Style item)
     {
         base.InsertItem(index, item);
-        StylesChanged?.Invoke();
+        if (!_suppressChanged)
+        {
+            StylesChanged?.Invoke();
+        }
     }
 
     /// <inheritdoc/>
@@ -182,14 +187,31 @@ public class StyleCollection : Collection<Style>
     }
 
     /// <summary>
-    /// Adds each style in order, raising <see cref="StylesChanged"/> once per style.
+    /// Adds each style in order, then raises <see cref="StylesChanged"/> once (if anything was added), so that
+    /// listeners re-apply styles once instead of once per style.
     /// </summary>
     /// <param name="styles">The styles to add.</param>
     public void AddRange(IEnumerable<Style> styles)
     {
-        foreach (var s in styles)
+        ArgumentNullException.ThrowIfNull(styles);
+
+        int countBefore = Count;
+        _suppressChanged = true;
+        try
         {
-            Add(s);
+            foreach (var s in styles)
+            {
+                Add(s);
+            }
+        }
+        finally
+        {
+            _suppressChanged = false;
+        }
+
+        if (Count != countBefore)
+        {
+            StylesChanged?.Invoke();
         }
     }
 }
@@ -203,8 +225,9 @@ public static class StyleManager
     /// Gets the global styles, searched after the styles of an element and its ancestors.
     /// </summary>
     /// <remarks>
-    /// Nothing subscribes to this collection's <see cref="StyleCollection.StylesChanged"/> event, so changes are not
-    /// applied to existing elements automatically.
+    /// Windows re-apply styles to their element tree once per frame after this collection changes
+    /// (see <c>SilkWindow</c>). Elements that are not shown in a window can be updated with
+    /// <see cref="Tree.UIElement.ApplyStylesToTree"/>.
     /// </remarks>
     public static StyleCollection GlobalStyles { get; } = new();
 }

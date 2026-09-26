@@ -14,6 +14,7 @@ using Atelier.Core.Animation;
 using Atelier.Core.Events;
 using Atelier.Core.HotReload;
 using Atelier.Core.Primitives;
+using Atelier.Core.Styling;
 using Atelier.Core.Tree;
 using Atelier.Rendering;
 using Atelier.Theming;
@@ -124,29 +125,115 @@ public class SilkWindow : IDisposable
     // Performance & Frame Stats
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
     private int _frameCount = 0;
-    private double _fpsTimer = 0;
-    public double CurrentFps { get; private set; }
-    public bool ShowFpsOverlay { get; set; } = true;
+    private double _fpsSampleStart = 0;
+    private string _fpsText = string.Empty;
+    private double _fpsTextValue = double.NaN;
+    private int _fpsTextAnimations = -1;
 
+    /// <summary>
+    /// Gets the number of frames actually rendered per second. With render-on-demand this drops to zero while
+    /// nothing changes on screen.
+    /// </summary>
+    public double CurrentFps { get; private set; }
+
+    private bool _showFpsOverlay = true;
+
+    /// <summary>
+    /// Gets or sets whether the frame-rate overlay is drawn in the bottom-left corner.
+    /// </summary>
+    public bool ShowFpsOverlay
+    {
+        get => _showFpsOverlay;
+        set { _showFpsOverlay = value; InvalidateRender(); }
+    }
+
+    // Render-on-demand. A frame is drawn only when something changed. When nothing is animating, repeating or queued,
+    // the loop switches Silk to event-driven mode and sleeps until OS input arrives or InvalidateRender() wakes it,
+    // instead of redrawing an unchanged screen at the display refresh rate.
+    private volatile bool _needsRender = true;
+    private volatile bool _isLoaded;
+    private bool _resumingFromIdle;
+
+    /// <summary>
+    /// Requests a new frame, waking the render loop if it is idle. Safe to call from any thread.
+    /// </summary>
+    /// <remarks>
+    /// Changes inside the element tree request frames automatically (through <see cref="VisualNode.InvalidateVisual"/>
+    /// and layout invalidation). Call this when something outside the tree affects what is drawn.
+    /// </remarks>
+    public void InvalidateRender()
+    {
+        _needsRender = true;
+        if (_isLoaded && !_isClosing && !_isDisposed && _window.IsEventDriven)
+        {
+            _window.ContinueEvents();
+        }
+    }
+
+    // Also wakes the loop, so changes made from a background thread (e.g. a timer updating a bound view model) show up
+    // even while the window is idle. During a frame the loop is not event-driven, so this is just a flag write.
+    private void OnTreeInvalidated() => InvalidateRender();
+
+    private void OnPopupChanged(Popup popup) => InvalidateRender();
+
+    private void OnThemeChanged(Theme theme) => InvalidateRender();
+
+    // Global style changes are coalesced: a theme may add many styles, but the tree is restyled once per frame.
+    private volatile bool _globalStylesChanged;
+
+    private void OnGlobalStylesChanged()
+    {
+        _globalStylesChanged = true;
+        InvalidateRender();
+    }
+
+    private void OnWindowStateChanged(WindowState state) => InvalidateRender();
+
+    private void OnWindowFocusChanged(bool focused) => InvalidateRender();
+
+    /// <summary>
+    /// Gets or sets the root element displayed in the window.
+    /// </summary>
     public UIElement? Content
     {
         get => _rootElement;
         set
         {
+            if (value == _rootElement)
+            {
+                return;
+            }
+
+            if (_rootElement != null)
+            {
+                _rootElement.NeedsVisualUpdate -= OnTreeInvalidated;
+                _rootElement.NeedsLayoutUpdate -= OnTreeInvalidated;
+                _rootElement.DetachFromHost();
+            }
+
             _rootElement = value;
             _hoveredElement = null;
             _pressedElement = null;
             if (_rootElement != null)
             {
+                _rootElement.NeedsVisualUpdate += OnTreeInvalidated;
+                _rootElement.NeedsLayoutUpdate += OnTreeInvalidated;
+                _rootElement.AttachToHost();
                 _rootElement.InvalidateMeasure();
                 _rootElement.InvalidateVisual();
             }
+            InvalidateRender();
         }
     }
 
+    /// <summary>
+    /// Queues <paramref name="action"/> to run on the UI thread at the start of the next frame, waking the loop if idle.
+    /// Safe to call from any thread.
+    /// </summary>
     public void Dispatch(Action action)
     {
         _dispatchQueue.Enqueue(action);
+        InvalidateRender();
     }
 
     public void SetContent(Func<UIElement> contentFactory)
@@ -181,8 +268,22 @@ public class SilkWindow : IDisposable
 
     public bool IsTitleLess { get; }
     public bool IsTransparent { get; }
-    public float WindowOpacity { get; set; } = 1.0f;
-    public Color? WindowBackground { get; set; }
+    private float _windowOpacity = 1.0f;
+    private Color? _windowBackground;
+
+    /// <summary>Gets or sets the opacity applied to the window background (requires a transparent window).</summary>
+    public float WindowOpacity
+    {
+        get => _windowOpacity;
+        set { _windowOpacity = value; InvalidateRender(); }
+    }
+
+    /// <summary>Gets or sets the window background; <c>null</c> uses the theme's background color.</summary>
+    public Color? WindowBackground
+    {
+        get => _windowBackground;
+        set { _windowBackground = value; InvalidateRender(); }
+    }
     public int ResizeBorderThickness { get; set; } = 4;
     public string? WindowIconPath { get; set; }
 
@@ -531,6 +632,8 @@ public class SilkWindow : IDisposable
         options.Title = title;
         options.Size = new Vector2D<int>(width, height);
         options.VSync = true;
+        // Buffers are swapped manually, only for frames that were actually rendered (see OnRender).
+        options.ShouldSwapAutomatically = false;
         options.PreferredDepthBufferBits = 24;
         options.PreferredStencilBufferBits = 8;
         options.API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.Default, new APIVersion(3, 3));
@@ -555,6 +658,13 @@ public class SilkWindow : IDisposable
         _window.Update += OnUpdate;
         _window.Render += OnRender;
         _window.Closing += OnClosing;
+        _window.StateChanged += OnWindowStateChanged;
+        _window.FocusChanged += OnWindowFocusChanged;
+
+        ThemeManager.ThemeChanged += OnThemeChanged;
+        StyleManager.GlobalStyles.StylesChanged += OnGlobalStylesChanged;
+        PopupManager.PopupOpened += OnPopupChanged;
+        PopupManager.PopupClosed += OnPopupChanged;
 
         Atelier.Controls.Button.SetGlobalAnimationClock(_animationClock);
         CheckBox.SetGlobalAnimationClock(_animationClock);
@@ -747,6 +857,9 @@ public class SilkWindow : IDisposable
         {
             SetWindowIcon(WindowIconPath);
         }
+
+        _isLoaded = true;
+        _needsRender = true;
     }
 
     private void OnFramebufferResize(Vector2D<int> size)
@@ -767,6 +880,7 @@ public class SilkWindow : IDisposable
         _surface = SKSurface.Create(_grContext, _renderTarget, GRSurfaceOrigin.BottomLeft, SKColorType.Rgba8888);
 
         _rootElement?.InvalidateMeasure();
+        _needsRender = true;
     }
 
     private void HookInputEvents()
@@ -820,6 +934,7 @@ public class SilkWindow : IDisposable
 
     private void OnMouseDown(IMouse mouse, MouseButton button)
     {
+        _needsRender = true; // discrete input usually changes something on screen
         if (_rootElement == null) return;
 
         var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
@@ -855,6 +970,7 @@ public class SilkWindow : IDisposable
 
     private void OnMouseUp(IMouse mouse, MouseButton button)
     {
+        _needsRender = true; // discrete input usually changes something on screen
         if (_rootElement == null) return;
 
         var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
@@ -963,6 +1079,7 @@ public class SilkWindow : IDisposable
 
     private void OnMouseScroll(IMouse mouse, ScrollWheel scroll)
     {
+        _needsRender = true; // discrete input usually changes something on screen
         if (_rootElement == null) return;
 
         var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
@@ -1033,6 +1150,7 @@ public class SilkWindow : IDisposable
 
     private void OnKeyDown(IKeyboard keyboard, SilkKey key, int keyCode)
     {
+        _needsRender = true; // discrete input usually changes something on screen
         // Hot Reload manual trigger: F5 or Ctrl+R
         if (key == SilkKey.F5 || (key == SilkKey.R && (keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight))))
         {
@@ -1077,6 +1195,7 @@ public class SilkWindow : IDisposable
 
     private void OnKeyUp(IKeyboard keyboard, SilkKey key, int keyCode)
     {
+        _needsRender = true; // discrete input usually changes something on screen
         if (_repeatingKey == key)
         {
             _repeatingKey = SilkKey.Unknown;
@@ -1104,6 +1223,7 @@ public class SilkWindow : IDisposable
 
     private void OnKeyChar(IKeyboard keyboard, char c)
     {
+        _needsRender = true; // discrete input usually changes something on screen
         var textArgs = new TextInputEventArgs(c.ToString());
         FocusManager.DispatchTextInput(textArgs, _rootElement);
     }
@@ -1208,10 +1328,21 @@ public class SilkWindow : IDisposable
             }
         }
 
-        // 1. Advance Animation Clock (sub-pixel spring & tween updates)
-        _animationClock.Update(deltaTime);
+        // 1. Advance Animation Clock (sub-pixel spring & tween updates).
+        // After an idle period deltaTime spans the whole sleep; animations started by the input that woke the loop
+        // must start from zero instead of jumping to their end, so the first update after idling advances nothing.
+        double animationDelta = _resumingFromIdle ? 0 : Math.Min(deltaTime, MaxAnimationStepSeconds);
+        _resumingFromIdle = false;
+        _animationClock.Update(animationDelta);
 
-        // 2. Measure & Arrange Passes
+        // 2. Re-apply styles once if the global styles changed since the last frame
+        if (_globalStylesChanged)
+        {
+            _globalStylesChanged = false;
+            _rootElement?.ApplyStylesToTree();
+        }
+
+        // 3. Measure & Arrange Passes
         if (_rootElement != null && _window.Size.X > 0 && _window.Size.Y > 0)
         {
             var winSize = new Size(_window.Size.X, _window.Size.Y);
@@ -1234,21 +1365,29 @@ public class SilkWindow : IDisposable
             // Measure & Arrange active popups
             PopupManager.UpdatePopups(winSize);
         }
-
-        // 3. Track FPS
-        _frameCount++;
-        _fpsTimer += deltaTime;
-        if (_fpsTimer >= 0.5)
-        {
-            CurrentFps = _frameCount / _fpsTimer;
-            _frameCount = 0;
-            _fpsTimer = 0;
-        }
     }
+
+    // Longest animation step per frame, so a stalled frame (e.g. while the OS drags the window) doesn't skip animations.
+    private const double MaxAnimationStepSeconds = 0.1;
+
+    // Work that needs the loop to keep ticking even when nothing has been invalidated yet.
+    private bool HasContinuousWork =>
+        _animationClock.ActiveAnimationCount > 0 || _repeatingKey != SilkKey.Unknown || !_dispatchQueue.IsEmpty;
 
     private void OnRender(double deltaTime)
     {
         if (_isDisposed || _isClosing || _surface == null || _paintRegistry == null || _grContext == null) return;
+
+        bool continuous = HasContinuousWork;
+        if (!_needsRender && !continuous)
+        {
+            // Nothing changed: skip drawing and swapping, and sleep until input or InvalidateRender() wakes the loop.
+            EnterIdle();
+            return;
+        }
+
+        _needsRender = false;
+        _window.IsEventDriven = false;
 
         var canvas = _surface.Canvas;
 
@@ -1279,9 +1418,10 @@ public class SilkWindow : IDisposable
         PopupManager.RenderPopups(ref drawingContext, ThemeVisualPresenter.Instance);
 
         // 3. FPS & Performance overlay (Bottom-Left)
+        TrackRenderedFrame();
         if (ShowFpsOverlay && _window.Size.Y > 40)
         {
-            string fpsText = $"FPS: {CurrentFps:F0} | Animations: {_animationClock.ActiveAnimationCount}";
+            string fpsText = GetFpsText();
             float boxWidth = 170f;
             float boxHeight = 24f;
             float boxX = 8f;
@@ -1291,9 +1431,53 @@ public class SilkWindow : IDisposable
             drawingContext.DrawText(fpsText, new Point(boxX + 6f, boxY + 16f), Color.FromHex("#00E676"), 12f, bold: true);
         }
 
-        // 4. Flush GPU commands
+        // 4. Flush GPU commands and present (VSync throttles the loop here while frames are being rendered)
         canvas.Flush();
         _grContext.Flush();
+        _window.GLContext?.SwapBuffers();
+    }
+
+    private void EnterIdle()
+    {
+        if (_window.IsEventDriven)
+        {
+            return;
+        }
+
+        _window.IsEventDriven = true;
+        _resumingFromIdle = true;
+
+        // Restart the frame-rate sample so the next measurement doesn't include the idle period.
+        _frameCount = 0;
+        _fpsSampleStart = _stopwatch.Elapsed.TotalSeconds;
+        CurrentFps = 0;
+    }
+
+    private void TrackRenderedFrame()
+    {
+        _frameCount++;
+        double now = _stopwatch.Elapsed.TotalSeconds;
+        double elapsed = now - _fpsSampleStart;
+        if (elapsed >= 0.5)
+        {
+            CurrentFps = _frameCount / elapsed;
+            _frameCount = 0;
+            _fpsSampleStart = now;
+        }
+    }
+
+    // Rebuilt only when the displayed numbers change, so the overlay doesn't allocate a string every frame.
+    private string GetFpsText()
+    {
+        double fps = Math.Round(CurrentFps);
+        int animations = _animationClock.ActiveAnimationCount;
+        if (fps != _fpsTextValue || animations != _fpsTextAnimations)
+        {
+            _fpsTextValue = fps;
+            _fpsTextAnimations = animations;
+            _fpsText = $"FPS: {fps:F0} | Animations: {animations}";
+        }
+        return _fpsText;
     }
 
     private void CleanupGraphicsResources()
@@ -1385,7 +1569,20 @@ public class SilkWindow : IDisposable
         OnClosing();
 
         HotReloadManager.HotReloadTriggered -= OnHotReloadTriggered;
+        ThemeManager.ThemeChanged -= OnThemeChanged;
+        StyleManager.GlobalStyles.StylesChanged -= OnGlobalStylesChanged;
+        PopupManager.PopupOpened -= OnPopupChanged;
+        PopupManager.PopupClosed -= OnPopupChanged;
 
+        if (_rootElement != null)
+        {
+            _rootElement.NeedsVisualUpdate -= OnTreeInvalidated;
+            _rootElement.NeedsLayoutUpdate -= OnTreeInvalidated;
+            _rootElement.DetachFromHost();
+        }
+
+        _window.StateChanged -= OnWindowStateChanged;
+        _window.FocusChanged -= OnWindowFocusChanged;
         _window.Load -= OnLoad;
         _window.FramebufferResize -= OnFramebufferResize;
         _window.Update -= OnUpdate;

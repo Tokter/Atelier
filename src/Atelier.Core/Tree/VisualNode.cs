@@ -300,6 +300,16 @@ public abstract class VisualNode : BindableObject
 
     private void AttachChild(int? index, VisualNode child)
     {
+        ArgumentNullException.ThrowIfNull(child);
+        if (child._isHostRoot)
+        {
+            throw new InvalidOperationException("A node attached to a host as its root cannot be added as a child. Call DetachFromHost() first.");
+        }
+        if (child == this || IsDescendantOf(child))
+        {
+            throw new InvalidOperationException("A node cannot be added to itself or to one of its descendants.");
+        }
+
         // Capture inherited values before relinking so a move raises one notification per real change.
         var inherited = child.CaptureInheritedValues();
 
@@ -311,6 +321,10 @@ public abstract class VisualNode : BindableObject
 
         CommitInheritedValues(inherited);
         child.OnInheritanceParentChanged(oldParent, this);
+
+        // Only a change of attachment raises lifecycle events; moving between two attached parents raises none.
+        child.SetAttachedToVisualTree(_isAttachedToVisualTree);
+
         OnChildAdded(child);
         InvalidateLayout();
     }
@@ -332,8 +346,113 @@ public abstract class VisualNode : BindableObject
         DetachChild(child);
         CommitInheritedValues(inherited);
         child.OnInheritanceParentChanged(this, null);
+        child.SetAttachedToVisualTree(false);
         return true;
     }
+
+    #region Visual tree lifecycle
+
+    private bool _isAttachedToVisualTree;
+    private bool _isHostRoot;
+
+    /// <summary>
+    /// Gets a value indicating whether this node is part of a tree whose root has been attached to a host (such as a
+    /// window) with <see cref="AttachToHost"/>, i.e. whether it is currently displayed.
+    /// </summary>
+    public bool IsAttachedToVisualTree => _isAttachedToVisualTree;
+
+    /// <summary>
+    /// Occurs when this node becomes part of a hosted tree: when its root is attached to a host, or when it (or an
+    /// ancestor) is added under a node that already is.
+    /// </summary>
+    /// <remarks>
+    /// Raised parent-first, after inherited values and styles have been updated. Moving a node between two attached
+    /// parents raises neither this event nor <see cref="DetachedFromVisualTree"/>. Use it to acquire resources or
+    /// subscribe to long-lived objects, and release them in <see cref="DetachedFromVisualTree"/>.
+    /// </remarks>
+    public event EventHandler? AttachedToVisualTree;
+
+    /// <summary>
+    /// Occurs when this node stops being part of a hosted tree: when it (or an ancestor) is removed from an attached
+    /// parent, or when its root is detached from the host.
+    /// </summary>
+    /// <remarks>Raised children-first, so teardown mirrors <see cref="AttachedToVisualTree"/>.</remarks>
+    public event EventHandler? DetachedFromVisualTree;
+
+    /// <summary>
+    /// Marks this node as the root of a hosted tree and raises <see cref="AttachedToVisualTree"/> for it and all
+    /// descendants. Called by hosts such as windows when they start displaying the tree.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">This node has a parent.</exception>
+    public void AttachToHost()
+    {
+        if (_parent != null)
+        {
+            throw new InvalidOperationException("Only a node without a parent can be attached to a host.");
+        }
+
+        _isHostRoot = true;
+        SetAttachedToVisualTree(true);
+    }
+
+    /// <summary>
+    /// Ends hosting of this root and raises <see cref="DetachedFromVisualTree"/> for all descendants and this node.
+    /// Does nothing if this node is not attached to a host.
+    /// </summary>
+    public void DetachFromHost()
+    {
+        if (!_isHostRoot)
+        {
+            return;
+        }
+
+        _isHostRoot = false;
+        SetAttachedToVisualTree(false);
+    }
+
+    /// <summary>
+    /// Called when this node becomes part of a hosted tree. The base implementation raises <see cref="AttachedToVisualTree"/>.
+    /// </summary>
+    protected virtual void OnAttachedToVisualTree() => AttachedToVisualTree?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Called when this node stops being part of a hosted tree. The base implementation raises <see cref="DetachedFromVisualTree"/>.
+    /// </summary>
+    protected virtual void OnDetachedFromVisualTree() => DetachedFromVisualTree?.Invoke(this, EventArgs.Empty);
+
+    private void SetAttachedToVisualTree(bool attached)
+    {
+        if (_isAttachedToVisualTree == attached)
+        {
+            return;
+        }
+
+        _isAttachedToVisualTree = attached;
+
+        // Indexed loops: a handler may add or remove children. Nodes added meanwhile are handled by AttachChild, and the
+        // equality check above makes a second visit harmless.
+        if (attached)
+        {
+            OnAttachedToVisualTree();
+            for (int i = 0; i < _children.Count; i++)
+            {
+                _children[i].SetAttachedToVisualTree(true);
+            }
+        }
+        else
+        {
+            for (int i = _children.Count - 1; i >= 0; i--)
+            {
+                if (i < _children.Count)
+                {
+                    _children[i].SetAttachedToVisualTree(false);
+                }
+            }
+            OnDetachedFromVisualTree();
+        }
+    }
+
+    #endregion
 
     // Unlinks a child without raising inheritance notifications; callers are responsible for those.
     private void DetachChild(VisualNode child)
