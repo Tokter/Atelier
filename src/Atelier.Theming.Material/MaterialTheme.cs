@@ -18,6 +18,7 @@ public class MaterialTheme : Theme
 
         // Register all control renderers for this theme
         Renderers.Register(new MaterialButtonRenderer(colors));
+        Renderers.Register(new MaterialToggleButtonRenderer(colors));
         Renderers.Register(new MaterialCheckBoxRenderer(colors));
         Renderers.Register(new MaterialRadioButtonRenderer(colors));
         Renderers.Register(new MaterialSwitchRenderer(colors));

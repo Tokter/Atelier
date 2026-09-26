@@ -844,11 +844,12 @@ public class AtelierCoreTests
         };
 
         // 1. Single click triggers drag move
-        titleBar.OnPointerPressed(new Core.Events.PointerEventArgs(new Point(100, 20), Core.Events.PointerButtons.Left));
+        var point = new Point(100, 20);
+        titleBar.OnPointerPressed(new Core.Events.PointerEventArgs(point, point, Core.Events.PointerButtons.Left, clickCount: 1));
         Assert.True(dragged);
 
-        // 2. Immediate second click triggers double click (maximize)
-        titleBar.OnPointerPressed(new Core.Events.PointerEventArgs(new Point(100, 20), Core.Events.PointerButtons.Left));
+        // 2. The second click of a double click (as counted by the platform) toggles maximize
+        titleBar.OnPointerPressed(new Core.Events.PointerEventArgs(point, point, Core.Events.PointerButtons.Left, clickCount: 2));
         Assert.True(maximized);
 
         // 3. Button callbacks

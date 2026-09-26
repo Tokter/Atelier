@@ -110,8 +110,8 @@ public partial class TextBoxMD3Tests
         var btn = new Button("Click Me")
             .Command(new Atelier.Core.Keybinding.AtelierRelayCommand(() => executed = true));
         btn.OnPointerEntered(new Atelier.Core.Events.PointerEventArgs(Point.Zero, Point.Zero));
-        btn.OnPointerPressed(new Atelier.Core.Events.PointerEventArgs(Point.Zero, Point.Zero));
-        btn.OnPointerReleased(new Atelier.Core.Events.PointerEventArgs(Point.Zero, Point.Zero));
+        btn.OnPointerPressed(new Atelier.Core.Events.PointerEventArgs(Point.Zero, Point.Zero, Atelier.Core.Events.PointerButtons.Left));
+        btn.OnPointerReleased(new Atelier.Core.Events.PointerEventArgs(Point.Zero, Point.Zero, Atelier.Core.Events.PointerButtons.Left));
         Assert.True(executed);
     }
 
@@ -127,10 +127,10 @@ public partial class TextBoxMD3Tests
         textBlock.DispatchBubblePointerEvent(new Atelier.Core.Events.PointerEventArgs(Point.Zero, Point.Zero), (el, e) => el.OnPointerEntered(e));
 
         // SilkWindow mouse down dispatch
-        textBlock.DispatchBubblePointerEvent(new Atelier.Core.Events.PointerEventArgs(Point.Zero, Point.Zero), (el, e) => el.OnPointerPressed(e));
+        textBlock.DispatchBubblePointerEvent(new Atelier.Core.Events.PointerEventArgs(Point.Zero, Point.Zero, Atelier.Core.Events.PointerButtons.Left), (el, e) => el.OnPointerPressed(e));
 
         // SilkWindow mouse up dispatch
-        textBlock.DispatchBubblePointerEvent(new Atelier.Core.Events.PointerEventArgs(Point.Zero, Point.Zero), (el, e) => el.OnPointerReleased(e));
+        textBlock.DispatchBubblePointerEvent(new Atelier.Core.Events.PointerEventArgs(Point.Zero, Point.Zero, Atelier.Core.Events.PointerButtons.Left), (el, e) => el.OnPointerReleased(e));
 
         Assert.True(executed);
     }

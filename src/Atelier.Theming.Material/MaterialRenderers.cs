@@ -144,6 +144,57 @@ public class MaterialButtonRenderer(MaterialColorScheme colors) : ControlRendere
     }
 }
 
+/// <summary>
+/// Draws a standalone <see cref="ToggleButton"/>: outlined when unchecked, a secondary-container fill when checked, and
+/// half of that fill when indeterminate. <see cref="CheckBox"/>, <see cref="RadioButton"/> and <see cref="Switch"/> have
+/// their own renderers.
+/// </summary>
+public class MaterialToggleButtonRenderer(MaterialColorScheme colors) : ControlRenderer<ToggleButton>
+{
+    /// <inheritdoc/>
+    public override void Render(ToggleButton button, ref DrawingContext context)
+    {
+        var bounds = new Rect(Point.Zero, button.Bounds.Size);
+        if (bounds.Width <= 0 || bounds.Height <= 0) return;
+
+        var corner = button.CornerRadius;
+        float progress = button.CheckAnimationProgress * (button.IsChecked == null ? 0.5f : 1f);
+
+        if (!button.IsEnabled)
+        {
+            context.DrawRoundedRect(bounds, corner, colors.OnSurface.WithAlpha(0.12f * Math.Max(progress, 0.5f)));
+            return;
+        }
+
+        Color fg = Color.Lerp(colors.Primary, colors.OnSecondaryContainer, progress);
+        Color bg = colors.SecondaryContainer.WithAlpha(progress);
+        if (button.IsPressed)
+        {
+            bg = Color.Lerp(bg, fg.WithAlpha(0.12f), 0.5f);
+        }
+        else if (button.IsHovered)
+        {
+            bg = Color.Lerp(bg, fg.WithAlpha(0.08f), 0.5f);
+        }
+
+        if (bg.A > 0)
+        {
+            context.DrawRoundedRect(bounds, corner, bg);
+        }
+
+        if (progress < 1f)
+        {
+            context.DrawRoundedRectOutline(bounds, corner, colors.Outline.WithAlpha(1f - progress), 1f);
+        }
+
+        if (button.IsFocused)
+        {
+            var focusBounds = new Rect(bounds.X - 2, bounds.Y - 2, bounds.Width + 4, bounds.Height + 4);
+            context.DrawRoundedRectOutline(focusBounds, new CornerRadius(corner.TopLeft + 2), colors.Primary, 2.0f);
+        }
+    }
+}
+
 internal static class MaterialRendererHelpers
 {
     public static void ApplyDisabledState(UIElement element, Color disabledForeground)
@@ -173,64 +224,49 @@ public class MaterialCheckBoxRenderer(MaterialColorScheme colors) : ControlRende
 {
     public override void Render(CheckBox checkBox, ref DrawingContext context)
     {
-        float boxSize = 18f;
-        float y = (checkBox.Bounds.Height - boxSize) * 0.5f;
-        var boxRect = new Rect(0, y, boxSize, boxSize);
+        var boxRect = checkBox.GetIndicatorBounds();
         var corner = new CornerRadius(2);
 
         float progress = checkBox.CheckAnimationProgress;
         bool isEnabled = checkBox.IsEnabled;
+        bool isIndeterminate = checkBox.IsChecked == null;
 
+        Color fillColor;
+        Color markColor;
         if (!isEnabled)
         {
-            Color disabledColor = colors.OnSurface.WithAlpha(0.38f);
-            if (progress <= 0.01f)
-            {
-                context.DrawRoundedRectOutline(boxRect, corner, disabledColor, 2f);
-            }
-            else
-            {
-                context.DrawRoundedRect(boxRect, corner, disabledColor);
-                if (progress > 0.1f)
-                {
-                    using var builder = new SKPathBuilder();
-                    float x1 = boxRect.X + 3.5f;
-                    float y1 = boxRect.Y + 9f;
-                    float x2 = boxRect.X + 7.5f;
-                    float y2 = boxRect.Y + 13f;
-                    float x3 = boxRect.X + 14.5f;
-                    float y3 = boxRect.Y + 5.5f;
-
-                    builder.MoveTo(x1, y1);
-                    builder.LineTo(x2, y2);
-                    float endX = x2 + (x3 - x2) * progress;
-                    float endY = y2 + (y3 - y2) * progress;
-                    builder.LineTo(endX, endY);
-
-                    using var path = builder.Detach();
-                    context.DrawPathOutline(path, colors.Surface, 2.0f);
-                }
-            }
-            return;
+            fillColor = colors.OnSurface.WithAlpha(0.38f);
+            markColor = colors.Surface;
+        }
+        else
+        {
+            // Checked / transitioning state: fill primary
+            fillColor = Color.Lerp(colors.Outline, colors.Primary, progress);
+            markColor = colors.OnPrimary;
         }
 
         if (progress <= 0.01f)
         {
             // Unchecked state: outline only
-            Color outlineColor = checkBox.IsHovered ? colors.OnSurface : colors.Outline;
+            Color outlineColor = !isEnabled ? fillColor : checkBox.IsHovered ? colors.OnSurface : colors.Outline;
             context.DrawRoundedRectOutline(boxRect, corner, outlineColor, 2f);
         }
         else
         {
-            // Checked / Transitioning state: fill primary
-            Color fillColor = Color.Lerp(colors.Outline, colors.Primary, progress);
             context.DrawRoundedRect(boxRect, corner, fillColor);
 
-            // Draw vector checkmark morphing with progress
-            if (progress > 0.1f)
+            if (isIndeterminate)
             {
+                // Indeterminate: a horizontal dash growing from the center
+                float half = 5f * progress;
+                float cx = boxRect.X + boxRect.Width * 0.5f;
+                float cy = boxRect.Y + boxRect.Height * 0.5f;
+                context.DrawLine(new Point(cx - half, cy), new Point(cx + half, cy), markColor, 2f);
+            }
+            else if (progress > 0.1f)
+            {
+                // Vector check mark, its second stroke drawn with the progress
                 using var builder = new SKPathBuilder();
-                // Checkmark coordinates relative to box
                 float x1 = boxRect.X + 3.5f;
                 float y1 = boxRect.Y + 9f;
                 float x2 = boxRect.X + 7.5f;
@@ -240,18 +276,17 @@ public class MaterialCheckBoxRenderer(MaterialColorScheme colors) : ControlRende
 
                 builder.MoveTo(x1, y1);
                 builder.LineTo(x2, y2);
-                // Animate checkmark second stroke
                 float endX = x2 + (x3 - x2) * progress;
                 float endY = y2 + (y3 - y2) * progress;
                 builder.LineTo(endX, endY);
 
                 using var path = builder.Detach();
-                context.DrawPathOutline(path, colors.OnPrimary, 2.0f);
+                context.DrawPathOutline(path, markColor, 2.0f);
             }
         }
 
         // Draw focus ring
-        if (checkBox.IsFocused)
+        if (checkBox.IsFocused && isEnabled)
         {
             var focusRect = new Rect(boxRect.X - 3, boxRect.Y - 3, boxRect.Width + 6, boxRect.Height + 6);
             context.DrawRoundedRectOutline(focusRect, new CornerRadius(4), colors.Primary, 2f);
@@ -263,16 +298,16 @@ public class MaterialRadioButtonRenderer(MaterialColorScheme colors) : ControlRe
 {
     public override void Render(RadioButton radioButton, ref DrawingContext context)
     {
-        float size = 20f;
-        float y = (radioButton.Bounds.Height - size) * 0.5f;
-        var center = new Point(size * 0.5f, y + size * 0.5f);
-        float radius = 9f;
+        var indicator = radioButton.GetIndicatorBounds();
+        var center = new Point(indicator.X + indicator.Width * 0.5f, indicator.Y + indicator.Height * 0.5f);
+        float radius = indicator.Width * 0.5f - 1f;
         bool isEnabled = radioButton.IsEnabled;
+        bool isChecked = radioButton.IsChecked == true;
 
         if (!isEnabled)
         {
             Color disabledColor = colors.OnSurface.WithAlpha(0.38f);
-            if (radioButton.IsChecked)
+            if (isChecked)
             {
                 context.DrawCircleOutline(center, radius, disabledColor, 2f);
                 context.DrawCircle(center, 5f, disabledColor);
@@ -284,7 +319,7 @@ public class MaterialRadioButtonRenderer(MaterialColorScheme colors) : ControlRe
             return;
         }
 
-        if (radioButton.IsChecked)
+        if (isChecked)
         {
             context.DrawCircleOutline(center, radius, colors.Primary, 2f);
             context.DrawCircle(center, 5f, colors.Primary);
@@ -307,8 +342,8 @@ public class MaterialSwitchRenderer(MaterialColorScheme colors) : ControlRendere
     public override void Render(Switch switchControl, ref DrawingContext context)
     {
         var pad = switchControl.Padding;
-        float trackW = 40f;
-        float trackH = 22f;
+        float trackW = Switch.TrackWidth;
+        float trackH = Switch.TrackHeight;
         float trackX = pad.Left;
         float y = pad.Top + (switchControl.Bounds.Height - pad.Vertical - trackH) * 0.5f;
         var trackRect = new Rect(trackX, y, trackW, trackH);
@@ -688,6 +723,22 @@ public class MaterialSliderRenderer(MaterialColorScheme colors) : ControlRendere
             context.DrawRoundedRect(activeRect, new CornerRadius(trackHeight * 0.5f), colors.Primary);
         }
 
+        // Tick marks of a discrete slider (MD3), skipped when they would be closer than 4 px
+        float range = slider.Maximum - slider.Minimum;
+        float tick = slider.TickFrequency;
+        float usable = bounds.Width - handleRadius * 2;
+        if (slider.IsSnapToTickEnabled && tick > 0 && range > 0 && usable > 0 && usable * tick / range >= 4f)
+        {
+            int count = (int)MathF.Floor(range / tick + 1e-4f);
+            for (int i = 0; i <= count; i++)
+            {
+                float ratio = i * tick / range;
+                float x = handleRadius + ratio * usable;
+                Color dot = ratio <= progress ? colors.OnPrimary : colors.OnSurfaceVariant;
+                context.DrawCircle(new Point(x, trackCenterY), 1f, dot);
+            }
+        }
+
         // Handle
         var handleCenter = new Point(handleX, trackCenterY);
         context.DrawShadow(new Rect(handleCenter.X - handleRadius, handleCenter.Y - handleRadius, handleRadius * 2, handleRadius * 2), new CornerRadius(handleRadius), 2f, colors.OnSurface);
@@ -702,7 +753,7 @@ public class MaterialSliderRenderer(MaterialColorScheme colors) : ControlRendere
         if (slider.ShowValueIndicator && slider.ValueIndicatorOpacity > 0.005f)
         {
             float opacity = slider.ValueIndicatorOpacity;
-            string text = string.Format(slider.ValueFormat, slider.Value);
+            string text = slider.ValueText; // cached by the slider; no per-frame formatting
             float fontSize = 11f;
 
             var textSize = context.MeasureText(text, fontSize, bold: true);

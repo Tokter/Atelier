@@ -198,7 +198,7 @@ public class PropertyEditorRegistry
                 isSelfUpdating = true;
                 try
                 {
-                    context.UpdateValue(isChecked);
+                    context.UpdateValue(isChecked == true);
                 }
                 finally
                 {

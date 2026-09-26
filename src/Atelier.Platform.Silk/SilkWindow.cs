@@ -181,7 +181,14 @@ public class SilkWindow : IDisposable, IHostWindow
         InvalidateRender();
     }
 
-    private void OnWindowStateChanged(WindowState state) => InvalidateRender();
+    private void OnWindowStateChanged(WindowState state)
+    {
+        InvalidateRender();
+        WindowStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <inheritdoc/>
+    public event EventHandler? WindowStateChanged;
 
     private void OnWindowFocusChanged(bool focused)
     {

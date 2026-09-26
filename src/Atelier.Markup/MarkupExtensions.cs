@@ -892,9 +892,13 @@ public static class MarkupExtensions
         [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        checkBox.SetBinding(CheckBox.IsCheckedProperty, source, getter, setter, getterExpression: getterExpression);
+        checkBox.SetBinding(CheckBox.IsCheckedProperty, source, s => (bool?)getter(s), ToNullableSetter(setter), getterExpression: getterExpression);
         return checkBox;
     }
+
+    // Adapts a bool source setter to the bool? IsChecked of toggle buttons; the indeterminate state is written as false.
+    private static Action<TSource, bool?>? ToNullableSetter<TSource>(Action<TSource, bool>? setter) =>
+        setter == null ? null : (s, value) => setter(s, value == true);
 
     public static CheckBox BindIsChecked<TDataContext>(
         this CheckBox checkBox,
@@ -903,7 +907,7 @@ public static class MarkupExtensions
         [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
-        checkBox.SetBinding(CheckBox.IsCheckedProperty, getter, setter, getterExpression: getterExpression);
+        checkBox.SetBinding(CheckBox.IsCheckedProperty, (TDataContext s) => (bool?)getter(s), ToNullableSetter(setter), getterExpression: getterExpression);
         return checkBox;
     }
 
@@ -931,10 +935,10 @@ public static class MarkupExtensions
         radioButton.SetBinding(
             CheckBox.IsCheckedProperty,
             source,
-            s => EqualityComparer<TValue>.Default.Equals(getter(s), valueToMatch),
+            s => (bool?)EqualityComparer<TValue>.Default.Equals(getter(s), valueToMatch),
             (s, isChecked) =>
             {
-                if (isChecked) setter(s, valueToMatch);
+                if (isChecked == true) setter(s, valueToMatch);
             },
             getterExpression: getterExpression);
         return radioButton;
@@ -950,10 +954,10 @@ public static class MarkupExtensions
     {
         radioButton.SetBinding(
             CheckBox.IsCheckedProperty,
-            (TDataContext s) => EqualityComparer<TValue>.Default.Equals(getter(s), valueToMatch),
-            (TDataContext s, bool isChecked) =>
+            (TDataContext s) => (bool?)EqualityComparer<TValue>.Default.Equals(getter(s), valueToMatch),
+            (TDataContext s, bool? isChecked) =>
             {
-                if (isChecked) setter(s, valueToMatch);
+                if (isChecked == true) setter(s, valueToMatch);
             },
             getterExpression: getterExpression);
         return radioButton;
@@ -985,7 +989,7 @@ public static class MarkupExtensions
         [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        switchControl.SetBinding(Switch.IsCheckedProperty, source, getter, setter, getterExpression: getterExpression);
+        switchControl.SetBinding(Switch.IsCheckedProperty, source, s => (bool?)getter(s), ToNullableSetter(setter), getterExpression: getterExpression);
         return switchControl;
     }
 
@@ -996,7 +1000,7 @@ public static class MarkupExtensions
         [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
-        switchControl.SetBinding(Switch.IsCheckedProperty, getter, setter, getterExpression: getterExpression);
+        switchControl.SetBinding(Switch.IsCheckedProperty, (TDataContext s) => (bool?)getter(s), ToNullableSetter(setter), getterExpression: getterExpression);
         return switchControl;
     }
 

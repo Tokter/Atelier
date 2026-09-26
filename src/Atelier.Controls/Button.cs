@@ -1,56 +1,77 @@
 using System;
-using System.Windows.Input;
 using Atelier.Core.Animation;
-using Atelier.Core.Events;
 using Atelier.Core.Primitives;
 using Atelier.Core.Properties;
 using Atelier.Core.Threading;
 
 namespace Atelier.Controls;
 
+/// <summary>
+/// The Material Design 3 emphasis levels of a <see cref="Button"/>, from highest to lowest.
+/// </summary>
 public enum ButtonVariant
 {
+    /// <summary>A solid primary-colored container, for the most important action.</summary>
     Filled,
+
+    /// <summary>A tinted surface container with a shadow.</summary>
     Elevated,
+
+    /// <summary>A secondary-container fill, between filled and outlined in emphasis.</summary>
     Tonal,
+
+    /// <summary>A transparent container with an outline.</summary>
     Outlined,
+
+    /// <summary>Text only, for the lowest-emphasis actions.</summary>
     Text
 }
 
-public class Button : ContentControl
+/// <summary>
+/// A push button that raises <see cref="ButtonBase.Click"/> and executes its <see cref="ButtonBase.Command"/>, drawn in
+/// one of the Material Design 3 <see cref="ButtonVariant"/>s with an ink ripple on press.
+/// </summary>
+/// <remarks>
+/// The default <see cref="Control.Padding"/> is 16×6 and the default <see cref="Control.CornerRadius"/> is 20 (a pill).
+/// The ripple is only shown while an animation clock is set (see <see cref="ButtonBase.SetGlobalAnimationClock"/>).
+/// </remarks>
+public class Button : ButtonBase
 {
-    public static readonly BindableProperty<ICommand?> CommandProperty =
-        BindableProperty.Register<Button, ICommand?>(nameof(Command), null, (s, o, n) => ((Button)s).OnCommandChanged(o, n));
-
-    public static readonly BindableProperty<object?> CommandParameterProperty =
-        BindableProperty.Register<Button, object?>(nameof(CommandParameter), null, (s, o, n) => ((Button)s).UpdateIsEnabledCore());
-
+    /// <summary>Identifies the <see cref="Variant"/> property.</summary>
     public static readonly BindableProperty<ButtonVariant> VariantProperty =
-        BindableProperty.Register<Button, ButtonVariant>(
-            nameof(Variant),
-            ButtonVariant.Filled,
-            options: PropertyOptions.AffectsRender
-        );
+        BindableProperty.Register<Button, ButtonVariant>(nameof(Variant), ButtonVariant.Filled, options: PropertyOptions.AffectsRender);
 
+    /// <summary>Identifies the <see cref="Elevation"/> property.</summary>
     public static readonly BindableProperty<float> ElevationProperty =
-        BindableProperty.Register<Button, float>(
-            nameof(Elevation),
-            1f,
-            options: PropertyOptions.AffectsRender
-        );
+        BindableProperty.Register<Button, float>(nameof(Elevation), 1f, options: PropertyOptions.AffectsRender);
 
-    public ICommand? Command { get => GetValue(CommandProperty); set => SetValue(CommandProperty, value); }
-    public object? CommandParameter { get => GetValue(CommandParameterProperty); set => SetValue(CommandParameterProperty, value); }
+    /// <summary>Gets or sets the visual style. The default is <see cref="ButtonVariant.Filled"/>.</summary>
     public ButtonVariant Variant { get => GetValue(VariantProperty); set => SetValue(VariantProperty, value); }
+
+    /// <summary>
+    /// Gets or sets the resting shadow elevation of the <see cref="ButtonVariant.Filled"/> and
+    /// <see cref="ButtonVariant.Elevated"/> variants; hover and press raise it. The default is 1.
+    /// </summary>
     public float Elevation { get => GetValue(ElevationProperty); set => SetValue(ElevationProperty, value); }
 
-    public event EventHandler? Click;
-
-    // Ripple state for Material Design 3
+    /// <summary>Gets the center of the current ink ripple, in local coordinates.</summary>
     public Point RippleCenter { get; private set; } = Point.Zero;
-    public float RippleProgress { get; private set; } = 0f;
-    public float RippleOpacity { get; private set; } = 0f;
+
+    /// <summary>Gets how far the ripple has expanded, from 0 to 1 (1 covers the whole button).</summary>
+    public float RippleProgress { get; private set; }
+
+    /// <summary>Gets the ripple's opacity; 0 when no ripple is shown.</summary>
+    public float RippleOpacity { get; private set; }
+
+    /// <summary>Gets whether a ripple is currently visible.</summary>
     public bool HasActiveRipple => RippleOpacity > 0f;
+
+    private const float RippleStartOpacity = 0.25f;
+
+    private FloatAnimation? _rippleExpand;
+    private FloatAnimation? _rippleFade;
+    private Action<float>? _setRippleProgress;
+    private Action<float>? _setRippleOpacity;
 
     static Button()
     {
@@ -58,161 +79,153 @@ public class Button : ContentControl
         CornerRadiusProperty.OverrideDefaultValue<Button>(new CornerRadius(20)); // MD3 pill shape default
     }
 
+    /// <summary>Initializes a new, empty button.</summary>
     public Button()
     {
-        IsFocusable = true;
     }
 
+    /// <summary>Initializes a new button showing <paramref name="text"/>.</summary>
     public Button(string text) : this()
     {
         Content = new TextBlock(text) { VerticalAlignment = VerticalAlignment.Center };
     }
 
-    public override void OnPointerPressed(PointerEventArgs e)
+    /// <inheritdoc/>
+    /// <remarks>Starts a new ink ripple at <paramref name="position"/>, replacing any ripple still shown.</remarks>
+    protected override void OnPressStarted(Point position)
     {
-        base.OnPointerPressed(e);
-        e.Handled = true;
+        base.OnPressStarted(position);
+        _rippleFade?.Stop();
+        _rippleFade = null;
 
-        RippleCenter = e.Position;
+        if (AnimationClock == null)
+        {
+            // Without a clock nothing would fade the ripple out again.
+            return;
+        }
+
+        RippleCenter = position;
         RippleProgress = 0f;
-        RippleOpacity = 0.25f;
+        RippleOpacity = RippleStartOpacity;
+        InvalidateVisual();
 
-        // Animate ripple expansion
-        var anim = new FloatAnimation(
+        StartAnimation(ref _rippleExpand, new FloatAnimation(
             from: 0f,
             to: 1f,
             duration: TimeSpan.FromMilliseconds(350),
-            onUpdate: p =>
+            onUpdate: _setRippleProgress ??= p =>
             {
                 RippleProgress = p;
                 InvalidateVisual();
             },
-            easing: Easing.EaseOutCubic
-        );
-
-        StartAnimation(anim);
-    }
-
-    public override void OnPointerReleased(PointerEventArgs e)
-    {
-        bool wasPressed = IsPressed;
-        base.OnPointerReleased(e);
-        e.Handled = true;
-
-        if (wasPressed && IsHovered && IsEnabled)
-        {
-            if (Command != null && Command.CanExecute(CommandParameter))
-            {
-                Command.Execute(CommandParameter);
-            }
-            Click?.Invoke(this, EventArgs.Empty);
-        }
-
-        // Fade out ripple
-        var fadeAnim = new FloatAnimation(
-            from: RippleOpacity,
-            to: 0f,
-            duration: TimeSpan.FromMilliseconds(200),
-            onUpdate: o =>
-            {
-                RippleOpacity = o;
-                InvalidateVisual();
-            },
-            easing: Easing.Linear
-        );
-
-        StartAnimation(fadeAnim);
-    }
-
-    #region Command state
-
-    // The command the button currently listens to. Only set while the button is displayed, so a long-lived command
-    // never keeps a removed button alive through its CanExecuteChanged event.
-    private ICommand? _observedCommand;
-
-    /// <summary>
-    /// The button is disabled while its <see cref="Command"/> cannot execute with the current <see cref="CommandParameter"/>.
-    /// </summary>
-    protected override bool IsEnabledCore => Command is not { } command || command.CanExecute(CommandParameter);
-
-    private void OnCommandChanged(ICommand? oldCommand, ICommand? newCommand)
-    {
-        if (IsAttachedToVisualTree)
-        {
-            ObserveCommand(newCommand);
-        }
-        UpdateIsEnabledCore();
+            easing: Easing.EaseOutCubic));
     }
 
     /// <inheritdoc/>
-    protected override void OnAttachedToVisualTree()
+    /// <remarks>Fades the ripple out.</remarks>
+    protected override void OnPressEnded()
     {
-        ObserveCommand(Command);
-        UpdateIsEnabledCore(); // CanExecute may have changed while the button was not displayed
-        base.OnAttachedToVisualTree();
-    }
-
-    /// <inheritdoc/>
-    protected override void OnDetachedFromVisualTree()
-    {
-        ObserveCommand(null);
-        base.OnDetachedFromVisualTree();
-    }
-
-    private void ObserveCommand(ICommand? command)
-    {
-        if (_observedCommand == command)
+        base.OnPressEnded();
+        if (RippleOpacity <= 0f || AnimationClock == null)
         {
             return;
         }
 
-        if (_observedCommand != null)
-        {
-            _observedCommand.CanExecuteChanged -= OnCanExecuteChanged;
-        }
-
-        _observedCommand = command;
-
-        if (_observedCommand != null)
-        {
-            _observedCommand.CanExecuteChanged += OnCanExecuteChanged;
-        }
-    }
-
-    private void OnCanExecuteChanged(object? sender, EventArgs e)
-    {
-        // Commands may raise this from a background thread; property changes must happen on the UI thread.
-        if (Dispatcher.CheckAccess())
-        {
-            UpdateIsEnabledCore();
-        }
-        else
-        {
-            Dispatcher.Post(UpdateIsEnabledCore);
-        }
-    }
-
-    #endregion
-
-    public override void OnKeyDown(KeyEventArgs e)
-    {
-        base.OnKeyDown(e);
-        if (IsEnabled && (e.Key is Key.Enter or Key.Space))
-        {
-            if (Command != null && Command.CanExecute(CommandParameter))
+        StartAnimation(ref _rippleFade, new FloatAnimation(
+            from: RippleOpacity,
+            to: 0f,
+            duration: TimeSpan.FromMilliseconds(200),
+            onUpdate: _setRippleOpacity ??= o =>
             {
-                Command.Execute(CommandParameter);
-            }
-            Click?.Invoke(this, EventArgs.Empty);
-            e.Handled = true;
-        }
+                RippleOpacity = o;
+                InvalidateVisual();
+            },
+            easing: Easing.Linear));
+    }
+}
+
+/// <summary>
+/// A <see cref="Button"/> that raises <see cref="ButtonBase.Click"/> repeatedly while it is held down, like the arrows
+/// of a scroll bar or a numeric up/down control.
+/// </summary>
+/// <remarks>
+/// The first click happens on press (<see cref="ButtonBase.ClickMode"/> defaults to <see cref="ClickMode.Press"/>),
+/// the next one after <see cref="Delay"/>, and then one every <see cref="Interval"/> until the left pointer button or
+/// Space is released, the pointer leaves the button, or the button is disabled, loses focus or is removed.
+/// </remarks>
+public class RepeatButton : Button
+{
+    /// <summary>Identifies the <see cref="Delay"/> property.</summary>
+    public static readonly BindableProperty<TimeSpan> DelayProperty =
+        BindableProperty.Register<RepeatButton, TimeSpan>(nameof(Delay), TimeSpan.FromMilliseconds(500), validateValue: IsPositive);
+
+    /// <summary>Identifies the <see cref="Interval"/> property.</summary>
+    public static readonly BindableProperty<TimeSpan> IntervalProperty =
+        BindableProperty.Register<RepeatButton, TimeSpan>(nameof(Interval), TimeSpan.FromMilliseconds(33), validateValue: IsPositive);
+
+    /// <summary>Gets or sets the time between the press and the first repeated click. The default is 500 ms.</summary>
+    public TimeSpan Delay { get => GetValue(DelayProperty); set => SetValue(DelayProperty, value); }
+
+    /// <summary>Gets or sets the time between repeated clicks after <see cref="Delay"/>. The default is 33 ms.</summary>
+    public TimeSpan Interval { get => GetValue(IntervalProperty); set => SetValue(IntervalProperty, value); }
+
+    private DispatcherTimer? _timer;
+
+    static RepeatButton()
+    {
+        ClickModeProperty.OverrideDefaultValue<RepeatButton>(ClickMode.Press);
     }
 
-    private static AnimationClock? _clock;
-    public static void SetGlobalAnimationClock(AnimationClock clock) => _clock = clock;
-
-    protected void StartAnimation(IAnimation animation)
+    /// <summary>Initializes a new, empty repeat button.</summary>
+    public RepeatButton()
     {
-        _clock?.Add(animation);
+    }
+
+    /// <summary>Initializes a new repeat button showing <paramref name="text"/>.</summary>
+    public RepeatButton(string text) : base(text)
+    {
+    }
+
+    private static bool IsPositive(TimeSpan value) => value > TimeSpan.Zero;
+
+    /// <inheritdoc/>
+    /// <remarks>Starts the repeat timer.</remarks>
+    protected override void OnPressStarted(Point position)
+    {
+        base.OnPressStarted(position);
+        if (_timer == null)
+        {
+            _timer = new DispatcherTimer();
+            _timer.Tick += OnTimerTick;
+        }
+
+        _timer.Stop();
+        _timer.Interval = Delay;
+        _timer.Start();
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>Stops the repeat timer.</remarks>
+    protected override void OnPressEnded()
+    {
+        _timer?.Stop();
+        base.OnPressEnded();
+    }
+
+    private void OnTimerTick(object? sender, EventArgs e)
+    {
+        if (!IsPressActive || !IsEnabled)
+        {
+            _timer?.Stop();
+            return;
+        }
+
+        var interval = Interval;
+        if (_timer!.Interval != interval)
+        {
+            _timer.Interval = interval;
+        }
+
+        OnClick();
     }
 }
