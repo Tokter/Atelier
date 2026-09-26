@@ -43,10 +43,14 @@ public class CheckBox : Control
     private static AnimationClock? _clock;
     public static void SetGlobalAnimationClock(AnimationClock clock) => _clock = clock;
 
+    static CheckBox()
+    {
+        PaddingProperty.OverrideDefaultValue<CheckBox>(new Thickness(8, 6));
+    }
+
     public CheckBox()
     {
         IsFocusable = true;
-        Padding = new Thickness(8, 6);
     }
 
     public CheckBox(string text) : this()

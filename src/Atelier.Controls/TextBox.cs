@@ -27,20 +27,20 @@ public class TextBox : Control
         BindableProperty.Register<TextBox, string>(
             nameof(Placeholder),
             string.Empty,
-            (s, o, n) => ((TextBox)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<bool> IsReadOnlyProperty =
         BindableProperty.Register<TextBox, bool>(nameof(IsReadOnly), false);
 
     public static readonly BindableProperty<float> CaretWidthProperty =
-        BindableProperty.Register<TextBox, float>(nameof(CaretWidth), 2f, (s, o, n) => ((TextBox)s).InvalidateVisual());
+        BindableProperty.Register<TextBox, float>(nameof(CaretWidth), 2f, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<TextBoxVariant> VariantProperty =
         BindableProperty.Register<TextBox, TextBoxVariant>(
             nameof(Variant),
             TextBoxVariant.Outlined,
-            (s, o, n) => ((TextBox)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<string> LabelProperty =
@@ -54,14 +54,14 @@ public class TextBox : Control
         BindableProperty.Register<TextBox, MaterialIconKind>(
             nameof(LeadingIconKind),
             MaterialIconKind.None,
-            (s, o, n) => { ((TextBox)s).InvalidateMeasure(); ((TextBox)s).InvalidateVisual(); }
+            options: PropertyOptions.AffectsMeasure | PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<string> SupportingTextProperty =
         BindableProperty.Register<TextBox, string>(
             nameof(SupportingText),
             string.Empty,
-            (s, o, n) => { ((TextBox)s).InvalidateMeasure(); ((TextBox)s).InvalidateVisual(); }
+            options: PropertyOptions.AffectsMeasure | PropertyOptions.AffectsRender
         );
 
     public string Text
@@ -155,11 +155,15 @@ public class TextBox : Control
     private ulong _lastClickTime = 0;
     private Point _lastClickPos = Point.Zero;
 
+    static TextBox()
+    {
+        PaddingProperty.OverrideDefaultValue<TextBox>(new Thickness(16, 8));
+        CornerRadiusProperty.OverrideDefaultValue<TextBox>(new CornerRadius(4));
+    }
+
     public TextBox()
     {
         IsFocusable = true;
-        Padding = new Thickness(16, 8);
-        CornerRadius = new CornerRadius(4);
     }
 
     public TextBox(string text) : this()

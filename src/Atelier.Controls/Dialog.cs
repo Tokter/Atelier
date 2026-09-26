@@ -56,21 +56,21 @@ public class Dialog : Control
         BindableProperty.Register<Dialog, float>(
             nameof(Elevation),
             6f,
-            (s, o, n) => ((Dialog)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<Color> BorderBrushProperty =
         BindableProperty.Register<Dialog, Color>(
             nameof(BorderBrush),
             Color.Transparent,
-            (s, o, n) => ((Dialog)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<Thickness> BorderThicknessProperty =
         BindableProperty.Register<Dialog, Thickness>(
             nameof(BorderThickness),
             Thickness.Zero,
-            (s, o, n) => ((Dialog)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     #endregion
@@ -138,13 +138,17 @@ public class Dialog : Control
     private TaskCompletionSource<DialogResponse>? _tcs;
     private DialogHost? _hostingHost;
 
+    static Dialog()
+    {
+        CornerRadiusProperty.OverrideDefaultValue<Dialog>(new CornerRadius(28)); // Material Design 3 dialog radius
+        PaddingProperty.OverrideDefaultValue<Dialog>(new Thickness(24));
+        MinWidthProperty.OverrideDefaultValue<Dialog>(280f);
+        MaxWidthProperty.OverrideDefaultValue<Dialog>(560f);
+    }
+
     public Dialog()
     {
         IsFocusable = true;
-        CornerRadius = new CornerRadius(28); // Material Design 3 dialog radius
-        Padding = new Thickness(24);
-        MinWidth = 280f;
-        MaxWidth = 560f;
 
         _titleBlock = new TextBlock
         {

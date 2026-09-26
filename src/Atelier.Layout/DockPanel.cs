@@ -16,10 +16,10 @@ public enum Dock
 public class DockPanel : Panel
 {
     public static readonly BindableProperty<Dock> DockProperty =
-        BindableProperty.RegisterAttached<DockPanel, UIElement, Dock>("Dock", Dock.Left, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
+        BindableProperty.RegisterAttached<DockPanel, UIElement, Dock>("Dock", Dock.Left, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<bool> LastChildFillProperty =
-        BindableProperty.Register<DockPanel, bool>(nameof(LastChildFill), true, (s, o, n) => ((DockPanel)s).InvalidateArrange());
+        BindableProperty.Register<DockPanel, bool>(nameof(LastChildFill), true, options: PropertyOptions.AffectsArrange);
 
     public static void SetDock(UIElement element, Dock value) => element.SetValue(DockProperty, value);
     public static Dock GetDock(UIElement element) => element.GetValue(DockProperty);

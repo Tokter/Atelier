@@ -15,21 +15,21 @@ public class Toolbar : ContentControl
         BindableProperty.Register<Toolbar, float>(
             nameof(Elevation),
             2f,
-            (s, o, n) => ((Toolbar)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<Color> BorderBrushProperty =
         BindableProperty.Register<Toolbar, Color>(
             nameof(BorderBrush),
             Color.Transparent,
-            (s, o, n) => ((Toolbar)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<Thickness> BorderThicknessProperty =
         BindableProperty.Register<Toolbar, Thickness>(
             nameof(BorderThickness),
             Thickness.Zero,
-            (s, o, n) => ((Toolbar)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     /// <summary>
@@ -59,9 +59,13 @@ public class Toolbar : ContentControl
         set => SetValue(BorderThicknessProperty, value);
     }
 
+    static Toolbar()
+    {
+        PaddingProperty.OverrideDefaultValue<Toolbar>(new Thickness(10, 8));
+    }
+
     public Toolbar()
     {
-        Padding = new Thickness(10, 8);
     }
 
     public Toolbar(object? content) : this()

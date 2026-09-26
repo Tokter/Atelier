@@ -19,7 +19,7 @@ public class Card : Border
         BindableProperty.Register<Card, CardVariant>(
             nameof(Variant),
             CardVariant.Outlined,
-            (s, o, n) => ((Card)s).InvalidateVisual());
+            options: PropertyOptions.AffectsRender);
 
     public CardVariant Variant
     {
@@ -27,11 +27,15 @@ public class Card : Border
         set => SetValue(VariantProperty, value);
     }
 
+    static Card()
+    {
+        CornerRadiusProperty.OverrideDefaultValue<Card>(new CornerRadius(12f));
+        PaddingProperty.OverrideDefaultValue<Card>(new Thickness(16f));
+        ClipToBoundsProperty.OverrideDefaultValue<Card>(true);
+    }
+
     public Card()
     {
-        CornerRadius = new CornerRadius(12f);
-        Padding = new Thickness(16f);
-        ClipToBounds = true;
     }
 
     public Card(CardVariant variant) : this()

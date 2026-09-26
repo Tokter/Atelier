@@ -23,6 +23,56 @@ public delegate void PropertyChangedCallback<T>(BindableObject sender, T oldValu
 public delegate T CoerceValueCallback<T>(BindableObject sender, T baseValue);
 
 /// <summary>
+/// Represents a callback that decides whether a value is acceptable for a <see cref="BindableProperty{T}"/>.
+/// Unlike coercion, a rejected value is not adjusted: the set operation throws an <see cref="ArgumentException"/>.
+/// </summary>
+/// <typeparam name="T">The type of the property value.</typeparam>
+/// <param name="value">The proposed value.</param>
+/// <returns><c>true</c> if the value is valid; otherwise, <c>false</c>.</returns>
+public delegate bool ValidateValueCallback<T>(T value);
+
+/// <summary>
+/// Declares side effects of a bindable property that the framework applies automatically whenever
+/// the property's effective value changes on a <see cref="Tree.UIElement"/>.
+/// </summary>
+[Flags]
+public enum PropertyOptions
+{
+    /// <summary>No automatic side effects.</summary>
+    None = 0,
+
+    /// <summary>A change invalidates the element's measure (and therefore also its arrange).</summary>
+    AffectsMeasure = 1,
+
+    /// <summary>A change invalidates the element's arrange.</summary>
+    AffectsArrange = 2,
+
+    /// <summary>A change requires the element to be redrawn.</summary>
+    AffectsRender = 4,
+}
+
+/// <summary>
+/// Identifies where the effective value of a bindable property comes from; see <see cref="BindableObject.GetValueSource(BindableProperty)"/>.
+/// </summary>
+public enum ValueSource
+{
+    /// <summary>The property's default value (possibly overridden for the object's type).</summary>
+    Default = 0,
+
+    /// <summary>A value inherited from an ancestor.</summary>
+    Inherited = 1,
+
+    /// <summary>A value applied by a style setter.</summary>
+    Style = 2,
+
+    /// <summary>A local value, set directly or written by a data binding.</summary>
+    Local = 3,
+
+    /// <summary>A value supplied by a running animation or transition.</summary>
+    Animation = 4,
+}
+
+/// <summary>
 /// Represents the definition and metadata of a bindable property in the Atelier property system.
 /// </summary>
 /// <remarks>
@@ -93,6 +143,17 @@ public abstract class BindableProperty
     public bool IsAttached { get; }
 
     /// <summary>
+    /// Gets a value indicating whether this property is read-only: it can only be set by code holding its
+    /// <see cref="BindablePropertyKey{T}"/> (see <see cref="RegisterReadOnly{TOwner, T}"/>).
+    /// </summary>
+    public bool IsReadOnly { get; }
+
+    /// <summary>
+    /// Gets the side effects applied automatically when this property's effective value changes.
+    /// </summary>
+    public PropertyOptions Options { get; }
+
+    /// <summary>
     /// The properties consulted, in order, on each ancestor when resolving an inherited value for this property:
     /// this property first, then same-named inheritable properties whose values are assignable to it.
     /// </summary>
@@ -113,8 +174,18 @@ public abstract class BindableProperty
     /// <param name="propertyType">The <see cref="Type"/> of values stored by this property.</param>
     /// <param name="inherits"><c>true</c> if the property's value should inherit down the tree; otherwise, <c>false</c>.</param>
     /// <param name="isAttached"><c>true</c> if this is an attached property.</param>
+    /// <param name="isReadOnly"><c>true</c> if this property can only be set through its <see cref="BindablePropertyKey{T}"/>.</param>
+    /// <param name="options">Side effects applied automatically when the effective value changes.</param>
     /// <exception cref="InvalidOperationException">A property with the same name is already registered on <paramref name="ownerType"/>.</exception>
-    private protected BindableProperty(string name, Type ownerType, Type targetType, Type propertyType, bool inherits, bool isAttached)
+    private protected BindableProperty(
+        string name,
+        Type ownerType,
+        Type targetType,
+        Type propertyType,
+        bool inherits,
+        bool isAttached,
+        bool isReadOnly,
+        PropertyOptions options)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(ownerType);
@@ -125,6 +196,8 @@ public abstract class BindableProperty
         PropertyType = propertyType;
         Inherits = inherits;
         IsAttached = isAttached;
+        IsReadOnly = isReadOnly;
+        Options = options;
         InheritanceSources = new[] { this };
         InheritanceDependents = new[] { this };
 
@@ -226,10 +299,13 @@ public abstract class BindableProperty
     internal static BindableProperty FromId(int id) => _byId[id]!;
 
     /// <summary>
-    /// Determines whether <paramref name="value"/> is of a type this property can store.
+    /// Determines whether <paramref name="value"/> can be stored by this property.
     /// </summary>
     /// <param name="value">The candidate value.</param>
-    /// <returns><c>true</c> if the value is an instance of <see cref="PropertyType"/>, or <c>null</c> for a nullable property type.</returns>
+    /// <returns>
+    /// <c>true</c> if the value is an instance of <see cref="PropertyType"/> (or <c>null</c> for a nullable property type)
+    /// and passes the property's <see cref="ValidateValueCallback{T}"/>, if any.
+    /// </returns>
     public abstract bool IsValidValue(object? value);
 
     /// <summary>
@@ -240,15 +316,34 @@ public abstract class BindableProperty
     {
         if (!IsValidValue(value))
         {
-            throw new ArgumentException(
-                $"Value '{value ?? "null"}' of type '{value?.GetType().FullName ?? "null"}' is not valid for property " +
-                $"'{OwnerType.Name}.{Name}' of type '{PropertyType.FullName}'.",
-                nameof(value));
+            throw InvalidValue(value);
+        }
+    }
+
+    private protected ArgumentException InvalidValue(object? value)
+    {
+        return new ArgumentException(
+            $"Value '{value ?? "null"}' of type '{value?.GetType().FullName ?? "null"}' is not valid for property " +
+            $"'{OwnerType.Name}.{Name}' of type '{PropertyType.FullName}'.",
+            nameof(value));
+    }
+
+    internal void ThrowIfReadOnly()
+    {
+        if (IsReadOnly)
+        {
+            throw new InvalidOperationException(
+                $"Property '{OwnerType.Name}.{Name}' is read-only and can only be set through its BindablePropertyKey.");
         }
     }
 
     internal abstract void InvokePropertyChangedUntyped(BindableObject sender, object? oldValue, object? newValue);
-    internal abstract object? GetDefaultValueUntyped();
+
+    /// <summary>
+    /// Gets the default value that applies to objects of <paramref name="objectType"/>, taking
+    /// <see cref="BindableProperty{T}.OverrideDefaultValue{TDerived}(T)"/> into account.
+    /// </summary>
+    internal abstract object? GetDefaultValueUntyped(Type objectType);
 
     /// <summary>
     /// Validates <paramref name="value"/> and applies the property's coercion callback, if any.
@@ -265,19 +360,59 @@ public abstract class BindableProperty
     /// <param name="name">The name of the bindable property (typically defined with <c>nameof(...)</c>).</param>
     /// <param name="defaultValue">The fallback default value returned when no local, styled, or inherited value is present.</param>
     /// <param name="propertyChanged">An optional callback invoked whenever the effective value of this property changes.</param>
-    /// <param name="coerceValue">An optional callback used to constrain or validate proposed values before they are assigned.</param>
+    /// <param name="coerceValue">An optional callback used to constrain proposed values before they are assigned.</param>
     /// <param name="inherits"><c>true</c> if this property should inherit values from ancestor objects down the tree; otherwise, <c>false</c>.</param>
+    /// <param name="options">Layout and rendering side effects applied automatically when the effective value changes.</param>
+    /// <param name="validateValue">An optional callback that rejects invalid values; setting a rejected value throws an <see cref="ArgumentException"/>.</param>
     /// <returns>A typed <see cref="BindableProperty{T}"/> descriptor representing the registered property.</returns>
     /// <exception cref="InvalidOperationException">A property with the same name is already registered on <typeparamref name="TOwner"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="defaultValue"/> is rejected by <paramref name="validateValue"/>.</exception>
     public static BindableProperty<T> Register<TOwner, T>(
         string name,
         T defaultValue = default!,
         PropertyChangedCallback<T>? propertyChanged = null,
         CoerceValueCallback<T>? coerceValue = null,
-        bool inherits = false)
+        bool inherits = false,
+        PropertyOptions options = PropertyOptions.None,
+        ValidateValueCallback<T>? validateValue = null)
         where TOwner : BindableObject
     {
-        return new BindableProperty<T>(name, typeof(TOwner), typeof(TOwner), defaultValue, propertyChanged, coerceValue, inherits, isAttached: false);
+        return new BindableProperty<T>(
+            name, typeof(TOwner), typeof(TOwner), defaultValue, propertyChanged, coerceValue, validateValue,
+            inherits, isAttached: false, isReadOnly: false, options);
+    }
+
+    /// <summary>
+    /// Registers a new read-only bindable property. The returned key is required to set the value, so keep it
+    /// private to the owner and expose only <see cref="BindablePropertyKey{T}.Property"/> publicly.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// private static readonly BindablePropertyKey&lt;bool&gt; IsHoveredPropertyKey =
+    ///     BindableProperty.RegisterReadOnly&lt;UIElement, bool&gt;(nameof(IsHovered), false);
+    /// public static readonly BindableProperty&lt;bool&gt; IsHoveredProperty = IsHoveredPropertyKey.Property;
+    /// </code>
+    /// </example>
+    /// <typeparam name="TOwner">The type of the owning class, which must inherit from <see cref="BindableObject"/>.</typeparam>
+    /// <typeparam name="T">The data type of the property value.</typeparam>
+    /// <param name="name">The name of the bindable property.</param>
+    /// <param name="defaultValue">The default value.</param>
+    /// <param name="propertyChanged">An optional callback invoked whenever the effective value of this property changes.</param>
+    /// <param name="inherits"><c>true</c> if this property should inherit values from ancestor objects down the tree.</param>
+    /// <param name="options">Layout and rendering side effects applied automatically when the effective value changes.</param>
+    /// <returns>The key granting write access to the new property.</returns>
+    public static BindablePropertyKey<T> RegisterReadOnly<TOwner, T>(
+        string name,
+        T defaultValue = default!,
+        PropertyChangedCallback<T>? propertyChanged = null,
+        bool inherits = false,
+        PropertyOptions options = PropertyOptions.None)
+        where TOwner : BindableObject
+    {
+        var property = new BindableProperty<T>(
+            name, typeof(TOwner), typeof(TOwner), defaultValue, propertyChanged, coerceValue: null, validateValue: null,
+            inherits, isAttached: false, isReadOnly: true, options);
+        return new BindablePropertyKey<T>(property);
     }
 
     /// <summary>
@@ -290,8 +425,10 @@ public abstract class BindableProperty
     /// <param name="name">The name of the attached property (e.g. <c>"Row"</c>).</param>
     /// <param name="defaultValue">The fallback default value returned when no local, styled, or inherited value is present.</param>
     /// <param name="propertyChanged">An optional callback invoked whenever the effective value of this property changes.</param>
-    /// <param name="coerceValue">An optional callback used to constrain or validate proposed values before they are assigned.</param>
+    /// <param name="coerceValue">An optional callback used to constrain proposed values before they are assigned.</param>
     /// <param name="inherits"><c>true</c> if this property should inherit values from ancestor objects down the tree; otherwise, <c>false</c>.</param>
+    /// <param name="options">Layout and rendering side effects applied to the target element when the effective value changes.</param>
+    /// <param name="validateValue">An optional callback that rejects invalid values.</param>
     /// <returns>A typed <see cref="BindableProperty{T}"/> descriptor representing the registered attached property.</returns>
     /// <exception cref="InvalidOperationException">A property with the same name is already registered on <typeparamref name="TOwner"/>.</exception>
     public static BindableProperty<T> RegisterAttached<TOwner, TTarget, T>(
@@ -299,24 +436,51 @@ public abstract class BindableProperty
         T defaultValue = default!,
         PropertyChangedCallback<T>? propertyChanged = null,
         CoerceValueCallback<T>? coerceValue = null,
-        bool inherits = false)
+        bool inherits = false,
+        PropertyOptions options = PropertyOptions.None,
+        ValidateValueCallback<T>? validateValue = null)
         where TTarget : BindableObject
     {
-        return new BindableProperty<T>(name, typeof(TOwner), typeof(TTarget), defaultValue, propertyChanged, coerceValue, inherits, isAttached: true);
+        return new BindableProperty<T>(
+            name, typeof(TOwner), typeof(TTarget), defaultValue, propertyChanged, coerceValue, validateValue,
+            inherits, isAttached: true, isReadOnly: false, options);
     }
 }
 
 /// <summary>
+/// Grants write access to a read-only <see cref="BindableProperty{T}"/> registered with
+/// <see cref="BindableProperty.RegisterReadOnly{TOwner, T}"/>.
+/// </summary>
+/// <typeparam name="T">The data type of the property value.</typeparam>
+public sealed class BindablePropertyKey<T>
+{
+    internal BindablePropertyKey(BindableProperty<T> property)
+    {
+        Property = property;
+    }
+
+    /// <summary>
+    /// Gets the read-only property this key unlocks. This is the identifier to expose publicly.
+    /// </summary>
+    public BindableProperty<T> Property { get; }
+}
+
+/// <summary>
 /// Represents a strongly-typed bindable property definition that carries type information,
-/// typed default values, and typed change and coercion callbacks.
+/// typed default values, and typed change, coercion and validation callbacks.
 /// </summary>
 /// <typeparam name="T">The data type of the property value.</typeparam>
 public sealed class BindableProperty<T> : BindableProperty
 {
     private static readonly bool _acceptsNull = !typeof(T).IsValueType || Nullable.GetUnderlyingType(typeof(T)) != null;
 
+    private readonly object _defaultOverridesLock = new();
+    private volatile Dictionary<Type, T>? _defaultOverrides;
+    private readonly ConcurrentDictionary<Type, T> _resolvedDefaults = new();
+
     /// <summary>
     /// Gets the strongly-typed default value returned when no local, styled, or inherited value is present.
+    /// Individual types may override it with <see cref="OverrideDefaultValue{TDerived}(T)"/>; see <see cref="GetDefaultValue(Type)"/>.
     /// </summary>
     public T DefaultValue { get; }
 
@@ -331,10 +495,15 @@ public sealed class BindableProperty<T> : BindableProperty
     /// or <c>null</c> if no coercion callback was registered.
     /// </summary>
     /// <remarks>
-    /// Coercion applies to local and styled values. Inherited and default values are not coerced.
+    /// Coercion applies to local and styled values. Inherited, default and animated values are not coerced.
     /// Use <see cref="BindableObject.CoerceValue(BindableProperty)"/> to re-run coercion when a value it depends on changes.
     /// </remarks>
     public CoerceValueCallback<T>? CoerceValue { get; }
+
+    /// <summary>
+    /// Gets the optional callback that rejects invalid values, or <c>null</c> if none was registered.
+    /// </summary>
+    public ValidateValueCallback<T>? ValidateValueCallback { get; }
 
     internal BindableProperty(
         string name,
@@ -343,17 +512,104 @@ public sealed class BindableProperty<T> : BindableProperty
         T defaultValue,
         PropertyChangedCallback<T>? propertyChanged,
         CoerceValueCallback<T>? coerceValue,
+        ValidateValueCallback<T>? validateValue,
         bool inherits,
-        bool isAttached)
-        : base(name, ownerType, targetType, typeof(T), inherits, isAttached)
+        bool isAttached,
+        bool isReadOnly,
+        PropertyOptions options)
+        : base(name, ownerType, targetType, typeof(T), inherits, isAttached, isReadOnly, options)
     {
+        if (validateValue != null && !validateValue(defaultValue))
+        {
+            throw new ArgumentException(
+                $"The default value '{defaultValue}' of property '{ownerType.Name}.{name}' is rejected by its validation callback.",
+                nameof(defaultValue));
+        }
+
         DefaultValue = defaultValue;
         PropertyChanged = propertyChanged;
         CoerceValue = coerceValue;
+        ValidateValueCallback = validateValue;
+    }
+
+    /// <summary>
+    /// Overrides the default value of this property for objects of type <typeparamref name="TDerived"/> and its subclasses.
+    /// </summary>
+    /// <remarks>
+    /// Prefer this over assigning the property in a control's constructor: a constructor assignment creates a
+    /// <em>local</em> value, which silently beats every style, while an overridden default sits at the bottom of
+    /// the precedence chain. Call it from the derived type's static constructor.
+    /// </remarks>
+    /// <typeparam name="TDerived">The type (and its subclasses) the new default applies to.</typeparam>
+    /// <param name="defaultValue">The default value for <typeparamref name="TDerived"/>.</param>
+    /// <exception cref="ArgumentException"><typeparamref name="TDerived"/> cannot carry this property, or the value is invalid.</exception>
+    public void OverrideDefaultValue<TDerived>(T defaultValue) where TDerived : BindableObject
+    {
+        if (!TargetType.IsAssignableFrom(typeof(TDerived)))
+        {
+            throw new ArgumentException(
+                $"'{typeof(TDerived).Name}' does not derive from '{TargetType.Name}', so it cannot override the default of '{OwnerType.Name}.{Name}'.");
+        }
+
+        if (!IsValidValue(defaultValue))
+        {
+            throw InvalidValue(defaultValue);
+        }
+
+        lock (_defaultOverridesLock)
+        {
+            var overrides = _defaultOverrides == null ? new Dictionary<Type, T>() : new Dictionary<Type, T>(_defaultOverrides);
+            overrides[typeof(TDerived)] = defaultValue;
+            _defaultOverrides = overrides;
+            _resolvedDefaults.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Gets the default value that applies to objects of <paramref name="objectType"/>: the closest override
+    /// registered with <see cref="OverrideDefaultValue{TDerived}(T)"/> on the type or a base type, else <see cref="DefaultValue"/>.
+    /// </summary>
+    /// <param name="objectType">The runtime type of the object.</param>
+    /// <returns>The applicable default value.</returns>
+    public T GetDefaultValue(Type objectType)
+    {
+        var overrides = _defaultOverrides;
+        if (overrides == null)
+        {
+            return DefaultValue;
+        }
+
+        return _resolvedDefaults.GetOrAdd(objectType, static (type, state) =>
+        {
+            for (Type? t = type; t != null; t = t.BaseType)
+            {
+                if (state.overrides.TryGetValue(t, out var value))
+                {
+                    return value;
+                }
+            }
+            return state.self.DefaultValue;
+        }, (overrides, self: this));
     }
 
     /// <inheritdoc/>
-    public override bool IsValidValue(object? value) => value is T || (value is null && _acceptsNull);
+    public override bool IsValidValue(object? value)
+    {
+        if (value is T typed)
+        {
+            return ValidateValueCallback == null || ValidateValueCallback(typed);
+        }
+
+        return value is null && _acceptsNull && (ValidateValueCallback == null || ValidateValueCallback(default!));
+    }
+
+    internal void ValidateTyped(T value)
+    {
+        if (ValidateValueCallback != null && !ValidateValueCallback(value))
+        {
+            throw InvalidValue(value);
+        }
+    }
 
     internal override bool HasCoercion => CoerceValue != null;
 
@@ -362,7 +618,7 @@ public sealed class BindableProperty<T> : BindableProperty
         PropertyChanged?.Invoke(sender, (T)oldValue!, (T)newValue!);
     }
 
-    internal override object? GetDefaultValueUntyped() => DefaultValue;
+    internal override object? GetDefaultValueUntyped(Type objectType) => GetDefaultValue(objectType);
 
     internal override object? CoerceUntyped(BindableObject sender, object? value)
     {

@@ -55,16 +55,16 @@ public class ColumnDefinition
 public class Grid : Panel
 {
     public static readonly BindableProperty<int> RowProperty =
-        BindableProperty.RegisterAttached<Grid, UIElement, int>("Row", 0, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
+        BindableProperty.RegisterAttached<Grid, UIElement, int>("Row", 0, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<int> ColumnProperty =
-        BindableProperty.RegisterAttached<Grid, UIElement, int>("Column", 0, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
+        BindableProperty.RegisterAttached<Grid, UIElement, int>("Column", 0, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<int> RowSpanProperty =
-        BindableProperty.RegisterAttached<Grid, UIElement, int>("RowSpan", 1, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
+        BindableProperty.RegisterAttached<Grid, UIElement, int>("RowSpan", 1, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<int> ColumnSpanProperty =
-        BindableProperty.RegisterAttached<Grid, UIElement, int>("ColumnSpan", 1, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
+        BindableProperty.RegisterAttached<Grid, UIElement, int>("ColumnSpan", 1, options: PropertyOptions.AffectsMeasure);
 
     public static void SetRow(UIElement element, int value) => element.SetValue(RowProperty, value);
     public static int GetRow(UIElement element) => element.GetValue(RowProperty);
@@ -79,10 +79,10 @@ public class Grid : Panel
     public static int GetColumnSpan(UIElement element) => element.GetValue(ColumnSpanProperty);
 
     public static readonly BindableProperty<float> RowSpacingProperty =
-        BindableProperty.Register<Grid, float>(nameof(RowSpacing), 0f, (s, o, n) => ((Grid)s).InvalidateMeasure());
+        BindableProperty.Register<Grid, float>(nameof(RowSpacing), 0f, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<float> ColumnSpacingProperty =
-        BindableProperty.Register<Grid, float>(nameof(ColumnSpacing), 0f, (s, o, n) => ((Grid)s).InvalidateMeasure());
+        BindableProperty.Register<Grid, float>(nameof(ColumnSpacing), 0f, options: PropertyOptions.AffectsMeasure);
 
     public float RowSpacing
     {

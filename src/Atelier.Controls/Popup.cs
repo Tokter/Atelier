@@ -45,10 +45,10 @@ public class Popup : Control
         BindableProperty.Register<Popup, bool>(nameof(MatchTargetWidth), false);
 
     public static readonly BindableProperty<Color> BorderBrushProperty =
-        BindableProperty.Register<Popup, Color>(nameof(BorderBrush), Color.Transparent, (s, o, n) => ((Popup)s).InvalidateVisual());
+        BindableProperty.Register<Popup, Color>(nameof(BorderBrush), Color.Transparent, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<Thickness> BorderThicknessProperty =
-        BindableProperty.Register<Popup, Thickness>(nameof(BorderThickness), Thickness.Zero, (s, o, n) => ((Popup)s).InvalidateVisual());
+        BindableProperty.Register<Popup, Thickness>(nameof(BorderThickness), Thickness.Zero, options: PropertyOptions.AffectsRender);
 
     public Color BorderBrush
     {
@@ -121,12 +121,16 @@ public class Popup : Control
     public event EventHandler? Opened;
     public event EventHandler? Closed;
 
+    static Popup()
+    {
+        CornerRadiusProperty.OverrideDefaultValue<Popup>(new CornerRadius(8));
+    }
+
     public Popup()
     {
         IsOverlayElement = true;
         Visibility = Visibility.Collapsed;
         IsHitTestVisible = false;
-        CornerRadius = new CornerRadius(8);
     }
 
     public override Point OverlayOrigin => ActualBounds.Location;

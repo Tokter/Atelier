@@ -26,14 +26,14 @@ public class TextBlock : UIElement
         BindableProperty.Register<TextBlock, string>(
             nameof(Text),
             string.Empty,
-            (s, o, n) => ((TextBlock)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     public static readonly BindableProperty<float> FontSizeProperty =
         BindableProperty.Register<TextBlock, float>(
             nameof(FontSize),
             14f,
-            (s, o, n) => ((TextBlock)s).InvalidateMeasure(),
+            options: PropertyOptions.AffectsMeasure,
             inherits: true
         );
 
@@ -41,7 +41,7 @@ public class TextBlock : UIElement
         BindableProperty.Register<TextBlock, Color>(
             nameof(Foreground),
             Color.Black,
-            (s, o, n) => ((TextBlock)s).InvalidateVisual(),
+            options: PropertyOptions.AffectsRender,
             inherits: true
         );
 
@@ -49,7 +49,7 @@ public class TextBlock : UIElement
         BindableProperty.Register<TextBlock, string?>(
             nameof(FontFamily),
             null,
-            (s, o, n) => ((TextBlock)s).InvalidateMeasure(),
+            options: PropertyOptions.AffectsMeasure,
             inherits: true
         );
 
@@ -57,35 +57,35 @@ public class TextBlock : UIElement
         BindableProperty.Register<TextBlock, TextAlignment>(
             nameof(TextAlignment),
             TextAlignment.Left,
-            (s, o, n) => ((TextBlock)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<TextWrapping> TextWrappingProperty =
         BindableProperty.Register<TextBlock, TextWrapping>(
             nameof(TextWrapping),
             TextWrapping.NoWrap,
-            (s, o, n) => ((TextBlock)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     public static readonly BindableProperty<bool> BoldProperty =
         BindableProperty.Register<TextBlock, bool>(
             nameof(Bold),
             false,
-            (s, o, n) => ((TextBlock)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     public static readonly BindableProperty<bool> ItalicProperty =
         BindableProperty.Register<TextBlock, bool>(
             nameof(Italic),
             false,
-            (s, o, n) => ((TextBlock)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     public static readonly BindableProperty<bool> MutedProperty =
         BindableProperty.Register<TextBlock, bool>(
             nameof(Muted),
             false,
-            (s, o, n) => ((TextBlock)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public string Text { get => GetValue(TextProperty); set => SetValue(TextProperty, value); }

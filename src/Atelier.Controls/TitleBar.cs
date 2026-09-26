@@ -11,7 +11,7 @@ namespace Atelier.Controls;
 public class TitleBarButton : Button
 {
     public static readonly BindableProperty<bool> IsCloseButtonProperty =
-        BindableProperty.Register<TitleBarButton, bool>(nameof(IsCloseButton), false, (s, o, n) => ((TitleBarButton)s).InvalidateVisual());
+        BindableProperty.Register<TitleBarButton, bool>(nameof(IsCloseButton), false, options: PropertyOptions.AffectsRender);
 
     public bool IsCloseButton
     {

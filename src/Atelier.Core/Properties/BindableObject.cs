@@ -26,6 +26,7 @@ namespace Atelier.Core.Properties;
 /// values are evaluated in the following priority order:
 /// </para>
 /// <list type="number">
+///   <item><term>0. Animated Value</term><description>Supplied by a running animation or transition via <see cref="SetAnimatedValue{T}(BindableProperty{T}, T)"/>. It overrides all other layers without replacing them, so clearing it restores the underlying value.</description></item>
 ///   <item><term>1. Local / Explicit Value</term><description>Directly set via <see cref="SetValue{T}(BindableProperty{T}, T)"/> or <see cref="SetValueUntyped(BindableProperty, object?)"/>. Data bindings also write to this layer, so a local set replaces a one-way bound value until the source changes again.</description></item>
 ///   <item><term>2. Styled Value</term><description>Applied by active themes, style setters, or triggers.</description></item>
 ///   <item><term>3. Inherited Value</term><description>Inherited from an ancestor in the visual/logical tree if <see cref="BindableProperty.Inherits"/> is <c>true</c>.</description></item>
@@ -41,6 +42,10 @@ public class BindableObject : INotifyPropertyChanged
     private readonly Dictionary<int, object?> _localValues = new();
     private readonly Dictionary<int, object?> _styleValues = new();
     private readonly Dictionary<int, IBindingSubscription> _bindings = new();
+
+    // Allocated on first use: most objects are never animated or observed per property.
+    private Dictionary<int, object?>? _animatedValues;
+    private Dictionary<int, List<PropertySubscription>>? _subscriptions;
 
     // Uncoerced values, kept only for entries where coercion changed the value, so CoerceValue() can re-evaluate them.
     private Dictionary<int, object?>? _localBaseValues;
@@ -119,7 +124,7 @@ public class BindableObject : INotifyPropertyChanged
             return (T)inherited!;
         }
 
-        return property.DefaultValue;
+        return property.GetDefaultValue(GetType());
     }
 
     /// <summary>
@@ -140,7 +145,21 @@ public class BindableObject : INotifyPropertyChanged
             return inherited;
         }
 
-        return property.GetDefaultValueUntyped();
+        return property.GetDefaultValueUntyped(GetType());
+    }
+
+    /// <summary>
+    /// Determines which layer of the precedence chain currently supplies the effective value of <paramref name="property"/>.
+    /// </summary>
+    /// <param name="property">The bindable property to inspect.</param>
+    /// <returns>The <see cref="ValueSource"/> of the effective value.</returns>
+    public ValueSource GetValueSource(BindableProperty property)
+    {
+        if (_animatedValues != null && _animatedValues.ContainsKey(property.Id)) return ValueSource.Animation;
+        if (_localValues.ContainsKey(property.Id)) return ValueSource.Local;
+        if (_styleValues.ContainsKey(property.Id)) return ValueSource.Style;
+        if (property.Inherits && TryGetInheritedValue(property, out _)) return ValueSource.Inherited;
+        return ValueSource.Default;
     }
 
     /// <summary>
@@ -160,8 +179,33 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="property">The strongly-typed bindable property to set.</param>
     /// <param name="value">The new value to set.</param>
     /// <returns><c>true</c> if the local value was updated; <c>false</c> if the local value was already equal to the coerced value.</returns>
+    /// <exception cref="InvalidOperationException">The property is read-only.</exception>
+    /// <exception cref="ArgumentException"><paramref name="value"/> is rejected by the property's validation callback.</exception>
     public bool SetValue<T>(BindableProperty<T> property, T value)
     {
+        property.ThrowIfReadOnly();
+        return SetValueTyped(property, value);
+    }
+
+    /// <summary>
+    /// Sets the local value of a read-only bindable property. Only code holding the property's key can call this.
+    /// </summary>
+    /// <typeparam name="T">The type of the property value.</typeparam>
+    /// <param name="key">The key returned by <see cref="BindableProperty.RegisterReadOnly{TOwner, T}"/>.</param>
+    /// <param name="value">The new value to set.</param>
+    /// <returns><c>true</c> if the local value was updated; otherwise, <c>false</c>.</returns>
+    public bool SetValue<T>(BindablePropertyKey<T> key, T value) => SetValueTyped(key.Property, value);
+
+    /// <summary>
+    /// Clears the local value of a read-only bindable property. Only code holding the property's key can call this.
+    /// </summary>
+    /// <typeparam name="T">The type of the property value.</typeparam>
+    /// <param name="key">The key returned by <see cref="BindableProperty.RegisterReadOnly{TOwner, T}"/>.</param>
+    public void ClearValue<T>(BindablePropertyKey<T> key) => ClearLocalValueCore(key.Property);
+
+    private bool SetValueTyped<T>(BindableProperty<T> property, T value)
+    {
+        property.ValidateTyped(value);
         object? coerced = property.CoerceValue != null ? property.CoerceValue(this, value) : value;
         return SetLocalValueCore(property, value, coerced);
     }
@@ -173,8 +217,10 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="value">The untyped value to set.</param>
     /// <returns><c>true</c> if the local value was updated; <c>false</c> if the local value was already equal to the coerced value.</returns>
     /// <exception cref="ArgumentException"><paramref name="value"/> is not valid for the property's type.</exception>
+    /// <exception cref="InvalidOperationException">The property is read-only.</exception>
     public bool SetValueUntyped(BindableProperty property, object? value)
     {
+        property.ThrowIfReadOnly();
         object? coerced = property.CoerceUntyped(this, value);
         return SetLocalValueCore(property, value, coerced);
     }
@@ -217,7 +263,14 @@ public class BindableObject : INotifyPropertyChanged
     /// </summary>
     /// <remarks>An active binding on the property is not removed; use <see cref="ClearBinding(BindableProperty)"/> for that.</remarks>
     /// <param name="property">The bindable property to clear.</param>
+    /// <exception cref="InvalidOperationException">The property is read-only.</exception>
     public void ClearValue(BindableProperty property)
+    {
+        property.ThrowIfReadOnly();
+        ClearLocalValueCore(property);
+    }
+
+    private void ClearLocalValueCore(BindableProperty property)
     {
         if (!_localValues.ContainsKey(property.Id))
         {
@@ -291,6 +344,109 @@ public class BindableObject : INotifyPropertyChanged
         else
         {
             (bases ??= new())[id] = baseValue;
+        }
+    }
+
+    /// <summary>
+    /// Sets an animated value, which takes precedence over local, styled, inherited and default values without replacing them.
+    /// </summary>
+    /// <remarks>
+    /// Use this from animations and transitions instead of <see cref="SetValue{T}(BindableProperty{T}, T)"/>: the element's own
+    /// value (for example an <c>Opacity</c> of 0.5 set by the app) is preserved and comes back when
+    /// <see cref="ClearAnimatedValue(BindableProperty)"/> is called. Animated values are validated but not coerced,
+    /// and they are not written back through data bindings. Read-only properties can be animated.
+    /// </remarks>
+    /// <typeparam name="T">The type of the property value.</typeparam>
+    /// <param name="property">The bindable property to animate.</param>
+    /// <param name="value">The current animated value.</param>
+    public void SetAnimatedValue<T>(BindableProperty<T> property, T value)
+    {
+        property.ValidateTyped(value);
+
+        if (_animatedValues != null && _animatedValues.TryGetValue(property.Id, out var current) && Equals(current, value))
+        {
+            return;
+        }
+
+        var change = BeginChange(property, captureDescendants: true);
+        (_animatedValues ??= new())[property.Id] = value;
+        EndChange(property, change);
+    }
+
+    /// <summary>
+    /// Removes the animated value of <paramref name="property"/>, so the effective value falls back to the
+    /// local, styled, inherited or default value underneath.
+    /// </summary>
+    /// <param name="property">The bindable property whose animation has finished.</param>
+    public void ClearAnimatedValue(BindableProperty property)
+    {
+        if (_animatedValues == null || !_animatedValues.ContainsKey(property.Id))
+        {
+            return;
+        }
+
+        var change = BeginChange(property, captureDescendants: true);
+        _animatedValues.Remove(property.Id);
+        EndChange(property, change);
+    }
+
+    /// <summary>
+    /// Subscribes to changes of the effective value of a single property on this object.
+    /// </summary>
+    /// <remarks>
+    /// The handler runs after the property's registration callback and before <see cref="PropertyChanged"/> is raised.
+    /// Prefer this over filtering <see cref="PropertyChanged"/> by name: it is typed, and it cannot confuse
+    /// same-named properties from different owners.
+    /// </remarks>
+    /// <typeparam name="T">The type of the property value.</typeparam>
+    /// <param name="property">The bindable property to observe.</param>
+    /// <param name="handler">The handler receiving the object, the old value and the new value.</param>
+    /// <returns>A token; dispose it to unsubscribe.</returns>
+    public IDisposable Subscribe<T>(BindableProperty<T> property, PropertyChangedCallback<T> handler)
+    {
+        ArgumentNullException.ThrowIfNull(handler);
+
+        var subscription = new PropertySubscription(this, property.Id, (sender, o, n) => handler(sender, (T)o!, (T)n!));
+        _subscriptions ??= new();
+        if (!_subscriptions.TryGetValue(property.Id, out var list))
+        {
+            _subscriptions[property.Id] = list = new List<PropertySubscription>();
+        }
+        list.Add(subscription);
+        return subscription;
+    }
+
+    private void Unsubscribe(PropertySubscription subscription)
+    {
+        if (_subscriptions != null && _subscriptions.TryGetValue(subscription.PropertyId, out var list))
+        {
+            list.Remove(subscription);
+            if (list.Count == 0)
+            {
+                _subscriptions.Remove(subscription.PropertyId);
+            }
+        }
+    }
+
+    private sealed class PropertySubscription : IDisposable
+    {
+        private BindableObject? _owner;
+
+        public PropertySubscription(BindableObject owner, int propertyId, Action<BindableObject, object?, object?> invoke)
+        {
+            _owner = owner;
+            PropertyId = propertyId;
+            Invoke = invoke;
+        }
+
+        public int PropertyId { get; }
+        public Action<BindableObject, object?, object?> Invoke { get; }
+        public bool IsDisposed => _owner == null;
+
+        public void Dispose()
+        {
+            _owner?.Unsubscribe(this);
+            _owner = null;
         }
     }
 
@@ -421,7 +577,33 @@ public class BindableObject : INotifyPropertyChanged
     private void RaiseEffectiveValueChanged(BindableProperty property, object? oldValue, object? newValue)
     {
         property.InvokePropertyChangedUntyped(this, oldValue, newValue);
+        OnPropertyValueChanged(property, oldValue, newValue);
+
+        if (_subscriptions != null && _subscriptions.TryGetValue(property.Id, out var list))
+        {
+            // Copy so handlers may subscribe or unsubscribe while being notified.
+            foreach (var subscription in list.ToArray())
+            {
+                if (!subscription.IsDisposed)
+                {
+                    subscription.Invoke(this, oldValue, newValue);
+                }
+            }
+        }
+
         OnPropertyChanged(property.Name);
+    }
+
+    /// <summary>
+    /// Invoked whenever the effective value of any bindable property on this object changes, after the property's
+    /// registration callback and before per-property subscribers and <see cref="PropertyChanged"/>.
+    /// </summary>
+    /// <remarks>Derived classes use this to apply cross-cutting behavior such as <see cref="PropertyOptions"/>.</remarks>
+    /// <param name="property">The property whose effective value changed.</param>
+    /// <param name="oldValue">The previous effective value.</param>
+    /// <param name="newValue">The new effective value.</param>
+    protected virtual void OnPropertyValueChanged(BindableProperty property, object? oldValue, object? newValue)
+    {
     }
 
     /// <summary>
@@ -492,10 +674,13 @@ public class BindableObject : INotifyPropertyChanged
 
     private bool TryGetOwnValue(int id, out object? value)
     {
-        return _localValues.TryGetValue(id, out value) || _styleValues.TryGetValue(id, out value);
+        return (_animatedValues != null && _animatedValues.TryGetValue(id, out value))
+            || _localValues.TryGetValue(id, out value)
+            || _styleValues.TryGetValue(id, out value);
     }
 
-    private bool HasOwnValue(int id) => _localValues.ContainsKey(id) || _styleValues.ContainsKey(id);
+    private bool HasOwnValue(int id) =>
+        (_animatedValues != null && _animatedValues.ContainsKey(id)) || _localValues.ContainsKey(id) || _styleValues.ContainsKey(id);
 
     private bool HasOwnValueForAny(BindableProperty[] properties)
     {
@@ -565,6 +750,8 @@ public class BindableObject : INotifyPropertyChanged
         UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
         where TSource : class
     {
+        property.ThrowIfReadOnly();
+
         if (_bindings.Remove(property.Id, out var existing))
         {
             existing.Dispose();
@@ -599,6 +786,8 @@ public class BindableObject : INotifyPropertyChanged
         UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
         where TDataContext : class
     {
+        property.ThrowIfReadOnly();
+
         if (_bindings.Remove(property.Id, out var existing))
         {
             existing.Dispose();
@@ -904,6 +1093,7 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
     private readonly Func<TDataContext, TTarget> _getter;
     private readonly Action<TDataContext, TTarget>? _setter;
     private readonly UpdateSourceTrigger _updateSourceTrigger;
+    private readonly IDisposable _dataContextSubscription;
     private INotifyPropertyChanged? _currentInpc;
     private object? _pendingValue;
     private bool _hasPendingValue;
@@ -934,7 +1124,7 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
         _setter = setter;
         _updateSourceTrigger = updateSourceTrigger;
 
-        target.PropertyChanged += OnTargetPropertyChangedInternal;
+        _dataContextSubscription = target.Subscribe(BindableObject.DataContextProperty, OnTargetDataContextChanged);
         if (target is Tree.UIElement uie && _updateSourceTrigger == UpdateSourceTrigger.LostFocus)
         {
             uie.LostFocus += OnTargetLostFocus;
@@ -953,16 +1143,10 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
         }
     }
 
-    private void OnTargetPropertyChangedInternal(object? sender, PropertyChangedEventArgs e)
+    private void OnTargetDataContextChanged(BindableObject sender, object? oldValue, object? newValue)
     {
-        if (e.PropertyName == nameof(BindableObject.DataContext))
-        {
-            if (_targetRef.TryGetTarget(out var target))
-            {
-                HookDataContext(target.DataContext);
-                UpdateTarget();
-            }
-        }
+        HookDataContext(newValue);
+        UpdateTarget();
     }
 
     private void HookDataContext(object? dataContext)
@@ -1094,9 +1278,10 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
     /// </summary>
     public void Dispose()
     {
+        _dataContextSubscription.Dispose();
+
         if (_targetRef.TryGetTarget(out var target))
         {
-            target.PropertyChanged -= OnTargetPropertyChangedInternal;
             if (target is Tree.UIElement uie)
             {
                 uie.LostFocus -= OnTargetLostFocus;

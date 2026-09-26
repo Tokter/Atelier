@@ -13,43 +13,43 @@ public abstract class UIElement : VisualNode
     #region Bindable Properties
 
     public static readonly BindableProperty<float> WidthProperty =
-        BindableProperty.Register<UIElement, float>(nameof(Width), float.NaN, (s, o, n) => ((UIElement)s).InvalidateMeasure());
+        BindableProperty.Register<UIElement, float>(nameof(Width), float.NaN, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<float> HeightProperty =
-        BindableProperty.Register<UIElement, float>(nameof(Height), float.NaN, (s, o, n) => ((UIElement)s).InvalidateMeasure());
+        BindableProperty.Register<UIElement, float>(nameof(Height), float.NaN, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<float> MinWidthProperty =
-        BindableProperty.Register<UIElement, float>(nameof(MinWidth), 0f, (s, o, n) => ((UIElement)s).InvalidateMeasure());
+        BindableProperty.Register<UIElement, float>(nameof(MinWidth), 0f, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<float> MaxWidthProperty =
-        BindableProperty.Register<UIElement, float>(nameof(MaxWidth), float.PositiveInfinity, (s, o, n) => ((UIElement)s).InvalidateMeasure());
+        BindableProperty.Register<UIElement, float>(nameof(MaxWidth), float.PositiveInfinity, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<float> MinHeightProperty =
-        BindableProperty.Register<UIElement, float>(nameof(MinHeight), 0f, (s, o, n) => ((UIElement)s).InvalidateMeasure());
+        BindableProperty.Register<UIElement, float>(nameof(MinHeight), 0f, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<float> MaxHeightProperty =
-        BindableProperty.Register<UIElement, float>(nameof(MaxHeight), float.PositiveInfinity, (s, o, n) => ((UIElement)s).InvalidateMeasure());
+        BindableProperty.Register<UIElement, float>(nameof(MaxHeight), float.PositiveInfinity, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<Thickness> MarginProperty =
-        BindableProperty.Register<UIElement, Thickness>(nameof(Margin), Thickness.Zero, (s, o, n) => ((UIElement)s).InvalidateMeasure());
+        BindableProperty.Register<UIElement, Thickness>(nameof(Margin), Thickness.Zero, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<HorizontalAlignment> HorizontalAlignmentProperty =
-        BindableProperty.Register<UIElement, HorizontalAlignment>(nameof(HorizontalAlignment), HorizontalAlignment.Stretch, (s, o, n) => ((UIElement)s).InvalidateArrange());
+        BindableProperty.Register<UIElement, HorizontalAlignment>(nameof(HorizontalAlignment), HorizontalAlignment.Stretch, options: PropertyOptions.AffectsArrange);
 
     public static readonly BindableProperty<VerticalAlignment> VerticalAlignmentProperty =
-        BindableProperty.Register<UIElement, VerticalAlignment>(nameof(VerticalAlignment), VerticalAlignment.Stretch, (s, o, n) => ((UIElement)s).InvalidateArrange());
+        BindableProperty.Register<UIElement, VerticalAlignment>(nameof(VerticalAlignment), VerticalAlignment.Stretch, options: PropertyOptions.AffectsArrange);
 
     public static readonly BindableProperty<Visibility> VisibilityProperty =
-        BindableProperty.Register<UIElement, Visibility>(nameof(Visibility), Visibility.Visible, (s, o, n) => ((UIElement)s).InvalidateMeasure());
+        BindableProperty.Register<UIElement, Visibility>(nameof(Visibility), Visibility.Visible, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<float> OpacityProperty =
-        BindableProperty.Register<UIElement, float>(nameof(Opacity), 1.0f, (s, o, n) => ((UIElement)s).InvalidateVisual());
+        BindableProperty.Register<UIElement, float>(nameof(Opacity), 1.0f, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<bool> IsEnabledProperty =
-        BindableProperty.Register<UIElement, bool>(nameof(IsEnabled), true, (s, o, n) => ((UIElement)s).InvalidateVisual(), inherits: true);
+        BindableProperty.Register<UIElement, bool>(nameof(IsEnabled), true, options: PropertyOptions.AffectsRender, inherits: true);
 
     public static readonly BindableProperty<bool> ClipToBoundsProperty =
-        BindableProperty.Register<UIElement, bool>(nameof(ClipToBounds), false, (s, o, n) => ((UIElement)s).InvalidateVisual());
+        BindableProperty.Register<UIElement, bool>(nameof(ClipToBounds), false, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<string?> StyleKeyProperty =
         BindableProperty.Register<UIElement, string?>(
@@ -209,6 +209,31 @@ public abstract class UIElement : VisualNode
         return null;
     }
 
+    protected override void OnPropertyValueChanged(BindableProperty property, object? oldValue, object? newValue)
+    {
+        base.OnPropertyValueChanged(property, oldValue, newValue);
+
+        var options = property.Options;
+        if (options == PropertyOptions.None)
+        {
+            return;
+        }
+
+        if ((options & PropertyOptions.AffectsMeasure) != 0)
+        {
+            InvalidateMeasure();
+        }
+        else if ((options & PropertyOptions.AffectsArrange) != 0)
+        {
+            InvalidateArrange();
+        }
+
+        if ((options & PropertyOptions.AffectsRender) != 0)
+        {
+            InvalidateVisual();
+        }
+    }
+
     internal override void OnInheritanceParentChanged(BindableObject? oldParent, BindableObject? newParent)
     {
         base.OnInheritanceParentChanged(oldParent, newParent);
@@ -236,9 +261,23 @@ public abstract class UIElement : VisualNode
     public bool IsMeasureValid { get; private set; }
     public bool IsArrangeValid { get; private set; }
 
-    public bool IsHovered { get; internal set; }
-    public bool IsPressed { get; internal set; }
-    public bool IsFocused { get; internal set; }
+    private static readonly BindablePropertyKey<bool> IsHoveredPropertyKey =
+        BindableProperty.RegisterReadOnly<UIElement, bool>(nameof(IsHovered), false);
+    private static readonly BindablePropertyKey<bool> IsPressedPropertyKey =
+        BindableProperty.RegisterReadOnly<UIElement, bool>(nameof(IsPressed), false);
+    private static readonly BindablePropertyKey<bool> IsFocusedPropertyKey =
+        BindableProperty.RegisterReadOnly<UIElement, bool>(nameof(IsFocused), false);
+
+    /// <summary>Identifies the read-only <see cref="IsHovered"/> property.</summary>
+    public static readonly BindableProperty<bool> IsHoveredProperty = IsHoveredPropertyKey.Property;
+    /// <summary>Identifies the read-only <see cref="IsPressed"/> property.</summary>
+    public static readonly BindableProperty<bool> IsPressedProperty = IsPressedPropertyKey.Property;
+    /// <summary>Identifies the read-only <see cref="IsFocused"/> property.</summary>
+    public static readonly BindableProperty<bool> IsFocusedProperty = IsFocusedPropertyKey.Property;
+
+    public bool IsHovered { get => GetValue(IsHoveredProperty); internal set => SetValue(IsHoveredPropertyKey, value); }
+    public bool IsPressed { get => GetValue(IsPressedProperty); internal set => SetValue(IsPressedPropertyKey, value); }
+    public bool IsFocused { get => GetValue(IsFocusedProperty); internal set => SetValue(IsFocusedPropertyKey, value); }
     public bool IsFocusable { get; set; } = false;
     public bool IsHitTestVisible { get; set; } = true;
     public bool IsOverlayElement { get; protected set; } = false;

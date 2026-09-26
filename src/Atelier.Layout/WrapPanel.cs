@@ -16,35 +16,35 @@ public class WrapPanel : Panel
         BindableProperty.Register<WrapPanel, Orientation>(
             nameof(Orientation),
             Orientation.Horizontal,
-            (s, o, n) => ((WrapPanel)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     public static readonly BindableProperty<float> ItemWidthProperty =
         BindableProperty.Register<WrapPanel, float>(
             nameof(ItemWidth),
             float.NaN,
-            (s, o, n) => ((WrapPanel)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     public static readonly BindableProperty<float> ItemHeightProperty =
         BindableProperty.Register<WrapPanel, float>(
             nameof(ItemHeight),
             float.NaN,
-            (s, o, n) => ((WrapPanel)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     public static readonly BindableProperty<float> HorizontalSpacingProperty =
         BindableProperty.Register<WrapPanel, float>(
             nameof(HorizontalSpacing),
             0f,
-            (s, o, n) => ((WrapPanel)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     public static readonly BindableProperty<float> VerticalSpacingProperty =
         BindableProperty.Register<WrapPanel, float>(
             nameof(VerticalSpacing),
             0f,
-            (s, o, n) => ((WrapPanel)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     public Orientation Orientation

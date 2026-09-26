@@ -47,14 +47,14 @@ public class ScrollViewer : ContentControl
         BindableProperty.Register<ScrollViewer, ScrollBarVisibility>(
             nameof(HorizontalScrollBarVisibility),
             ScrollBarVisibility.Disabled,
-            (s, o, n) => ((ScrollViewer)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     public static readonly BindableProperty<ScrollBarVisibility> VerticalScrollBarVisibilityProperty =
         BindableProperty.Register<ScrollViewer, ScrollBarVisibility>(
             nameof(VerticalScrollBarVisibility),
             ScrollBarVisibility.Auto,
-            (s, o, n) => ((ScrollViewer)s).InvalidateMeasure()
+            options: PropertyOptions.AffectsMeasure
         );
 
     public float ScrollOffsetX
@@ -131,9 +131,13 @@ public class ScrollViewer : ContentControl
     private float _dragStartMousePos;
     private float _dragStartScrollOffset;
 
+    static ScrollViewer()
+    {
+        ClipToBoundsProperty.OverrideDefaultValue<ScrollViewer>(true);
+    }
+
     public ScrollViewer()
     {
-        ClipToBounds = true;
     }
 
     private void AnimateVerticalScrollBarWidth(float targetWidth)

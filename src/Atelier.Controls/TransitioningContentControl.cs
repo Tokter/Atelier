@@ -75,10 +75,14 @@ public class TransitioningContentControl : ContentControl
     private IAnimation? _activeAnimation;
     private ITransition? _activeTransition;
 
+    static TransitioningContentControl()
+    {
+        ClipToBoundsProperty.OverrideDefaultValue<TransitioningContentControl>(true);
+    }
+
     public TransitioningContentControl()
     {
         // Clip children by default so sliding or zooming visuals do not spill outside bounds
-        ClipToBounds = true;
     }
 
     public TransitioningContentControl(object? content) : this()

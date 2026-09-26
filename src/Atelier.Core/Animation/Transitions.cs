@@ -23,12 +23,12 @@ public class FadeTransition : TransitionBase
     {
         if (from != null)
         {
-            from.Opacity = Math.Clamp(1.0f - progress, 0.0f, 1.0f);
+            from.SetAnimatedValue(UIElement.OpacityProperty, Math.Clamp(1.0f - progress, 0.0f, 1.0f));
         }
 
         if (to != null)
         {
-            to.Opacity = Math.Clamp(progress, 0.0f, 1.0f);
+            to.SetAnimatedValue(UIElement.OpacityProperty, Math.Clamp(progress, 0.0f, 1.0f));
         }
     }
 }
@@ -103,12 +103,12 @@ public class SlideTransition : TransitionBase
 
         if (from != null)
         {
-            from.RenderTransform = Matrix3x2.CreateTranslation(fromX, fromY);
+            from.SetAnimatedValue(VisualNode.RenderTransformProperty, Matrix3x2.CreateTranslation(fromX, fromY));
         }
 
         if (to != null)
         {
-            to.RenderTransform = Matrix3x2.CreateTranslation(toX, toY);
+            to.SetAnimatedValue(VisualNode.RenderTransformProperty, Matrix3x2.CreateTranslation(toX, toY));
         }
     }
 }
@@ -165,16 +165,16 @@ public class ZoomTransition : TransitionBase
 
         if (from != null)
         {
-            from.RenderTransformOrigin = new Point(0.5f, 0.5f);
-            from.RenderTransform = Matrix3x2.CreateScale(fromScale);
-            from.Opacity = Math.Clamp(1.0f - progress, 0.0f, 1.0f);
+            from.SetAnimatedValue(VisualNode.RenderTransformOriginProperty, new Point(0.5f, 0.5f));
+            from.SetAnimatedValue(VisualNode.RenderTransformProperty, Matrix3x2.CreateScale(fromScale));
+            from.SetAnimatedValue(UIElement.OpacityProperty, Math.Clamp(1.0f - progress, 0.0f, 1.0f));
         }
 
         if (to != null)
         {
-            to.RenderTransformOrigin = new Point(0.5f, 0.5f);
-            to.RenderTransform = Matrix3x2.CreateScale(toScale);
-            to.Opacity = Math.Clamp(progress, 0.0f, 1.0f);
+            to.SetAnimatedValue(VisualNode.RenderTransformOriginProperty, new Point(0.5f, 0.5f));
+            to.SetAnimatedValue(VisualNode.RenderTransformProperty, Matrix3x2.CreateScale(toScale));
+            to.SetAnimatedValue(UIElement.OpacityProperty, Math.Clamp(progress, 0.0f, 1.0f));
         }
     }
 }
@@ -237,14 +237,14 @@ public class SlideFadeTransition : TransitionBase
 
         if (from != null)
         {
-            from.RenderTransform = Matrix3x2.CreateTranslation(fromX, fromY);
-            from.Opacity = Math.Clamp(1.0f - progress, 0.0f, 1.0f);
+            from.SetAnimatedValue(VisualNode.RenderTransformProperty, Matrix3x2.CreateTranslation(fromX, fromY));
+            from.SetAnimatedValue(UIElement.OpacityProperty, Math.Clamp(1.0f - progress, 0.0f, 1.0f));
         }
 
         if (to != null)
         {
-            to.RenderTransform = Matrix3x2.CreateTranslation(toX, toY);
-            to.Opacity = Math.Clamp(progress, 0.0f, 1.0f);
+            to.SetAnimatedValue(VisualNode.RenderTransformProperty, Matrix3x2.CreateTranslation(toX, toY));
+            to.SetAnimatedValue(UIElement.OpacityProperty, Math.Clamp(progress, 0.0f, 1.0f));
         }
     }
 }

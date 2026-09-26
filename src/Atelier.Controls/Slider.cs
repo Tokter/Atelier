@@ -10,10 +10,10 @@ namespace Atelier.Controls;
 public class Slider : Control
 {
     public static readonly BindableProperty<float> MinimumProperty =
-        BindableProperty.Register<Slider, float>(nameof(Minimum), 0f, (s, o, n) => ((Slider)s).InvalidateVisual());
+        BindableProperty.Register<Slider, float>(nameof(Minimum), 0f, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<float> MaximumProperty =
-        BindableProperty.Register<Slider, float>(nameof(Maximum), 100f, (s, o, n) => ((Slider)s).InvalidateVisual());
+        BindableProperty.Register<Slider, float>(nameof(Maximum), 100f, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<float> ValueProperty =
         BindableProperty.Register<Slider, float>(
@@ -31,14 +31,14 @@ public class Slider : Control
         BindableProperty.Register<Slider, bool>(
             nameof(ShowValueIndicator),
             true,
-            (s, o, n) => ((Slider)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<string> ValueFormatProperty =
         BindableProperty.Register<Slider, string>(
             nameof(ValueFormat),
             "{0:0}",
-            (s, o, n) => ((Slider)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public float Minimum { get => GetValue(MinimumProperty); set => SetValue(MinimumProperty, value); }
@@ -262,16 +262,16 @@ public class Slider : Control
 public class ProgressBar : Control
 {
     public static readonly BindableProperty<float> MinimumProperty =
-        BindableProperty.Register<ProgressBar, float>(nameof(Minimum), 0f, (s, o, n) => ((ProgressBar)s).InvalidateVisual());
+        BindableProperty.Register<ProgressBar, float>(nameof(Minimum), 0f, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<float> MaximumProperty =
-        BindableProperty.Register<ProgressBar, float>(nameof(Maximum), 100f, (s, o, n) => ((ProgressBar)s).InvalidateVisual());
+        BindableProperty.Register<ProgressBar, float>(nameof(Maximum), 100f, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<float> ValueProperty =
-        BindableProperty.Register<ProgressBar, float>(nameof(Value), 0f, (s, o, n) => ((ProgressBar)s).InvalidateVisual());
+        BindableProperty.Register<ProgressBar, float>(nameof(Value), 0f, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<bool> IsIndeterminateProperty =
-        BindableProperty.Register<ProgressBar, bool>(nameof(IsIndeterminate), false, (s, o, n) => ((ProgressBar)s).InvalidateVisual());
+        BindableProperty.Register<ProgressBar, bool>(nameof(IsIndeterminate), false, options: PropertyOptions.AffectsRender);
 
     public float Minimum { get => GetValue(MinimumProperty); set => SetValue(MinimumProperty, value); }
     public float Maximum { get => GetValue(MaximumProperty); set => SetValue(MaximumProperty, value); }

@@ -37,7 +37,7 @@ public class ComboBox : Control
         BindableProperty.Register<ComboBox, string>(
             nameof(Placeholder),
             "Select an option...",
-            (s, o, n) => ((ComboBox)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<bool> IsDropDownOpenProperty =
@@ -114,11 +114,15 @@ public class ComboBox : Control
     private UIElement? _selectionDisplayElement;
     private bool _isSynchronizingSelection;
 
+    static ComboBox()
+    {
+        PaddingProperty.OverrideDefaultValue<ComboBox>(new Thickness(14, 10));
+        CornerRadiusProperty.OverrideDefaultValue<ComboBox>(new CornerRadius(4));
+    }
+
     public ComboBox()
     {
         IsFocusable = true;
-        Padding = new Thickness(14, 10);
-        CornerRadius = new CornerRadius(4);
 
         // Internal ListBox for popup dropdown
         _listBox = new ListBox

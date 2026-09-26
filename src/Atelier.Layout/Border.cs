@@ -8,22 +8,22 @@ namespace Atelier.Layout;
 public class Border : UIElement
 {
     public static readonly BindableProperty<Color> BackgroundProperty =
-        BindableProperty.Register<Border, Color>(nameof(Background), Color.Transparent, (s, o, n) => ((Border)s).InvalidateVisual());
+        BindableProperty.Register<Border, Color>(nameof(Background), Color.Transparent, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<Color> BorderBrushProperty =
-        BindableProperty.Register<Border, Color>(nameof(BorderBrush), Color.Transparent, (s, o, n) => ((Border)s).InvalidateVisual());
+        BindableProperty.Register<Border, Color>(nameof(BorderBrush), Color.Transparent, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<Thickness> BorderThicknessProperty =
-        BindableProperty.Register<Border, Thickness>(nameof(BorderThickness), Thickness.Zero, (s, o, n) => ((Border)s).InvalidateMeasure());
+        BindableProperty.Register<Border, Thickness>(nameof(BorderThickness), Thickness.Zero, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<CornerRadius> CornerRadiusProperty =
-        BindableProperty.Register<Border, CornerRadius>(nameof(CornerRadius), CornerRadius.Zero, (s, o, n) => ((Border)s).InvalidateVisual());
+        BindableProperty.Register<Border, CornerRadius>(nameof(CornerRadius), CornerRadius.Zero, options: PropertyOptions.AffectsRender);
 
     public static readonly BindableProperty<Thickness> PaddingProperty =
-        BindableProperty.Register<Border, Thickness>(nameof(Padding), Thickness.Zero, (s, o, n) => ((Border)s).InvalidateMeasure());
+        BindableProperty.Register<Border, Thickness>(nameof(Padding), Thickness.Zero, options: PropertyOptions.AffectsMeasure);
 
     public static readonly BindableProperty<float> ElevationProperty =
-        BindableProperty.Register<Border, float>(nameof(Elevation), 0f, (s, o, n) => ((Border)s).InvalidateVisual());
+        BindableProperty.Register<Border, float>(nameof(Elevation), 0f, options: PropertyOptions.AffectsRender);
 
     public Color Background { get => GetValue(BackgroundProperty); set => SetValue(BackgroundProperty, value); }
     public Color BorderBrush { get => GetValue(BorderBrushProperty); set => SetValue(BorderBrushProperty, value); }

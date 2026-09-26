@@ -42,7 +42,7 @@ public class Icon : Control
         BindableProperty.Register<Icon, float>(
             nameof(StrokeWidth),
             0f,
-            (s, o, n) => ((Icon)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<float> SizeProperty =
@@ -56,28 +56,28 @@ public class Icon : Control
         BindableProperty.Register<Icon, float>(
             nameof(Fill),
             0f,
-            (s, o, n) => ((Icon)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<float> WeightProperty =
         BindableProperty.Register<Icon, float>(
             nameof(Weight),
             400f,
-            (s, o, n) => ((Icon)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<float> GradeProperty =
         BindableProperty.Register<Icon, float>(
             nameof(Grade),
             0f,
-            (s, o, n) => ((Icon)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<float> OpticalSizeProperty =
         BindableProperty.Register<Icon, float>(
             nameof(OpticalSize),
             24f,
-            (s, o, n) => ((Icon)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     #endregion

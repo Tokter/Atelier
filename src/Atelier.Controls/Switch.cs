@@ -27,7 +27,7 @@ public class Switch : Control
         BindableProperty.Register<Switch, bool>(
             nameof(ShowThumbIcon),
             false,
-            (s, o, n) => ((Switch)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public bool IsChecked
@@ -55,10 +55,14 @@ public class Switch : Control
     private static AnimationClock? _clock;
     public static void SetGlobalAnimationClock(AnimationClock? clock) => _clock = clock;
 
+    static Switch()
+    {
+        PaddingProperty.OverrideDefaultValue<Switch>(new Thickness(0, 4));
+    }
+
     public Switch()
     {
         IsFocusable = true;
-        Padding = new Thickness(0, 4);
     }
 
     public Switch(string text) : this()

@@ -25,7 +25,7 @@ public class Image : Control
         BindableProperty.Register<Image, Stretch>(
             nameof(Stretch),
             Stretch.Uniform,
-            (s, o, n) => ((Image)s).InvalidateVisual());
+            options: PropertyOptions.AffectsRender);
 
     public SKImage? Source
     {

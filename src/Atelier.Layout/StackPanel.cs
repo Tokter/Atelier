@@ -38,14 +38,14 @@ public class StackPanel : Panel
         Core.Properties.BindableProperty.Register<StackPanel, Orientation>(
             nameof(Orientation),
             Orientation.Vertical,
-            (s, o, n) => ((StackPanel)s).InvalidateMeasure()
+            options: Core.Properties.PropertyOptions.AffectsMeasure
         );
 
     public static readonly Core.Properties.BindableProperty<float> SpacingProperty =
         Core.Properties.BindableProperty.Register<StackPanel, float>(
             nameof(Spacing),
             0f,
-            (s, o, n) => ((StackPanel)s).InvalidateMeasure()
+            options: Core.Properties.PropertyOptions.AffectsMeasure
         );
 
     public Orientation Orientation

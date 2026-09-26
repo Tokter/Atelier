@@ -14,6 +14,7 @@ public class Setter
     public Setter(BindableProperty property, object? value)
     {
         Property = property ?? throw new ArgumentNullException(nameof(property));
+        property.ThrowIfReadOnly();
         property.ValidateValue(value);
         Value = value;
     }

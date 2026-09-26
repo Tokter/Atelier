@@ -32,6 +32,10 @@ public interface ITransition
     /// <summary>
     /// Restores any modified element properties (such as Opacity or RenderTransform) to their clean baseline states.
     /// </summary>
+    /// <remarks>
+    /// Transitions should write through <see cref="Properties.BindableObject.SetAnimatedValue{T}(Properties.BindableProperty{T}, T)"/>
+    /// so that resetting only has to clear the animation layer, which restores whatever value the element had before.
+    /// </remarks>
     /// <param name="from">The outgoing element, if any.</param>
     /// <param name="to">The incoming element, if any.</param>
     void Reset(UIElement? from, UIElement? to);
@@ -55,16 +59,23 @@ public abstract class TransitionBase : ITransition
 
     public virtual void Reset(UIElement? from, UIElement? to)
     {
-        if (from != null)
+        ClearAnimatedValues(from);
+        ClearAnimatedValues(to);
+    }
+
+    /// <summary>
+    /// Clears the animated values the built-in transitions write, restoring the element's own values.
+    /// </summary>
+    /// <param name="element">The element to restore, if any.</param>
+    protected static void ClearAnimatedValues(UIElement? element)
+    {
+        if (element == null)
         {
-            from.Opacity = 1.0f;
-            from.RenderTransform = System.Numerics.Matrix3x2.Identity;
+            return;
         }
 
-        if (to != null)
-        {
-            to.Opacity = 1.0f;
-            to.RenderTransform = System.Numerics.Matrix3x2.Identity;
-        }
+        element.ClearAnimatedValue(UIElement.OpacityProperty);
+        element.ClearAnimatedValue(VisualNode.RenderTransformProperty);
+        element.ClearAnimatedValue(VisualNode.RenderTransformOriginProperty);
     }
 }

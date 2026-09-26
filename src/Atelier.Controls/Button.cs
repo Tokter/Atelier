@@ -28,14 +28,14 @@ public class Button : ContentControl
         BindableProperty.Register<Button, ButtonVariant>(
             nameof(Variant),
             ButtonVariant.Filled,
-            (s, o, n) => ((Button)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public static readonly BindableProperty<float> ElevationProperty =
         BindableProperty.Register<Button, float>(
             nameof(Elevation),
             1f,
-            (s, o, n) => ((Button)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public ICommand? Command { get => GetValue(CommandProperty); set => SetValue(CommandProperty, value); }
@@ -51,11 +51,15 @@ public class Button : ContentControl
     public float RippleOpacity { get; private set; } = 0f;
     public bool HasActiveRipple => RippleOpacity > 0f;
 
+    static Button()
+    {
+        PaddingProperty.OverrideDefaultValue<Button>(new Thickness(16, 6));
+        CornerRadiusProperty.OverrideDefaultValue<Button>(new CornerRadius(20)); // MD3 pill shape default
+    }
+
     public Button()
     {
         IsFocusable = true;
-        Padding = new Thickness(16, 6);
-        CornerRadius = new CornerRadius(20); // MD3 pill shape default
     }
 
     public Button(string text) : this()

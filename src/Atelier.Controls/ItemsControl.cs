@@ -157,7 +157,7 @@ public class ListBoxItem : ContentControl
         BindableProperty.Register<ListBoxItem, bool>(
             nameof(IsSelected),
             false,
-            (s, o, n) => ((ListBoxItem)s).InvalidateVisual()
+            options: PropertyOptions.AffectsRender
         );
 
     public bool IsSelected
@@ -170,12 +170,16 @@ public class ListBoxItem : ContentControl
     public object? ItemValue { get; internal set; }
     public event EventHandler? Clicked;
 
+    static ListBoxItem()
+    {
+        PaddingProperty.OverrideDefaultValue<ListBoxItem>(new Thickness(12, 8));
+        CornerRadiusProperty.OverrideDefaultValue<ListBoxItem>(new CornerRadius(4));
+        ClipToBoundsProperty.OverrideDefaultValue<ListBoxItem>(true);
+    }
+
     public ListBoxItem()
     {
         IsFocusable = false; // ListBox itself is the single focusable tab stop
-        Padding = new Thickness(12, 8);
-        CornerRadius = new CornerRadius(4);
-        ClipToBounds = true;
     }
 
     public override UIElement? HitTest(Point point)
