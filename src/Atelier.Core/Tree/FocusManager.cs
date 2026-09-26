@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Atelier.Core.Events;
+using Atelier.Core.Threading;
 
 namespace Atelier.Core.Tree;
 
@@ -78,6 +79,7 @@ public static class FocusManager
     /// <param name="root">The root of the tree (the window content), or <c>null</c>.</param>
     public static void ActivateRoot(VisualNode? root)
     {
+        Dispatcher.VerifyAccess("FocusManager.ActivateRoot");
         s_activeRoot = root == null ? null : new WeakReference<VisualNode>(GetRoot(root));
         s_activeRootSetByHost = root != null;
     }
@@ -101,6 +103,7 @@ public static class FocusManager
     public static void PushModal(UIElement modalRoot)
     {
         ArgumentNullException.ThrowIfNull(modalRoot);
+        Dispatcher.VerifyAccess("FocusManager.PushModal");
 
         var scope = GetOrCreateScope(modalRoot);
         if (IndexOfModal(scope, modalRoot) < 0)
@@ -135,6 +138,7 @@ public static class FocusManager
     /// <param name="modalRoot">The root element passed to <see cref="PushModal"/>.</param>
     public static void PopModal(UIElement modalRoot)
     {
+        Dispatcher.VerifyAccess("FocusManager.PopModal");
         if (!TryFindModal(modalRoot, out var scope, out int index))
         {
             return;
@@ -155,6 +159,7 @@ public static class FocusManager
     /// </summary>
     public static void ClearModals()
     {
+        Dispatcher.VerifyAccess("FocusManager.ClearModals");
         ActiveScope?.ModalStack.Clear();
     }
 
@@ -279,6 +284,7 @@ public static class FocusManager
     /// <param name="element">The element to focus, or <c>null</c>.</param>
     public static void SetFocus(UIElement? element)
     {
+        Dispatcher.VerifyAccess("FocusManager.SetFocus");
         if (element == null)
         {
             if (ActiveScope is { } activeScope)
@@ -318,6 +324,7 @@ public static class FocusManager
     /// <param name="node">Any node of the tree, typically its root.</param>
     public static void ClearFocus(VisualNode node)
     {
+        Dispatcher.VerifyAccess("FocusManager.ClearFocus");
         if (s_scopes.TryGetValue(GetRoot(node), out var scope))
         {
             SetScopeFocus(scope, null);
@@ -353,6 +360,7 @@ public static class FocusManager
 
     private static bool MoveFocus(UIElement root, bool forward)
     {
+        Dispatcher.VerifyAccess(forward ? "FocusManager.FocusNext" : "FocusManager.FocusPrevious");
         var scope = GetScopeOrNull(root);
         var effectiveRoot = scope?.CurrentModal ?? root;
 

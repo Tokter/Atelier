@@ -74,6 +74,7 @@ public class ItemsControl : Control
 
     private void OnItemsSourceCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        Atelier.Core.Threading.Dispatcher.VerifyAccess("ItemsControl.ItemsSource collection change");
         switch (e.Action)
         {
             case NotifyCollectionChangedAction.Add:

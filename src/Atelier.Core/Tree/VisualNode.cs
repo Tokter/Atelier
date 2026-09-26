@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using Atelier.Core.Primitives;
 using Atelier.Core.Properties;
+using Atelier.Core.Threading;
 
 namespace Atelier.Core.Tree;
 
@@ -298,9 +300,19 @@ public abstract class VisualNode : BindableObject
     /// <param name="child">The node to insert.</param>
     public void InsertChild(int index, VisualNode child) => AttachChild(index, child);
 
+    // The tree is laid out and rendered on the UI thread without locking; see Dispatcher.ThreadCheckMode.
+    private protected void VerifyTreeAccess([CallerMemberName] string operation = "")
+    {
+        if (!Dispatcher.HasUIAccess)
+        {
+            Dispatcher.ReportWrongThread($"{GetType().Name}.{operation}");
+        }
+    }
+
     private void AttachChild(int? index, VisualNode child)
     {
         ArgumentNullException.ThrowIfNull(child);
+        VerifyTreeAccess(nameof(AddChild));
         if (child._isHostRoot)
         {
             throw new InvalidOperationException("A node attached to a host as its root cannot be added as a child. Call DetachFromHost() first.");
@@ -337,6 +349,7 @@ public abstract class VisualNode : BindableObject
     /// <returns><c>true</c> if the child was removed; <c>false</c> if it is not a child of this node.</returns>
     public bool RemoveChild(VisualNode child)
     {
+        VerifyTreeAccess();
         if (child._parent != this)
         {
             return false;
@@ -387,6 +400,7 @@ public abstract class VisualNode : BindableObject
     /// <exception cref="InvalidOperationException">This node has a parent.</exception>
     public void AttachToHost(Platform.IHostWindow? host = null)
     {
+        VerifyTreeAccess();
         if (_parent != null)
         {
             throw new InvalidOperationException("Only a node without a parent can be attached to a host.");
@@ -421,6 +435,7 @@ public abstract class VisualNode : BindableObject
     /// </summary>
     public void DetachFromHost()
     {
+        VerifyTreeAccess();
         if (!_isHostRoot)
         {
             return;
@@ -487,6 +502,7 @@ public abstract class VisualNode : BindableObject
     /// <summary>Removes all children, last to first, as if by calling <see cref="RemoveChild"/> for each.</summary>
     public void ClearChildren()
     {
+        VerifyTreeAccess();
         while (_children.Count > 0)
         {
             RemoveChild(_children[^1]);
@@ -525,6 +541,7 @@ public abstract class VisualNode : BindableObject
     /// </summary>
     public virtual void InvalidateVisual()
     {
+        VerifyTreeAccess();
         NeedsVisualUpdate?.Invoke();
         _parent?.InvalidateVisual();
     }

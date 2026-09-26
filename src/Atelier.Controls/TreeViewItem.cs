@@ -163,6 +163,7 @@ public class TreeViewItem : Control
 
     private void OnChildrenCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        Atelier.Core.Threading.Dispatcher.VerifyAccess("TreeViewItem.Children collection change");
         RebuildChildren();
     }
 

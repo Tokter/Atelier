@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Atelier.Core.Events;
 using Atelier.Core.Primitives;
 using Atelier.Core.Properties;
-using Atelier.Core.Threading;
 using Atelier.Core.Tree;
 using Atelier.Layout;
 
@@ -139,12 +138,6 @@ public class DialogHost : Control
 
     private void OnContentChanged(UIElement? oldVal, UIElement? newVal)
     {
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.Post(() => OnContentChanged(oldVal, newVal));
-            return;
-        }
-
         if (oldVal != null)
         {
             RemoveChild(oldVal);
@@ -161,12 +154,6 @@ public class DialogHost : Control
 
     private void OnDialogChanged(UIElement? oldVal, UIElement? newVal)
     {
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.Post(() => OnDialogChanged(oldVal, newVal));
-            return;
-        }
-
         if (oldVal != null)
         {
             FocusManager.PopModal(oldVal);
@@ -215,12 +202,6 @@ public class DialogHost : Control
 
     private void OnOverlayColorChanged(Color oldVal, Color newVal)
     {
-        if (!Dispatcher.CheckAccess())
-        {
-            Dispatcher.Post(() => OnOverlayColorChanged(oldVal, newVal));
-            return;
-        }
-
         _scrim.Background = newVal;
         _scrim.InvalidateVisual();
     }

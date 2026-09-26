@@ -110,6 +110,7 @@ public class TreeView : Control
 
     private void OnItemsSourceCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        Atelier.Core.Threading.Dispatcher.VerifyAccess("TreeView.ItemsSource collection change");
         RebuildTree();
     }
 

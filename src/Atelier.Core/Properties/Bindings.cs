@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace Atelier.Core.Properties;
 
@@ -152,6 +153,7 @@ internal sealed class BindingEngine<TTarget, TSource> : IBindingSubscription, IT
     private bool _isUpdating;
     private bool _hasAppliedValue;
     private bool _isDisposed;
+    private QueuedTargetUpdate? _queuedUpdate;
 
     public BindingEngine(
         BindableObject target,
@@ -264,9 +266,19 @@ internal sealed class BindingEngine<TTarget, TSource> : IBindingSubscription, IT
             return;
         }
 
-        if (BindingHelpers.Affects(e, _sourcePropertyName))
+        if (!BindingHelpers.Affects(e, _sourcePropertyName))
+        {
+            return;
+        }
+
+        // View models may change from background work; the target may only be updated on the UI thread.
+        if (Threading.Dispatcher.CheckAccess())
         {
             UpdateTarget();
+        }
+        else
+        {
+            (_queuedUpdate ??= new QueuedTargetUpdate(UpdateTarget)).Post();
         }
     }
 
@@ -614,6 +626,7 @@ public sealed class MultiSourceBinding<TTarget> : IBindingSubscription
     private readonly INotifyPropertyChanged[] _sources;
     private bool _isUpdating;
     private bool _isDisposed;
+    private QueuedTargetUpdate? _queuedUpdate;
 
     /// <summary>
     /// Initializes a new multi-source binding and sets the target from <paramref name="getter"/>.
@@ -648,7 +661,15 @@ public sealed class MultiSourceBinding<TTarget> : IBindingSubscription
             return;
         }
 
-        UpdateTarget();
+        // Sources may change from background work; the target may only be updated on the UI thread.
+        if (Threading.Dispatcher.CheckAccess())
+        {
+            UpdateTarget();
+        }
+        else
+        {
+            (_queuedUpdate ??= new QueuedTargetUpdate(UpdateTarget)).Post();
+        }
     }
 
     /// <inheritdoc/>
@@ -684,6 +705,34 @@ public sealed class MultiSourceBinding<TTarget> : IBindingSubscription
         foreach (var source in _sources)
         {
             source.PropertyChanged -= OnSourcePropertyChanged;
+        }
+    }
+}
+
+/// <summary>
+/// Runs a binding's target update on the UI thread for source changes raised on other threads. Changes arriving while
+/// an update is already queued are coalesced into it, since the update reads the source's latest value anyway.
+/// </summary>
+internal sealed class QueuedTargetUpdate
+{
+    private readonly Action _run;
+    private int _isQueued;
+
+    public QueuedTargetUpdate(Action updateTarget)
+    {
+        _run = () =>
+        {
+            // Reset before reading the source, so a change made during the update queues another one.
+            Volatile.Write(ref _isQueued, 0);
+            updateTarget();
+        };
+    }
+
+    public void Post()
+    {
+        if (Interlocked.Exchange(ref _isQueued, 1) == 0)
+        {
+            Threading.Dispatcher.Post(_run);
         }
     }
 }

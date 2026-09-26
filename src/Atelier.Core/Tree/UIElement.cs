@@ -934,6 +934,7 @@ public abstract class UIElement : VisualNode
     /// </remarks>
     public void InvalidateMeasure()
     {
+        VerifyTreeAccess();
         if (IsMeasureValid)
         {
             IsMeasureValid = false;
@@ -963,6 +964,7 @@ public abstract class UIElement : VisualNode
     /// </remarks>
     public void InvalidateArrange()
     {
+        VerifyTreeAccess();
         if (IsArrangeValid)
         {
             IsArrangeValid = false;

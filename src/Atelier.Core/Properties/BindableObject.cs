@@ -207,6 +207,7 @@ public class BindableObject : INotifyPropertyChanged
 
     private bool SetValueTyped<T>(BindableProperty<T> property, T value)
     {
+        VerifyAccess(property, nameof(SetValue));
         property.ValidateTyped(value);
 
         // Fast path: setting the value it already has must not box (bindings and animations do this constantly).
@@ -252,6 +253,16 @@ public class BindableObject : INotifyPropertyChanged
         }
 
         return true;
+    }
+
+    // Element trees are only safe to change on the UI thread; see Dispatcher.ThreadCheckMode. The message is only
+    // formatted for an actual violation, so the check costs a thread-id comparison.
+    private void VerifyAccess(BindableProperty property, [CallerMemberName] string operation = "")
+    {
+        if (!Threading.Dispatcher.HasUIAccess)
+        {
+            Threading.Dispatcher.ReportWrongThread($"{GetType().Name}.{operation}({property.OwnerType.Name}.{property.Name})");
+        }
     }
 
     private static bool HasEqualValue<T>(Dictionary<int, object?>? layer, int id, T value)
@@ -307,8 +318,7 @@ public class BindableObject : INotifyPropertyChanged
         }
     }
 
-    // Another slot type is possible when the value is inherited through a same-named alias with a different declared
-    // type (e.g. a float slot read as object); that rare case boxes.
+    // A property's slots always hold its own T; the IValueSlot case is a defensive fallback that boxes.
     private static T ReadStored<T>(object? stored) => stored switch
     {
         ValueSlot<T> slot => slot.Value,
@@ -339,6 +349,7 @@ public class BindableObject : INotifyPropertyChanged
     /// <exception cref="InvalidOperationException">The property is read-only.</exception>
     public bool SetValueUntyped(BindableProperty property, object? value)
     {
+        VerifyAccess(property);
         property.ThrowIfReadOnly();
         object? coerced = property.CoerceUntyped(this, value);
         return SetLocalValueCore(property, value, coerced);
@@ -391,6 +402,7 @@ public class BindableObject : INotifyPropertyChanged
 
     private void ClearLocalValueCore(BindableProperty property)
     {
+        VerifyAccess(property, nameof(ClearValue));
         if (!_localValues.ContainsKey(property.Id))
         {
             return;
@@ -413,6 +425,7 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="property">The bindable property to re-coerce.</param>
     public void CoerceValue(BindableProperty property)
     {
+        VerifyAccess(property);
         if (!property.HasCoercion)
         {
             return;
@@ -481,6 +494,7 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="value">The current animated value.</param>
     public void SetAnimatedValue<T>(BindableProperty<T> property, T value)
     {
+        VerifyAccess(property);
         property.ValidateTyped(value);
 
         if (HasEqualValue(_animatedValues, property.Id, value))
@@ -509,6 +523,7 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="property">The bindable property whose animation has finished.</param>
     public void ClearAnimatedValue(BindableProperty property)
     {
+        VerifyAccess(property);
         if (_animatedValues == null || !_animatedValues.ContainsKey(property.Id))
         {
             return;
@@ -533,6 +548,7 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="value">The forced value.</param>
     protected void SetCoercedValue<T>(BindableProperty<T> property, T value)
     {
+        VerifyAccess(property);
         property.ValidateTyped(value);
 
         if (HasEqualValue(_coercedValues, property.Id, value))
@@ -560,6 +576,7 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="property">The property to release.</param>
     protected void ClearCoercedValue(BindableProperty property)
     {
+        VerifyAccess(property);
         if (_coercedValues == null || !_coercedValues.ContainsKey(property.Id))
         {
             return;
@@ -585,6 +602,7 @@ public class BindableObject : INotifyPropertyChanged
     public IDisposable Subscribe<T>(BindableProperty<T> property, PropertyChangedCallback<T> handler)
     {
         ArgumentNullException.ThrowIfNull(handler);
+        VerifyAccess(property);
 
         var subscription = new PropertySubscription(this, property.Id, handler);
 
@@ -661,6 +679,11 @@ public class BindableObject : INotifyPropertyChanged
     /// <exception cref="InvalidOperationException">The <see cref="Style.BasedOn"/> chain is circular.</exception>
     internal void SetStyleValues(Style? style)
     {
+        if (!Threading.Dispatcher.HasUIAccess)
+        {
+            Threading.Dispatcher.ReportWrongThread($"{GetType().Name}.Style");
+        }
+
         if (style == null && _styleValues.Count == 0)
         {
             return;
@@ -1169,6 +1192,7 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="property">The bindable property whose binding subscription should be removed.</param>
     public void ClearBinding(BindableProperty property)
     {
+        VerifyAccess(property);
         if (_bindings.Remove(property.Id, out var existing))
         {
             existing.Dispose();
