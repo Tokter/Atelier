@@ -41,6 +41,12 @@ namespace Atelier.Gallery.ViewModels
             _pages.Add(new KeybindingViewModel());
             _pages.Add(new TransitionsViewModel());
             _currentPage = initialPage;
+
+            // Start page by index, e.g. for screenshots of a specific page (see also ATELIER_GALLERY_WINDOWS).
+            if (int.TryParse(Environment.GetEnvironmentVariable("ATELIER_GALLERY_PAGE"), out int page) && page >= 0 && page < _pages.Count)
+            {
+                _currentPage = _pages[page];
+            }
         }
 
 

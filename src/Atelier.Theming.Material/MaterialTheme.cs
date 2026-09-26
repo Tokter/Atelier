@@ -26,6 +26,7 @@ public class MaterialTheme : Theme
         Renderers.Register(new MaterialProgressBarRenderer(colors));
         Renderers.Register(new MaterialTextBlockRenderer(colors));
         Renderers.Register(new MaterialBorderRenderer());
+        Renderers.Register(new MaterialPanelRenderer());
         Renderers.Register(new MaterialCardRenderer(colors));
         Renderers.Register(new MaterialListBoxItemRenderer(colors));
         Renderers.Register(new MaterialScrollViewerRenderer(colors));

@@ -269,6 +269,26 @@ public static class MarkupExtensions
         return grid;
     }
 
+    /// <summary>Adds rows from a comma-separated list such as <c>"Auto,*,2*,48"</c> (see <see cref="GridLength.Parse"/>).</summary>
+    public static Grid Rows(this Grid grid, string rows)
+    {
+        foreach (var part in rows.Split(',', StringSplitOptions.TrimEntries))
+        {
+            grid.RowDefinitions.Add(new RowDefinition(GridLength.Parse(part)));
+        }
+        return grid;
+    }
+
+    /// <summary>Adds columns from a comma-separated list such as <c>"Auto,*,2*,48"</c> (see <see cref="GridLength.Parse"/>).</summary>
+    public static Grid Columns(this Grid grid, string columns)
+    {
+        foreach (var part in columns.Split(',', StringSplitOptions.TrimEntries))
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Parse(part)));
+        }
+        return grid;
+    }
+
     public static Grid RowSpacing(this Grid grid, float spacing)
     {
         grid.RowSpacing = spacing;

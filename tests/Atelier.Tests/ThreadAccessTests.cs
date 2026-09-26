@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
-using System.Threading.Tasks;
+using System.Threading;
 using Xunit;
 using Atelier.Controls;
 using Atelier.Core.Properties;
@@ -51,17 +51,24 @@ public sealed class QueueingTestDispatcher : IDispatcher, IDisposable
 
 public class ThreadAccessTests
 {
+    // A dedicated thread: blocking on Task.Run could run the task inline on this (UI) thread.
     private static Exception? OnBackgroundThread(Action action)
     {
-        try
+        Exception? error = null;
+        var thread = new Thread(() =>
         {
-            Task.Run(action).GetAwaiter().GetResult();
-            return null;
-        }
-        catch (Exception ex)
-        {
-            return ex;
-        }
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                error = ex;
+            }
+        });
+        thread.Start();
+        thread.Join();
+        return error;
     }
 
     [Fact]

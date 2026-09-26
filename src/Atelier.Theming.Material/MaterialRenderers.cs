@@ -878,6 +878,20 @@ public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRend
     }
 }
 
+/// <summary>Draws the <see cref="Panel.Background"/> of every panel type.</summary>
+public class MaterialPanelRenderer : ControlRenderer<Panel>
+{
+    public override void Render(Panel panel, ref DrawingContext context)
+    {
+        var background = panel.Background;
+        var size = panel.Bounds.Size;
+        if (background.A > 0 && size.Width > 0 && size.Height > 0)
+        {
+            context.DrawRect(new Rect(Point.Zero, size), background);
+        }
+    }
+}
+
 public class MaterialBorderRenderer : ControlRenderer<Border>
 {
     public override void Render(Border border, ref DrawingContext context)
