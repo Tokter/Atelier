@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using Atelier.Core.Events;
 
@@ -79,15 +80,80 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
     public static bool AreEquivalent(string? gestureA, string? gestureB) => Matches(gestureA, gestureB);
 
     /// <summary>
-    /// Normalizes a gesture string to canonical standard format ("Ctrl+Alt+Shift+Win+Key").
+    /// Normalizes a gesture or chord string to canonical format: <c>"Ctrl+Alt+Shift+Win+Key"</c> per stroke, strokes
+    /// separated by <c>", "</c> (e.g. <c>"Ctrl+K, Ctrl+C"</c>). Invalid strings are returned unchanged.
     /// </summary>
     public static string Normalize(string? gestureString)
     {
-        if (TryParse(gestureString, out var gesture))
+        if (TryParseSequence(gestureString, out var strokes))
         {
-            return gesture.ToString();
+            return FormatSequence(strokes);
         }
         return gestureString ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Parses a single-stroke gesture or a multi-stroke chord.
+    /// </summary>
+    /// <remarks>
+    /// A chord is written as complete strokes separated by commas, e.g. <c>"Ctrl+K, Ctrl+C"</c>: every comma-separated
+    /// part must itself be a valid gesture with a non-modifier key. Otherwise the whole text is parsed as a single gesture,
+    /// so commas used as token separators (<c>"Shift, Control+L"</c>) keep working.
+    /// </remarks>
+    /// <param name="text">The gesture or chord string.</param>
+    /// <param name="strokes">The parsed strokes (one for a single gesture), or empty on failure.</param>
+    /// <returns><c>true</c> if the string is a valid gesture or chord.</returns>
+    public static bool TryParseSequence(string? text, out KeybindingGesture[] strokes)
+    {
+        strokes = Array.Empty<KeybindingGesture>();
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        if (text.Contains(','))
+        {
+            var parts = text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length >= 2)
+            {
+                var chord = new KeybindingGesture[parts.Length];
+                bool allComplete = true;
+                for (int i = 0; i < parts.Length && allComplete; i++)
+                {
+                    allComplete = TryParseStroke(parts[i], out chord[i]);
+                }
+
+                if (allComplete)
+                {
+                    strokes = chord;
+                    return true;
+                }
+            }
+        }
+
+        if (TryParseStroke(text, out var single))
+        {
+            strokes = [single];
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Formats strokes in canonical form, separated by <c>", "</c>.
+    /// </summary>
+    public static string FormatSequence(IReadOnlyList<KeybindingGesture> strokes)
+    {
+        if (strokes.Count == 1)
+        {
+            return strokes[0].ToString();
+        }
+
+        var parts = new string[strokes.Count];
+        for (int i = 0; i < strokes.Count; i++)
+        {
+            parts[i] = strokes[i].ToString();
+        }
+        return string.Join(", ", parts);
     }
 
     /// <summary>
@@ -95,10 +161,23 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
     /// <c>,</c>, <c>|</c>, <c>;</c> and spaces separate tokens. Common aliases (<c>Control</c>, <c>Cmd</c>, <c>Esc</c>, <c>Del</c>,
     /// <c>Return</c>) are accepted. Exactly one non-modifier key is required; if several are given, the last one wins.
     /// </summary>
+    /// <remarks>Returns <c>false</c> for a multi-stroke chord; use <see cref="TryParseSequence"/> for those.</remarks>
     /// <param name="text">The gesture string.</param>
     /// <param name="gesture">The parsed gesture, or <c>default</c> on failure.</param>
-    /// <returns><c>true</c> if the string is a valid gesture.</returns>
+    /// <returns><c>true</c> if the string is a valid single-stroke gesture.</returns>
     public static bool TryParse(string? text, out KeybindingGesture gesture)
+    {
+        if (TryParseSequence(text, out var strokes) && strokes.Length == 1)
+        {
+            gesture = strokes[0];
+            return true;
+        }
+
+        gesture = default;
+        return false;
+    }
+
+    private static bool TryParseStroke(string? text, out KeybindingGesture gesture)
     {
         gesture = default;
         if (string.IsNullOrWhiteSpace(text))

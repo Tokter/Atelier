@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Atelier.Core.Events;
 
@@ -20,6 +21,7 @@ public static partial class KeybindingManager
     /// </summary>
     public static Dictionary<string, Dictionary<string, IKeybindingDescriptor>> RegisteredKeybindings { get; } = new Dictionary<string, Dictionary<string, IKeybindingDescriptor>>();
     private static readonly Dictionary<string, KeybindingGesture?> _gestureCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, KeybindingGesture[]?> _sequenceCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Registers a keybinding descriptor.
@@ -41,6 +43,7 @@ public static partial class KeybindingManager
 
         RegisteredKeybindings[keybindingDescriptor.Group][keybindingDescriptor.Name] = keybindingDescriptor;
         WarmGestureCache(keybindingDescriptor.Keybinding);
+        ReportConflicts(keybindingDescriptor);
     }
 
     /// <summary>
@@ -60,6 +63,7 @@ public static partial class KeybindingManager
 
         groupKeybindings[keybindingDescriptor.Name] = keybindingDescriptor;
         WarmGestureCache(keybindingDescriptor.Keybinding);
+        ReportConflicts(keybindingDescriptor);
     }
 
     /// <summary>
@@ -104,6 +108,7 @@ public static partial class KeybindingManager
     {
         RegisteredKeybindings.Clear();
         _gestureCache.Clear();
+        _sequenceCache.Clear();
     }
 
     private static void WarmGestureCache(string? keybindingStr)
@@ -111,8 +116,177 @@ public static partial class KeybindingManager
         if (!string.IsNullOrWhiteSpace(keybindingStr))
         {
             GetParsedGesture(keybindingStr);
+            GetParsedSequence(keybindingStr);
         }
     }
+
+    private static KeybindingGesture[]? GetParsedSequence(string? keybindingStr)
+    {
+        if (string.IsNullOrWhiteSpace(keybindingStr))
+            return null;
+
+        if (!_sequenceCache.TryGetValue(keybindingStr, out var strokes))
+        {
+            strokes = KeybindingGesture.TryParseSequence(keybindingStr, out var parsed) ? parsed : null;
+            _sequenceCache[keybindingStr] = strokes;
+        }
+        return strokes;
+    }
+
+    #region Chords (multi-stroke keybindings)
+
+    /// <summary>
+    /// Finds a keybinding in <paramref name="group"/> whose full stroke sequence equals <paramref name="strokes"/>
+    /// (a single stroke matches single-gesture keybindings; several strokes match chords such as <c>"Ctrl+K, Ctrl+C"</c>).
+    /// </summary>
+    public static IKeybindingDescriptor? FindKeybinding(string group, IReadOnlyList<KeybindingGesture> strokes)
+    {
+        if (string.IsNullOrEmpty(group) || strokes.Count == 0 || !RegisteredKeybindings.TryGetValue(group, out var groupKeybindings))
+            return null;
+
+        foreach (var descriptor in groupKeybindings.Values)
+        {
+            var sequence = GetParsedSequence(descriptor.Keybinding);
+            if (sequence != null && sequence.Length == strokes.Count && StartsWith(sequence, strokes))
+            {
+                return descriptor;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Determines whether <paramref name="strokes"/> is the beginning of a longer chord registered in <paramref name="group"/>,
+    /// i.e. whether more keys are needed to complete a keybinding.
+    /// </summary>
+    public static bool IsKeybindingPrefix(string group, IReadOnlyList<KeybindingGesture> strokes)
+    {
+        if (string.IsNullOrEmpty(group) || strokes.Count == 0 || !RegisteredKeybindings.TryGetValue(group, out var groupKeybindings))
+            return false;
+
+        foreach (var descriptor in groupKeybindings.Values)
+        {
+            var sequence = GetParsedSequence(descriptor.Keybinding);
+            if (sequence != null && sequence.Length > strokes.Count && StartsWith(sequence, strokes))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Finds the keybinding in <paramref name="group"/> matching <paramref name="strokes"/> exactly and executes it on
+    /// <paramref name="target"/> if its command can execute.
+    /// </summary>
+    /// <returns><c>true</c> if a keybinding was executed.</returns>
+    public static bool TryExecuteSequence(string group, IReadOnlyList<KeybindingGesture> strokes, object? target = null)
+    {
+        var descriptor = FindKeybinding(group, strokes);
+        if (descriptor != null && descriptor.Command.CanExecute(target))
+        {
+            descriptor.Command.Execute(target);
+            return true;
+        }
+        return false;
+    }
+
+    private static bool StartsWith(KeybindingGesture[] sequence, IReadOnlyList<KeybindingGesture> prefix)
+    {
+        for (int i = 0; i < prefix.Count; i++)
+        {
+            if (!sequence[i].Equals(prefix[i]))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    #endregion
+
+    #region Conflicts
+
+    /// <summary>
+    /// Describes two keybindings in the same group that cannot both be triggered as intended.
+    /// </summary>
+    /// <param name="Group">The group both keybindings belong to.</param>
+    /// <param name="First">The keybinding that wins (its sequence is equal to, or a prefix of, the other's).</param>
+    /// <param name="Second">The keybinding that is shadowed.</param>
+    /// <param name="IsPrefix">
+    /// <c>true</c> if <paramref name="First"/> is a shorter keybinding that fires before the chord <paramref name="Second"/>
+    /// can be completed; <c>false</c> if both use the same keys.
+    /// </param>
+    public sealed record KeybindingConflict(string Group, IKeybindingDescriptor First, IKeybindingDescriptor Second, bool IsPrefix);
+
+    /// <summary>
+    /// Finds keybindings that shadow each other within a group: identical key sequences (only the first registered one
+    /// fires) and single keybindings that are the first stroke of a chord (the chord can never be completed).
+    /// </summary>
+    /// <returns>The conflicts, in registration order.</returns>
+    public static IReadOnlyList<KeybindingConflict> GetConflicts()
+    {
+        var conflicts = new List<KeybindingConflict>();
+        foreach (var (group, groupKeybindings) in RegisteredKeybindings)
+        {
+            var descriptors = groupKeybindings.Values.ToArray();
+            for (int i = 0; i < descriptors.Length; i++)
+            {
+                for (int j = i + 1; j < descriptors.Length; j++)
+                {
+                    if (TryGetConflict(group, descriptors[i], descriptors[j], out var conflict))
+                    {
+                        conflicts.Add(conflict);
+                    }
+                }
+            }
+        }
+        return conflicts;
+    }
+
+    private static bool TryGetConflict(string group, IKeybindingDescriptor a, IKeybindingDescriptor b, out KeybindingConflict conflict)
+    {
+        conflict = null!;
+        var sa = GetParsedSequence(a.Keybinding);
+        var sb = GetParsedSequence(b.Keybinding);
+        if (sa == null || sb == null)
+        {
+            return false;
+        }
+
+        if (sa.Length <= sb.Length && StartsWith(sb, sa))
+        {
+            conflict = new KeybindingConflict(group, a, b, IsPrefix: sa.Length < sb.Length);
+            return true;
+        }
+
+        if (sb.Length < sa.Length && StartsWith(sa, sb))
+        {
+            conflict = new KeybindingConflict(group, b, a, IsPrefix: true);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void ReportConflicts(IKeybindingDescriptor added)
+    {
+        if (!RegisteredKeybindings.TryGetValue(added.Group, out var groupKeybindings))
+            return;
+
+        foreach (var other in groupKeybindings.Values)
+        {
+            if (!ReferenceEquals(other, added) && TryGetConflict(added.Group, other, added, out var conflict))
+            {
+                Debug.WriteLine(
+                    $"[Keybinding] Conflict in group '{conflict.Group}': '{conflict.First.Name}' ({conflict.First.Keybinding}) " +
+                    (conflict.IsPrefix ? "fires before chord" : "shadows") +
+                    $" '{conflict.Second.Name}' ({conflict.Second.Keybinding}).");
+            }
+        }
+    }
+
+    #endregion
 
     private static KeybindingGesture? GetParsedGesture(string keybindingStr)
     {
