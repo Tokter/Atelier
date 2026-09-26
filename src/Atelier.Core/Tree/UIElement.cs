@@ -302,7 +302,7 @@ public abstract class UIElement : VisualNode
     /// measure (which also covers arrange), otherwise <see cref="PropertyOptions.AffectsArrange"/> invalidates arrange;
     /// <see cref="PropertyOptions.AffectsRender"/> additionally invalidates rendering.
     /// </remarks>
-    protected override void OnPropertyValueChanged(BindableProperty property, object? oldValue, object? newValue)
+    protected override void OnPropertyValueChanged<T>(BindableProperty<T> property, T oldValue, T newValue)
     {
         base.OnPropertyValueChanged(property, oldValue, newValue);
 

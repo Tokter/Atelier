@@ -114,14 +114,14 @@ public class BindableObject : INotifyPropertyChanged
     /// <returns>The current effective value of the property.</returns>
     public T GetValue<T>(BindableProperty<T> property)
     {
-        if (TryGetOwnValue(property.Id, out var own))
+        if (TryGetOwnStored(property.Id, out var own))
         {
-            return (T)own!;
+            return ReadStored<T>(own);
         }
 
-        if (property.Inherits && TryGetInheritedValue(property, out var inherited))
+        if (property.Inherits && TryGetInheritedStored(property, out var inherited))
         {
-            return (T)inherited!;
+            return ReadStored<T>(inherited);
         }
 
         return property.GetDefaultValue(GetType());
@@ -135,14 +135,14 @@ public class BindableObject : INotifyPropertyChanged
     /// <returns>The current effective value of the property, or <c>null</c>.</returns>
     public object? GetValueUntyped(BindableProperty property)
     {
-        if (TryGetOwnValue(property.Id, out var own))
+        if (TryGetOwnStored(property.Id, out var own))
         {
-            return own;
+            return Unwrap(own);
         }
 
-        if (property.Inherits && TryGetInheritedValue(property, out var inherited))
+        if (property.Inherits && TryGetInheritedStored(property, out var inherited))
         {
-            return inherited;
+            return Unwrap(inherited);
         }
 
         return property.GetDefaultValueUntyped(GetType());
@@ -158,7 +158,7 @@ public class BindableObject : INotifyPropertyChanged
         if (_animatedValues != null && _animatedValues.ContainsKey(property.Id)) return ValueSource.Animation;
         if (_localValues.ContainsKey(property.Id)) return ValueSource.Local;
         if (_styleValues.ContainsKey(property.Id)) return ValueSource.Style;
-        if (property.Inherits && TryGetInheritedValue(property, out _)) return ValueSource.Inherited;
+        if (property.Inherits && TryGetInheritedStored(property, out _)) return ValueSource.Inherited;
         return ValueSource.Default;
     }
 
@@ -214,16 +214,118 @@ public class BindableObject : INotifyPropertyChanged
             return false;
         }
 
-        object? coerced = property.CoerceValue != null ? property.CoerceValue(this, value) : value;
-        return SetLocalValueCore(property, value, coerced);
+        T coerced = property.CoerceValue != null ? property.CoerceValue(this, value) : value;
+
+        if (!CanUseTypedPath(property))
+        {
+            // Box once and reuse it; the uncoerced base value is only needed (and boxed) when there is coercion.
+            object? boxed = coerced;
+            return SetLocalValueCore(property, property.HasCoercion ? (object?)value : boxed, boxed);
+        }
+
+        if (property.HasCoercion)
+        {
+            TrackBaseValue(ref _localBaseValues, property.Id, value, coerced);
+        }
+
+        if (HasEqualValue(_localValues, property.Id, coerced))
+        {
+            return false;
+        }
+
+        T oldValue = GetValue(property);
+        StoreTyped(_localValues, property.Id, coerced);
+        RaiseIfChanged(property, oldValue);
+
+        if (_bindings.TryGetValue(property.Id, out var binding))
+        {
+            if (binding is ITypedBindingSubscription<T> typedBinding)
+            {
+                typedBinding.OnTargetPropertyChanged(coerced);
+            }
+            else
+            {
+                binding.OnTargetPropertyChanged(coerced);
+            }
+        }
+
+        return true;
     }
 
     private static bool HasEqualValue<T>(Dictionary<int, object?>? layer, int id, T value)
     {
-        return layer != null
-            && layer.TryGetValue(id, out var current)
-            && (current is T typed ? EqualityComparer<T>.Default.Equals(typed, value) : current is null && value is null);
+        if (layer == null || !layer.TryGetValue(id, out var current))
+        {
+            return false;
+        }
+
+        return current switch
+        {
+            ValueSlot<T> slot => EqualityComparer<T>.Default.Equals(slot.Value, value),
+            T typed => EqualityComparer<T>.Default.Equals(typed, value),
+            _ => current is null && value is null,
+        };
     }
+
+    #region Typed value storage
+
+    // Value-type values set through the typed APIs are stored in a ValueSlot<T> that is created once per property and
+    // then overwritten in place, so repeated sets (animations, bindings) don't box. Untyped readers always receive a
+    // boxed copy (Unwrap), and the typed change path copies the old value before overwriting, so no caller can observe
+    // a stored value changing underneath it. Values set through untyped paths are stored as ordinary boxes.
+
+    private interface IValueSlot
+    {
+        object? BoxValue();
+    }
+
+    private sealed class ValueSlot<T> : IValueSlot
+    {
+        public T Value = default!;
+
+        public object? BoxValue() => Value;
+    }
+
+    /// <summary>
+    /// Typed changes skip boxing entirely, but notifying descendants of an inherited change needs the untyped snapshot
+    /// machinery, so inheritable properties on objects with children take the untyped path. Reference types never box.
+    /// </summary>
+    private bool CanUseTypedPath<T>(BindableProperty<T> property) =>
+        typeof(T).IsValueType && !(property.Inherits && InheritanceChildren.Count > 0);
+
+    private static void StoreTyped<T>(Dictionary<int, object?> layer, int id, T value)
+    {
+        if (layer.TryGetValue(id, out var current) && current is ValueSlot<T> slot)
+        {
+            slot.Value = value;
+        }
+        else
+        {
+            layer[id] = new ValueSlot<T> { Value = value };
+        }
+    }
+
+    // Another slot type is possible when the value is inherited through a same-named alias with a different declared
+    // type (e.g. a float slot read as object); that rare case boxes.
+    private static T ReadStored<T>(object? stored) => stored switch
+    {
+        ValueSlot<T> slot => slot.Value,
+        IValueSlot other => (T)other.BoxValue()!,
+        _ => (T)stored!,
+    };
+
+    private static object? Unwrap(object? stored) => stored is IValueSlot slot ? slot.BoxValue() : stored;
+
+    private void RaiseIfChanged<T>(BindableProperty<T> property, T oldValue)
+    {
+        T newValue = GetValue(property);
+        if (!EqualityComparer<T>.Default.Equals(oldValue, newValue))
+        {
+            RaiseEffectiveValueChanged(property, oldValue, newValue);
+        }
+    }
+
+    #endregion
 
     /// <summary>
     /// Sets the local (explicit) value of a bindable property using an untyped <see cref="object"/> value.
@@ -247,7 +349,7 @@ public class BindableObject : INotifyPropertyChanged
             TrackBaseValue(ref _localBaseValues, property.Id, baseValue, coerced);
         }
 
-        if (_localValues.TryGetValue(property.Id, out var current) && Equals(current, coerced))
+        if (_localValues.TryGetValue(property.Id, out var current) && Equals(Unwrap(current), coerced))
         {
             return false;
         }
@@ -316,6 +418,7 @@ public class BindableObject : INotifyPropertyChanged
 
         bool hasLocal = _localValues.TryGetValue(property.Id, out var local);
         bool hasStyle = _styleValues.TryGetValue(property.Id, out var styled);
+        local = Unwrap(local);
         if (!hasLocal && !hasStyle)
         {
             return;
@@ -383,6 +486,15 @@ public class BindableObject : INotifyPropertyChanged
             return;
         }
 
+        if (CanUseTypedPath(property))
+        {
+            // Allocation-free after the first frame: the value is written into the property's slot in place.
+            T oldValue = GetValue(property);
+            StoreTyped(_animatedValues ??= new(), property.Id, value);
+            RaiseIfChanged(property, oldValue);
+            return;
+        }
+
         var change = BeginChange(property, captureDescendants: true);
         (_animatedValues ??= new())[property.Id] = value;
         EndChange(property, change);
@@ -421,7 +533,7 @@ public class BindableObject : INotifyPropertyChanged
     {
         ArgumentNullException.ThrowIfNull(handler);
 
-        var subscription = new PropertySubscription(this, property.Id, (sender, o, n) => handler(sender, (T)o!, (T)n!));
+        var subscription = new PropertySubscription(this, property.Id, handler);
 
         // Copy-on-write arrays: subscribing is rare, notifying is frequent and must not allocate.
         _subscriptions ??= new();
@@ -460,15 +572,17 @@ public class BindableObject : INotifyPropertyChanged
     {
         private BindableObject? _owner;
 
-        public PropertySubscription(BindableObject owner, int propertyId, Action<BindableObject, object?, object?> invoke)
+        public PropertySubscription(BindableObject owner, int propertyId, Delegate handler)
         {
             _owner = owner;
             PropertyId = propertyId;
-            Invoke = invoke;
+            Handler = handler;
         }
 
         public int PropertyId { get; }
-        public Action<BindableObject, object?, object?> Invoke { get; }
+
+        /// <summary>A <see cref="PropertyChangedCallback{T}"/> for the subscribed property's value type.</summary>
+        public Delegate Handler { get; }
         public bool IsDisposed => _owner == null;
 
         public void Dispose()
@@ -660,9 +774,13 @@ public class BindableObject : INotifyPropertyChanged
         CommitInheritedValues(change.Descendants);
     }
 
-    private void RaiseEffectiveValueChanged(BindableProperty property, object? oldValue, object? newValue)
+    // Untyped changes (styles, SetValueUntyped, inherited changes) are unboxed once and share the typed path below.
+    private void RaiseEffectiveValueChanged(BindableProperty property, object? oldValue, object? newValue) =>
+        property.RaiseChanged(this, oldValue, newValue);
+
+    internal void RaiseEffectiveValueChanged<T>(BindableProperty<T> property, T oldValue, T newValue)
     {
-        property.InvokePropertyChangedUntyped(this, oldValue, newValue);
+        property.PropertyChanged?.Invoke(this, oldValue, newValue);
         OnPropertyValueChanged(property, oldValue, newValue);
 
         if (_subscriptions != null && _subscriptions.TryGetValue(property.Id, out var subscriptions))
@@ -672,7 +790,7 @@ public class BindableObject : INotifyPropertyChanged
             {
                 if (!subscription.IsDisposed)
                 {
-                    subscription.Invoke(this, oldValue, newValue);
+                    ((PropertyChangedCallback<T>)subscription.Handler)(this, oldValue, newValue);
                 }
             }
         }
@@ -684,11 +802,15 @@ public class BindableObject : INotifyPropertyChanged
     /// Invoked whenever the effective value of any bindable property on this object changes, after the property's
     /// registration callback and before per-property subscribers and <see cref="PropertyChanged"/>.
     /// </summary>
-    /// <remarks>Derived classes use this to apply cross-cutting behavior such as <see cref="PropertyOptions"/>.</remarks>
+    /// <remarks>
+    /// Derived classes use this to apply cross-cutting behavior such as <see cref="PropertyOptions"/>. It is generic so
+    /// that value-type changes are reported without boxing.
+    /// </remarks>
+    /// <typeparam name="T">The type of the property value.</typeparam>
     /// <param name="property">The property whose effective value changed.</param>
     /// <param name="oldValue">The previous effective value.</param>
     /// <param name="newValue">The new effective value.</param>
-    protected virtual void OnPropertyValueChanged(BindableProperty property, object? oldValue, object? newValue)
+    protected virtual void OnPropertyValueChanged<T>(BindableProperty<T> property, T oldValue, T newValue)
     {
     }
 
@@ -714,13 +836,43 @@ public class BindableObject : INotifyPropertyChanged
             return;
         }
 
-        foreach (var entry in entries)
+        try
         {
-            object? newValue = entry.Target.GetValueUntyped(entry.Property);
-            if (!Equals(entry.OldValue, newValue))
+            // Indexed: the handlers raised here may start nested changes, which rent their own lists.
+            for (int i = 0; i < entries.Count; i++)
             {
-                entry.Target.RaiseEffectiveValueChanged(entry.Property, entry.OldValue, newValue);
+                var entry = entries[i];
+                object? newValue = entry.Target.GetValueUntyped(entry.Property);
+                if (!Equals(entry.OldValue, newValue))
+                {
+                    entry.Target.RaiseEffectiveValueChanged(entry.Property, entry.OldValue, newValue);
+                }
             }
+        }
+        finally
+        {
+            ReturnEntries(entries);
+        }
+    }
+
+    // Pool of snapshot lists. Changes can nest (a handler changing another inherited property), so this is a small
+    // stack rather than a single scratch list. Capped so a burst of nesting doesn't keep large lists alive.
+    [ThreadStatic] private static Stack<List<InheritedValueEntry>>? t_entryListPool;
+    private const int MaxPooledEntryLists = 8;
+
+    private static List<InheritedValueEntry> RentEntries()
+    {
+        var pool = t_entryListPool;
+        return pool != null && pool.Count > 0 ? pool.Pop() : new List<InheritedValueEntry>();
+    }
+
+    private static void ReturnEntries(List<InheritedValueEntry> entries)
+    {
+        entries.Clear();
+        var pool = t_entryListPool ??= new Stack<List<InheritedValueEntry>>();
+        if (pool.Count < MaxPooledEntryLists)
+        {
+            pool.Push(entries);
         }
     }
 
@@ -733,7 +885,7 @@ public class BindableObject : INotifyPropertyChanged
             // (s, o, n) => ((TextBlock)s).InvalidateMeasure() from being invoked on unrelated node types.
             if (!node.HasOwnValue(property.Id) && property.TargetType.IsInstanceOfType(node))
             {
-                (entries ??= new()).Add(new InheritedValueEntry(node, property, node.GetValueUntyped(property)));
+                (entries ??= RentEntries()).Add(new InheritedValueEntry(node, property, node.GetValueUntyped(property)));
             }
 
             if (shadowsAll && !node.HasOwnValueForAny(property.InheritanceSources))
@@ -759,7 +911,8 @@ public class BindableObject : INotifyPropertyChanged
 
     #region Value lookup
 
-    private bool TryGetOwnValue(int id, out object? value)
+    // Returns the stored object, which may be a ValueSlot; typed readers use ReadStored, untyped readers Unwrap.
+    private bool TryGetOwnStored(int id, out object? value)
     {
         return (_animatedValues != null && _animatedValues.TryGetValue(id, out value))
             || _localValues.TryGetValue(id, out value)
@@ -781,7 +934,7 @@ public class BindableObject : INotifyPropertyChanged
         return false;
     }
 
-    private bool TryGetInheritedValue(BindableProperty property, out object? value)
+    private bool TryGetInheritedStored(BindableProperty property, out object? value)
     {
         var sources = property.InheritanceSources;
         for (var current = InheritanceParent; current != null; current = current.InheritanceParent)
@@ -789,7 +942,7 @@ public class BindableObject : INotifyPropertyChanged
             // The property itself first, then same-named aliases (e.g. Control.FontSize for TextBlock.FontSize).
             for (int i = 0; i < sources.Length; i++)
             {
-                if (current.TryGetOwnValue(sources[i].Id, out value))
+                if (current.TryGetOwnStored(sources[i].Id, out value))
                 {
                     return true;
                 }
@@ -829,12 +982,20 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="getter">A function delegate extracting the target value from the source object.</param>
     /// <param name="setter">An optional action delegate writing the target value back to the source object for two-way binding.</param>
     /// <param name="updateSourceTrigger">Specifies when two-way changes are pushed back to the source object. Defaults to <see cref="UpdateSourceTrigger.PropertyChanged"/>.</param>
+    /// <param name="getterExpression">
+    /// Supplied by the compiler: the source text of <paramref name="getter"/>. For a simple getter such as
+    /// <c>vm =&gt; vm.Title</c> (or <c>vm =&gt; vm.Order.Total</c>), the binding only updates when the source raises
+    /// <see cref="INotifyPropertyChanged.PropertyChanged"/> for that property (<c>Title</c> / <c>Order</c>) or for all
+    /// properties (empty name). Other getters update on every change. A computed property must therefore raise its own
+    /// change notification (e.g. with <c>[NotifyPropertyChangedFor]</c>). Leave this parameter at its default.
+    /// </param>
     public void SetBinding<TTarget, TSource>(
         BindableProperty<TTarget> property,
         TSource source,
         Func<TSource, TTarget> getter,
         Action<TSource, TTarget>? setter = null,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
         property.ThrowIfReadOnly();
@@ -844,7 +1005,8 @@ public class BindableObject : INotifyPropertyChanged
             existing.Dispose();
         }
 
-        var binding = new PropertyBinding<TTarget, TSource>(this, property, source, getter, setter, updateSourceTrigger);
+        var binding = new PropertyBinding<TTarget, TSource>(
+            this, property, source, getter, setter, updateSourceTrigger, BindingHelpers.GetSourcePropertyName(getterExpression));
         _bindings[property.Id] = binding;
     }
 
@@ -866,11 +1028,19 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="getter">A function delegate extracting the target value from the data context.</param>
     /// <param name="setter">An optional action delegate writing the target value back to the data context for two-way binding.</param>
     /// <param name="updateSourceTrigger">Specifies when two-way changes are pushed back to the data context. Defaults to <see cref="UpdateSourceTrigger.PropertyChanged"/>.</param>
+    /// <param name="getterExpression">
+    /// Supplied by the compiler: the source text of <paramref name="getter"/>. For a simple getter such as
+    /// <c>vm =&gt; vm.Title</c> (or <c>vm =&gt; vm.Order.Total</c>), the binding only updates when the source raises
+    /// <see cref="INotifyPropertyChanged.PropertyChanged"/> for that property (<c>Title</c> / <c>Order</c>) or for all
+    /// properties (empty name). Other getters update on every change. A computed property must therefore raise its own
+    /// change notification (e.g. with <c>[NotifyPropertyChangedFor]</c>). Leave this parameter at its default.
+    /// </param>
     public void SetBinding<TTarget, TDataContext>(
         BindableProperty<TTarget> property,
         Func<TDataContext, TTarget> getter,
         Action<TDataContext, TTarget>? setter = null,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
         property.ThrowIfReadOnly();
@@ -880,7 +1050,8 @@ public class BindableObject : INotifyPropertyChanged
             existing.Dispose();
         }
 
-        var binding = new DataContextBinding<TTarget, TDataContext>(this, property, getter, setter, updateSourceTrigger);
+        var binding = new DataContextBinding<TTarget, TDataContext>(
+            this, property, getter, setter, updateSourceTrigger, BindingHelpers.GetSourcePropertyName(getterExpression));
         _bindings[property.Id] = binding;
     }
 
@@ -975,6 +1146,16 @@ public interface IBindingSubscription : IDisposable
 }
 
 /// <summary>
+/// Implemented by bindings so the property system can report typed target changes without boxing value types.
+/// </summary>
+/// <typeparam name="T">The target property's value type.</typeparam>
+internal interface ITypedBindingSubscription<in T>
+{
+    /// <summary>Typed counterpart of <see cref="IBindingSubscription.OnTargetPropertyChanged(object?)"/>.</summary>
+    void OnTargetPropertyChanged(T newValue);
+}
+
+/// <summary>
 /// Represents a strongly-typed data binding subscription connecting a target <see cref="BindableProperty{TTarget}"/>
 /// on a <see cref="BindableObject"/> to an explicit source object instance of type <typeparamref name="TSource"/>.
 /// </summary>
@@ -984,7 +1165,7 @@ public interface IBindingSubscription : IDisposable
 /// </remarks>
 /// <typeparam name="TTarget">The data type of the target property.</typeparam>
 /// <typeparam name="TSource">The type of the source object. Must be a reference type.</typeparam>
-public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
+public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription, ITypedBindingSubscription<TTarget>
     where TSource : class
 {
     private readonly WeakReference<BindableObject> _targetRef;
@@ -997,6 +1178,7 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
     private object? _pendingValue;
     private bool _hasPendingValue;
     private bool _isUpdating;
+    private readonly string? _sourcePropertyName;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PropertyBinding{TTarget, TSource}"/> class.
@@ -1007,6 +1189,10 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
     /// <param name="getter">The getter delegate to extract values from the source object.</param>
     /// <param name="setter">An optional setter delegate to write values back to the source object for two-way binding.</param>
     /// <param name="updateSourceTrigger">Specifies when two-way changes are pushed back to the source. Defaults to <see cref="UpdateSourceTrigger.PropertyChanged"/>.</param>
+    /// <param name="sourcePropertyName">
+    /// The source property the getter reads, if known. When set, source notifications for other properties are ignored.
+    /// <c>null</c> updates on every change.
+    /// </param>
     /// <exception cref="ArgumentException"><paramref name="updateSourceTrigger"/> is <see cref="UpdateSourceTrigger.LostFocus"/> but <paramref name="target"/> is not a <see cref="Tree.UIElement"/>.</exception>
     public PropertyBinding(
         BindableObject target,
@@ -1014,7 +1200,8 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
         TSource source,
         Func<TSource, TTarget> getter,
         Action<TSource, TTarget>? setter,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        string? sourcePropertyName = null)
     {
         BindingHelpers.ValidateTrigger(target, updateSourceTrigger);
 
@@ -1024,6 +1211,7 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
         _getter = getter;
         _setter = setter;
         _updateSourceTrigger = updateSourceTrigger;
+        _sourcePropertyName = sourcePropertyName;
 
         if (source is INotifyPropertyChanged inpc)
         {
@@ -1053,6 +1241,11 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
         if (!_targetRef.TryGetTarget(out _))
         {
             Dispose();
+            return;
+        }
+
+        if (!BindingHelpers.Affects(e, _sourcePropertyName))
+        {
             return;
         }
 
@@ -1127,17 +1320,34 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
         }
     }
 
-    private void UpdateSourceInternal(object? value)
+    private void UpdateSourceInternal(object? value) => UpdateSourceTyped((TTarget)value!);
+
+    private void UpdateSourceTyped(TTarget value)
     {
         if (_isUpdating || _setter == null) return;
         _isUpdating = true;
         try
         {
-            _setter(_source, (TTarget)value!);
+            _setter(_source, value);
         }
         finally
         {
             _isUpdating = false;
+        }
+    }
+
+    void ITypedBindingSubscription<TTarget>.OnTargetPropertyChanged(TTarget newValue)
+    {
+        if (_isUpdating || _setter == null) return;
+
+        if (_updateSourceTrigger == UpdateSourceTrigger.PropertyChanged)
+        {
+            UpdateSourceTyped(newValue);
+        }
+        else
+        {
+            _pendingValue = newValue;
+            _hasPendingValue = true;
         }
     }
 
@@ -1172,7 +1382,7 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
 /// </remarks>
 /// <typeparam name="TTarget">The data type of the target property.</typeparam>
 /// <typeparam name="TDataContext">The expected type of the data context. Must be a reference type.</typeparam>
-public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscription
+public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscription, ITypedBindingSubscription<TTarget>
     where TDataContext : class
 {
     private readonly WeakReference<BindableObject> _targetRef;
@@ -1185,6 +1395,7 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
     private object? _pendingValue;
     private bool _hasPendingValue;
     private bool _isUpdating;
+    private readonly string? _sourcePropertyName;
     private bool _hasAppliedValue;
 
     /// <summary>
@@ -1195,13 +1406,18 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
     /// <param name="getter">The getter delegate to extract values from the data context.</param>
     /// <param name="setter">An optional setter delegate to write values back to the data context for two-way binding.</param>
     /// <param name="updateSourceTrigger">Specifies when two-way changes are pushed back to the data context. Defaults to <see cref="UpdateSourceTrigger.PropertyChanged"/>.</param>
+    /// <param name="sourcePropertyName">
+    /// The source property the getter reads, if known. When set, source notifications for other properties are ignored.
+    /// <c>null</c> updates on every change.
+    /// </param>
     /// <exception cref="ArgumentException"><paramref name="updateSourceTrigger"/> is <see cref="UpdateSourceTrigger.LostFocus"/> but <paramref name="target"/> is not a <see cref="Tree.UIElement"/>.</exception>
     public DataContextBinding(
         BindableObject target,
         BindableProperty<TTarget> property,
         Func<TDataContext, TTarget> getter,
         Action<TDataContext, TTarget>? setter,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        string? sourcePropertyName = null)
     {
         BindingHelpers.ValidateTrigger(target, updateSourceTrigger);
 
@@ -1210,6 +1426,7 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
         _getter = getter;
         _setter = setter;
         _updateSourceTrigger = updateSourceTrigger;
+        _sourcePropertyName = sourcePropertyName;
 
         _dataContextSubscription = target.Subscribe(BindableObject.DataContextProperty, OnTargetDataContextChanged);
         if (target is Tree.UIElement uie && _updateSourceTrigger == UpdateSourceTrigger.LostFocus)
@@ -1256,6 +1473,11 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
         if (!_targetRef.TryGetTarget(out _))
         {
             Dispose();
+            return;
+        }
+
+        if (!BindingHelpers.Affects(e, _sourcePropertyName))
+        {
             return;
         }
 
@@ -1343,7 +1565,9 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
         }
     }
 
-    private void UpdateSourceInternal(object? value)
+    private void UpdateSourceInternal(object? value) => UpdateSourceTyped((TTarget)value!);
+
+    private void UpdateSourceTyped(TTarget value)
     {
         if (_isUpdating || _setter == null) return;
         _isUpdating = true;
@@ -1351,12 +1575,27 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
         {
             if (_targetRef.TryGetTarget(out var target) && target.DataContext is TDataContext dc)
             {
-                _setter(dc, (TTarget)value!);
+                _setter(dc, value);
             }
         }
         finally
         {
             _isUpdating = false;
+        }
+    }
+
+    void ITypedBindingSubscription<TTarget>.OnTargetPropertyChanged(TTarget newValue)
+    {
+        if (_isUpdating || _setter == null) return;
+
+        if (_updateSourceTrigger == UpdateSourceTrigger.PropertyChanged)
+        {
+            UpdateSourceTyped(newValue);
+        }
+        else
+        {
+            _pendingValue = newValue;
+            _hasPendingValue = true;
         }
     }
 
@@ -1385,6 +1624,109 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
 
 internal static class BindingHelpers
 {
+    /// <summary>
+    /// Determines whether a source <see cref="INotifyPropertyChanged.PropertyChanged"/> notification can affect a binding
+    /// that reads <paramref name="sourcePropertyName"/>. A <c>null</c> or empty property name in the notification means
+    /// "everything changed"; a binding without a known source property is always affected.
+    /// </summary>
+    public static bool Affects(PropertyChangedEventArgs e, string? sourcePropertyName) =>
+        sourcePropertyName == null
+        || string.IsNullOrEmpty(e.PropertyName)
+        || string.Equals(e.PropertyName, sourcePropertyName, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Extracts the source property a getter reads from its source text (supplied through
+    /// <see cref="CallerArgumentExpressionAttribute"/>), for the simple forms <c>x =&gt; x.Name</c> and
+    /// <c>x =&gt; x.Name.Inner</c> (the first member is returned). Anything else (method calls, operators, several
+    /// members, a delegate variable) returns <c>null</c>, meaning the binding updates on every source change.
+    /// </summary>
+    public static string? GetSourcePropertyName(string? getterExpression)
+    {
+        if (string.IsNullOrWhiteSpace(getterExpression))
+        {
+            return null;
+        }
+
+        ReadOnlySpan<char> text = getterExpression.AsSpan().Trim();
+        if (text.StartsWith("static ", StringComparison.Ordinal))
+        {
+            text = text[7..].TrimStart();
+        }
+
+        int arrow = text.IndexOf("=>", StringComparison.Ordinal);
+        if (arrow <= 0)
+        {
+            return null;
+        }
+
+        // Parameter: "x", "(x)" or "(SomeType x)".
+        ReadOnlySpan<char> parameter = text[..arrow].Trim();
+        if (parameter.Length >= 2 && parameter[0] == '(' && parameter[^1] == ')')
+        {
+            parameter = parameter[1..^1].Trim();
+            int space = parameter.LastIndexOf(' ');
+            if (space >= 0)
+            {
+                parameter = parameter[(space + 1)..];
+            }
+        }
+
+        if (ReadIdentifier(parameter) != parameter.Length)
+        {
+            return null;
+        }
+
+        // Body: the parameter, then one or more ".Member" segments and nothing else.
+        ReadOnlySpan<char> body = text[(arrow + 2)..].Trim();
+        if (!body.StartsWith(parameter, StringComparison.Ordinal) || body.Length <= parameter.Length || body[parameter.Length] != '.')
+        {
+            return null;
+        }
+
+        ReadOnlySpan<char> rest = body[(parameter.Length + 1)..];
+        int nameLength = ReadIdentifier(rest);
+        if (nameLength == 0)
+        {
+            return null;
+        }
+
+        ReadOnlySpan<char> name = rest[..nameLength];
+        ReadOnlySpan<char> tail = rest[nameLength..];
+        while (tail.Length > 0)
+        {
+            if (tail[0] != '.')
+            {
+                return null;
+            }
+
+            tail = tail[1..];
+            int segment = ReadIdentifier(tail);
+            if (segment == 0)
+            {
+                return null;
+            }
+            tail = tail[segment..];
+        }
+
+        return name.ToString();
+    }
+
+    // Length of the C# identifier at the start of text (0 if there is none).
+    private static int ReadIdentifier(ReadOnlySpan<char> text)
+    {
+        if (text.Length == 0 || !(char.IsLetter(text[0]) || text[0] == '_'))
+        {
+            return 0;
+        }
+
+        int length = 1;
+        while (length < text.Length && (char.IsLetterOrDigit(text[length]) || text[length] == '_'))
+        {
+            length++;
+        }
+        return length;
+    }
+
     public static void ValidateTrigger(BindableObject target, UpdateSourceTrigger trigger)
     {
         if (trigger == UpdateSourceTrigger.LostFocus && target is not Tree.UIElement)

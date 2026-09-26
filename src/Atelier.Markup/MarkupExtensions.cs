@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using SkiaSharp;
 using Atelier.Controls;
@@ -129,21 +130,23 @@ public static class MarkupExtensions
     public static T BindIsEnabled<T, TSource>(
         this T element,
         TSource source,
-        Func<TSource, bool> getter)
+        Func<TSource, bool> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where T : UIElement
         where TSource : class
     {
-        element.SetBinding(UIElement.IsEnabledProperty, source, getter);
+        element.SetBinding(UIElement.IsEnabledProperty, source, getter, getterExpression: getterExpression);
         return element;
     }
 
     public static T BindIsEnabled<T, TDataContext>(
         this T element,
-        Func<TDataContext, bool> getter)
+        Func<TDataContext, bool> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where T : UIElement
         where TDataContext : class
     {
-        element.SetBinding(UIElement.IsEnabledProperty, getter);
+        element.SetBinding(UIElement.IsEnabledProperty, getter, getterExpression: getterExpression);
         return element;
     }
 
@@ -314,10 +317,11 @@ public static class MarkupExtensions
         this Card card,
         TSource source,
         Func<TSource, CardVariant> getter,
-        Action<TSource, CardVariant>? setter = null)
+        Action<TSource, CardVariant>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        card.SetBinding(Card.VariantProperty, source, getter, setter);
+        card.SetBinding(Card.VariantProperty, source, getter, setter, getterExpression: getterExpression);
         return card;
     }
 
@@ -337,10 +341,11 @@ public static class MarkupExtensions
         this Border border,
         TSource source,
         Func<TSource, float> getter,
-        Action<TSource, float>? setter = null)
+        Action<TSource, float>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        border.SetBinding(Border.ElevationProperty, source, getter, setter);
+        border.SetBinding(Border.ElevationProperty, source, getter, setter, getterExpression: getterExpression);
         return border;
     }
 
@@ -348,10 +353,11 @@ public static class MarkupExtensions
         this Card card,
         TSource source,
         Func<TSource, float> getter,
-        Action<TSource, float>? setter = null)
+        Action<TSource, float>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        card.SetBinding(Border.ElevationProperty, source, getter, setter);
+        card.SetBinding(Border.ElevationProperty, source, getter, setter, getterExpression: getterExpression);
         return card;
     }
 
@@ -382,20 +388,22 @@ public static class MarkupExtensions
     public static Border BindCornerRadius<TSource>(
         this Border border,
         TSource source,
-        Func<TSource, float> getter)
+        Func<TSource, float> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        border.SetBinding(Border.CornerRadiusProperty, source, s => new CornerRadius(getter(s)));
+        border.SetBinding(Border.CornerRadiusProperty, source, s => new CornerRadius(getter(s)), getterExpression: getterExpression);
         return border;
     }
 
     public static Card BindCornerRadius<TSource>(
         this Card card,
         TSource source,
-        Func<TSource, float> getter)
+        Func<TSource, float> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        card.SetBinding(Border.CornerRadiusProperty, source, s => new CornerRadius(getter(s)));
+        card.SetBinding(Border.CornerRadiusProperty, source, s => new CornerRadius(getter(s)), getterExpression: getterExpression);
         return card;
     }
 
@@ -438,20 +446,22 @@ public static class MarkupExtensions
     public static Border BindPadding<TSource>(
         this Border border,
         TSource source,
-        Func<TSource, float> getter)
+        Func<TSource, float> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        border.SetBinding(Border.PaddingProperty, source, s => new Thickness(getter(s)));
+        border.SetBinding(Border.PaddingProperty, source, s => new Thickness(getter(s)), getterExpression: getterExpression);
         return border;
     }
 
     public static Card BindPadding<TSource>(
         this Card card,
         TSource source,
-        Func<TSource, float> getter)
+        Func<TSource, float> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        card.SetBinding(Border.PaddingProperty, source, s => new Thickness(getter(s)));
+        card.SetBinding(Border.PaddingProperty, source, s => new Thickness(getter(s)), getterExpression: getterExpression);
         return card;
     }
 
@@ -483,10 +493,11 @@ public static class MarkupExtensions
         this Button button,
         TSource source,
         Func<TSource, ButtonVariant> getter,
-        Action<TSource, ButtonVariant>? setter = null)
+        Action<TSource, ButtonVariant>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        button.SetBinding(Button.VariantProperty, source, getter, setter);
+        button.SetBinding(Button.VariantProperty, source, getter, setter, getterExpression: getterExpression);
         return button;
     }
 
@@ -561,10 +572,11 @@ public static class MarkupExtensions
         this TextBlock textBlock,
         TSource source,
         Func<TSource, bool> getter,
-        Action<TSource, bool>? setter = null)
+        Action<TSource, bool>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBlock.SetBinding(TextBlock.ItalicProperty, source, getter, setter);
+        textBlock.SetBinding(TextBlock.ItalicProperty, source, getter, setter, getterExpression: getterExpression);
         return textBlock;
     }
 
@@ -572,10 +584,11 @@ public static class MarkupExtensions
         this TextBlock textBlock,
         TSource source,
         Func<TSource, string?> getter,
-        Action<TSource, string?>? setter = null)
+        Action<TSource, string?>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBlock.SetBinding(TextBlock.FontFamilyProperty, source, getter, setter);
+        textBlock.SetBinding(TextBlock.FontFamilyProperty, source, getter, setter, getterExpression: getterExpression);
         return textBlock;
     }
 
@@ -583,20 +596,22 @@ public static class MarkupExtensions
         this TextBlock textBlock,
         TSource source,
         Func<TSource, string> getter,
-        Action<TSource, string>? setter = null)
+        Action<TSource, string>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBlock.SetBinding(TextBlock.TextProperty, source, getter, setter);
+        textBlock.SetBinding(TextBlock.TextProperty, source, getter, setter, getterExpression: getterExpression);
         return textBlock;
     }
 
     public static TextBlock BindForeground<TSource>(
         this TextBlock textBlock,
         TSource source,
-        Func<TSource, Color> getter)
+        Func<TSource, Color> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBlock.SetBinding(TextBlock.ForegroundProperty, source, getter);
+        textBlock.SetBinding(TextBlock.ForegroundProperty, source, getter, getterExpression: getterExpression);
         return textBlock;
     }
 
@@ -604,10 +619,11 @@ public static class MarkupExtensions
         this TextBlock textBlock,
         TSource source,
         Func<TSource, float> getter,
-        Action<TSource, float>? setter = null)
+        Action<TSource, float>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBlock.SetBinding(TextBlock.FontSizeProperty, source, getter, setter);
+        textBlock.SetBinding(TextBlock.FontSizeProperty, source, getter, setter, getterExpression: getterExpression);
         return textBlock;
     }
 
@@ -615,10 +631,11 @@ public static class MarkupExtensions
         this TextBlock textBlock,
         TSource source,
         Func<TSource, bool> getter,
-        Action<TSource, bool>? setter = null)
+        Action<TSource, bool>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBlock.SetBinding(TextBlock.BoldProperty, source, getter, setter);
+        textBlock.SetBinding(TextBlock.BoldProperty, source, getter, setter, getterExpression: getterExpression);
         return textBlock;
     }
 
@@ -626,10 +643,11 @@ public static class MarkupExtensions
         this TextBlock textBlock,
         TSource source,
         Func<TSource, bool> getter,
-        Action<TSource, bool>? setter = null)
+        Action<TSource, bool>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBlock.SetBinding(TextBlock.MutedProperty, source, getter, setter);
+        textBlock.SetBinding(TextBlock.MutedProperty, source, getter, setter, getterExpression: getterExpression);
         return textBlock;
     }
 
@@ -637,10 +655,11 @@ public static class MarkupExtensions
         this TextBlock textBlock,
         TSource source,
         Func<TSource, TextAlignment> getter,
-        Action<TSource, TextAlignment>? setter = null)
+        Action<TSource, TextAlignment>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBlock.SetBinding(TextBlock.TextAlignmentProperty, source, getter, setter);
+        textBlock.SetBinding(TextBlock.TextAlignmentProperty, source, getter, setter, getterExpression: getterExpression);
         return textBlock;
     }
 
@@ -648,10 +667,11 @@ public static class MarkupExtensions
         this TextBlock textBlock,
         TSource source,
         Func<TSource, TextWrapping> getter,
-        Action<TSource, TextWrapping>? setter = null)
+        Action<TSource, TextWrapping>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBlock.SetBinding(TextBlock.TextWrappingProperty, source, getter, setter);
+        textBlock.SetBinding(TextBlock.TextWrappingProperty, source, getter, setter, getterExpression: getterExpression);
         return textBlock;
     }
 
@@ -703,11 +723,12 @@ public static class MarkupExtensions
         this T element,
         TSource source,
         Func<TSource, string?> getter,
-        Action<TSource, string?>? setter = null)
+        Action<TSource, string?>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where T : UIElement
         where TSource : class
     {
-        element.SetBinding(UIElement.StyleKeyProperty, source, getter, setter);
+        element.SetBinding(UIElement.StyleKeyProperty, source, getter, setter, getterExpression: getterExpression);
         return element;
     }
 
@@ -722,11 +743,12 @@ public static class MarkupExtensions
         BindableProperty<TProp> property,
         TSource source,
         Func<TSource, TProp> getter,
-        Action<TSource, TProp>? setter = null)
+        Action<TSource, TProp>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where T : BindableObject
         where TSource : class
     {
-        target.SetBinding(property, source, getter, setter);
+        target.SetBinding(property, source, getter, setter, getterExpression: getterExpression);
         return target;
     }
 
@@ -736,11 +758,12 @@ public static class MarkupExtensions
         TSource source,
         Func<TSource, TProp> getter,
         Action<TSource, TProp> setter,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where T : BindableObject
         where TSource : class
     {
-        target.SetBinding(property, source, getter, setter, updateSourceTrigger);
+        target.SetBinding(property, source, getter, setter, updateSourceTrigger, getterExpression: getterExpression);
         return target;
     }
 
@@ -760,30 +783,22 @@ public static class MarkupExtensions
         BindableProperty<TProp> property,
         Func<TDataContext, TProp> getter,
         Action<TDataContext, TProp> setter,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where T : BindableObject
         where TDataContext : class
     {
-        target.SetBinding(property, getter, setter, updateSourceTrigger);
+        target.SetBinding(property, getter, setter, updateSourceTrigger, getterExpression: getterExpression);
         return target;
-    }
-
-    public static TextBlock BindText<TSource>(
-        this TextBlock textBlock,
-        TSource source,
-        Func<TSource, string> getter)
-        where TSource : class
-    {
-        textBlock.SetBinding(TextBlock.TextProperty, source, getter);
-        return textBlock;
     }
 
     public static TextBlock BindText<TDataContext>(
         this TextBlock textBlock,
-        Func<TDataContext, string> getter)
+        Func<TDataContext, string> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
-        textBlock.SetBinding(TextBlock.TextProperty, getter);
+        textBlock.SetBinding(TextBlock.TextProperty, getter, getterExpression: getterExpression);
         return textBlock;
     }
 
@@ -792,10 +807,11 @@ public static class MarkupExtensions
         TSource source,
         Func<TSource, string> getter,
         Action<TSource, string>? setter = null,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBox.SetBinding(TextBox.TextProperty, source, getter, setter, updateSourceTrigger);
+        textBox.SetBinding(TextBox.TextProperty, source, getter, setter, updateSourceTrigger, getterExpression: getterExpression);
         return textBox;
     }
 
@@ -803,10 +819,11 @@ public static class MarkupExtensions
         this TextBox textBox,
         Func<TDataContext, string> getter,
         Action<TDataContext, string>? setter = null,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
-        textBox.SetBinding(TextBox.TextProperty, getter, setter, updateSourceTrigger);
+        textBox.SetBinding(TextBox.TextProperty, getter, setter, updateSourceTrigger, getterExpression: getterExpression);
         return textBox;
     }
 
@@ -815,10 +832,11 @@ public static class MarkupExtensions
         TSource source,
         Func<TSource, float> getter,
         Action<TSource, float>? setter = null,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        slider.SetBinding(Slider.ValueProperty, source, getter, setter, updateSourceTrigger);
+        slider.SetBinding(Slider.ValueProperty, source, getter, setter, updateSourceTrigger, getterExpression: getterExpression);
         return slider;
     }
 
@@ -826,10 +844,11 @@ public static class MarkupExtensions
         this Slider slider,
         Func<TDataContext, float> getter,
         Action<TDataContext, float>? setter = null,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
-        slider.SetBinding(Slider.ValueProperty, getter, setter, updateSourceTrigger);
+        slider.SetBinding(Slider.ValueProperty, getter, setter, updateSourceTrigger, getterExpression: getterExpression);
         return slider;
     }
 
@@ -849,20 +868,22 @@ public static class MarkupExtensions
         this CheckBox checkBox,
         TSource source,
         Func<TSource, bool> getter,
-        Action<TSource, bool>? setter = null)
+        Action<TSource, bool>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        checkBox.SetBinding(CheckBox.IsCheckedProperty, source, getter, setter);
+        checkBox.SetBinding(CheckBox.IsCheckedProperty, source, getter, setter, getterExpression: getterExpression);
         return checkBox;
     }
 
     public static CheckBox BindIsChecked<TDataContext>(
         this CheckBox checkBox,
         Func<TDataContext, bool> getter,
-        Action<TDataContext, bool>? setter = null)
+        Action<TDataContext, bool>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
-        checkBox.SetBinding(CheckBox.IsCheckedProperty, getter, setter);
+        checkBox.SetBinding(CheckBox.IsCheckedProperty, getter, setter, getterExpression: getterExpression);
         return checkBox;
     }
 
@@ -883,7 +904,8 @@ public static class MarkupExtensions
         TSource source,
         Func<TSource, TValue> getter,
         Action<TSource, TValue> setter,
-        TValue valueToMatch)
+        TValue valueToMatch,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
         radioButton.SetBinding(
@@ -893,7 +915,8 @@ public static class MarkupExtensions
             (s, isChecked) =>
             {
                 if (isChecked) setter(s, valueToMatch);
-            });
+            },
+            getterExpression: getterExpression);
         return radioButton;
     }
 
@@ -901,7 +924,8 @@ public static class MarkupExtensions
         this RadioButton radioButton,
         Func<TDataContext, TValue> getter,
         Action<TDataContext, TValue> setter,
-        TValue valueToMatch)
+        TValue valueToMatch,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
         radioButton.SetBinding(
@@ -910,7 +934,8 @@ public static class MarkupExtensions
             (TDataContext s, bool isChecked) =>
             {
                 if (isChecked) setter(s, valueToMatch);
-            });
+            },
+            getterExpression: getterExpression);
         return radioButton;
     }
 
@@ -936,20 +961,22 @@ public static class MarkupExtensions
         this Switch switchControl,
         TSource source,
         Func<TSource, bool> getter,
-        Action<TSource, bool>? setter = null)
+        Action<TSource, bool>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        switchControl.SetBinding(Switch.IsCheckedProperty, source, getter, setter);
+        switchControl.SetBinding(Switch.IsCheckedProperty, source, getter, setter, getterExpression: getterExpression);
         return switchControl;
     }
 
     public static Switch BindIsChecked<TDataContext>(
         this Switch switchControl,
         Func<TDataContext, bool> getter,
-        Action<TDataContext, bool>? setter = null)
+        Action<TDataContext, bool>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
-        switchControl.SetBinding(Switch.IsCheckedProperty, getter, setter);
+        switchControl.SetBinding(Switch.IsCheckedProperty, getter, setter, getterExpression: getterExpression);
         return switchControl;
     }
 
@@ -999,20 +1026,22 @@ public static class MarkupExtensions
     public static TextBox BindLabel<TSource>(
         this TextBox textBox,
         TSource source,
-        Func<TSource, string> getter)
+        Func<TSource, string> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBox.SetBinding(TextBox.LabelProperty, source, getter);
+        textBox.SetBinding(TextBox.LabelProperty, source, getter, getterExpression: getterExpression);
         return textBox;
     }
 
     public static TextBox BindSupportingText<TSource>(
         this TextBox textBox,
         TSource source,
-        Func<TSource, string> getter)
+        Func<TSource, string> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        textBox.SetBinding(TextBox.SupportingTextProperty, source, getter);
+        textBox.SetBinding(TextBox.SupportingTextProperty, source, getter, getterExpression: getterExpression);
         return textBox;
     }
 
@@ -1111,10 +1140,11 @@ public static class MarkupExtensions
         this ComboBox comboBox,
         TSource source,
         Func<TSource, object?> getter,
-        Action<TSource, object?>? setter = null)
+        Action<TSource, object?>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        comboBox.SetBinding(ComboBox.SelectedItemProperty, source, getter, setter);
+        comboBox.SetBinding(ComboBox.SelectedItemProperty, source, getter, setter, getterExpression: getterExpression);
         return comboBox;
     }
 
@@ -1122,10 +1152,11 @@ public static class MarkupExtensions
         this ComboBox comboBox,
         TSource source,
         Func<TSource, int> getter,
-        Action<TSource, int>? setter = null)
+        Action<TSource, int>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        comboBox.SetBinding(ComboBox.SelectedIndexProperty, source, getter, setter);
+        comboBox.SetBinding(ComboBox.SelectedIndexProperty, source, getter, setter, getterExpression: getterExpression);
         return comboBox;
     }
 
@@ -1275,10 +1306,11 @@ public static class MarkupExtensions
         TSource source,
         Func<TSource, int> getter,
         Action<TSource, int>? setter = null,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        listBox.SetBinding(ListBox.SelectedIndexProperty, source, getter, setter, updateSourceTrigger);
+        listBox.SetBinding(ListBox.SelectedIndexProperty, source, getter, setter, updateSourceTrigger, getterExpression: getterExpression);
         return listBox;
     }
 
@@ -1289,10 +1321,11 @@ public static class MarkupExtensions
         this ListBox listBox,
         Func<TDataContext, int> getter,
         Action<TDataContext, int>? setter = null,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
-        listBox.SetBinding(ListBox.SelectedIndexProperty, getter, setter, updateSourceTrigger);
+        listBox.SetBinding(ListBox.SelectedIndexProperty, getter, setter, updateSourceTrigger, getterExpression: getterExpression);
         return listBox;
     }
 
@@ -1302,10 +1335,11 @@ public static class MarkupExtensions
     public static ListBox BindItemsSource<TSource>(
         this ListBox listBox,
         TSource source,
-        Func<TSource, System.Collections.IEnumerable?> getter)
+        Func<TSource, System.Collections.IEnumerable?> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        listBox.SetBinding(ItemsControl.ItemsSourceProperty, source, getter);
+        listBox.SetBinding(ItemsControl.ItemsSourceProperty, source, getter, getterExpression: getterExpression);
         return listBox;
     }
 
@@ -1314,10 +1348,11 @@ public static class MarkupExtensions
     /// </summary>
     public static ListBox BindItemsSource<TDataContext>(
         this ListBox listBox,
-        Func<TDataContext, System.Collections.IEnumerable?> getter)
+        Func<TDataContext, System.Collections.IEnumerable?> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
-        listBox.SetBinding(ItemsControl.ItemsSourceProperty, getter);
+        listBox.SetBinding(ItemsControl.ItemsSourceProperty, getter, getterExpression: getterExpression);
         return listBox;
     }
 
@@ -1385,10 +1420,11 @@ public static class MarkupExtensions
     public static ItemsControl BindItemsSource<TSource>(
         this ItemsControl itemsControl,
         TSource source,
-        Func<TSource, System.Collections.IEnumerable?> getter)
+        Func<TSource, System.Collections.IEnumerable?> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        itemsControl.SetBinding(ItemsControl.ItemsSourceProperty, source, getter);
+        itemsControl.SetBinding(ItemsControl.ItemsSourceProperty, source, getter, getterExpression: getterExpression);
         return itemsControl;
     }
 
@@ -1397,10 +1433,11 @@ public static class MarkupExtensions
     /// </summary>
     public static ItemsControl BindItemsSource<TDataContext>(
         this ItemsControl itemsControl,
-        Func<TDataContext, System.Collections.IEnumerable?> getter)
+        Func<TDataContext, System.Collections.IEnumerable?> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
-        itemsControl.SetBinding(ItemsControl.ItemsSourceProperty, getter);
+        itemsControl.SetBinding(ItemsControl.ItemsSourceProperty, getter, getterExpression: getterExpression);
         return itemsControl;
     }
 
@@ -1447,19 +1484,21 @@ public static class MarkupExtensions
     public static ContentControl BindContent<TSource>(
         this ContentControl control,
         TSource source,
-        Func<TSource, object?> getter)
+        Func<TSource, object?> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        control.SetBinding(ContentControl.ContentProperty, source, getter);
+        control.SetBinding(ContentControl.ContentProperty, source, getter, getterExpression: getterExpression);
         return control;
     }
 
     public static ContentControl BindContent<TDataContext>(
         this ContentControl control,
-        Func<TDataContext, object?> getter)
+        Func<TDataContext, object?> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
-        control.SetBinding(ContentControl.ContentProperty, getter);
+        control.SetBinding(ContentControl.ContentProperty, getter, getterExpression: getterExpression);
         return control;
     }
 
@@ -1634,66 +1673,75 @@ public static class MarkupExtensions
         return new Icon(svgPathData, size, foreground);
     }
 
-    public static Icon BindKind<TSource>(this Icon icon, TSource source, Func<TSource, MaterialIconKind> getter, Action<TSource, MaterialIconKind>? setter = null)
+    public static Icon BindKind<TSource>(this Icon icon, TSource source, Func<TSource, MaterialIconKind> getter, Action<TSource, MaterialIconKind>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        icon.SetBinding(Icon.KindProperty, source, getter, setter);
+        icon.SetBinding(Icon.KindProperty, source, getter, setter, getterExpression: getterExpression);
         return icon;
     }
 
-    public static Icon BindForeground<TSource>(this Icon icon, TSource source, Func<TSource, Color> getter)
+    public static Icon BindForeground<TSource>(this Icon icon, TSource source, Func<TSource, Color> getter,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        icon.SetBinding(Icon.ForegroundProperty, source, getter);
+        icon.SetBinding(Icon.ForegroundProperty, source, getter, getterExpression: getterExpression);
         return icon;
     }
 
-    public static Icon BindFill<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+    public static Icon BindFill<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        icon.SetBinding(Icon.FillProperty, source, getter, setter);
+        icon.SetBinding(Icon.FillProperty, source, getter, setter, getterExpression: getterExpression);
         return icon;
     }
 
-    public static Icon BindWeight<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+    public static Icon BindWeight<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        icon.SetBinding(Icon.WeightProperty, source, getter, setter);
+        icon.SetBinding(Icon.WeightProperty, source, getter, setter, getterExpression: getterExpression);
         return icon;
     }
 
-    public static Icon BindGrade<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+    public static Icon BindGrade<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        icon.SetBinding(Icon.GradeProperty, source, getter, setter);
+        icon.SetBinding(Icon.GradeProperty, source, getter, setter, getterExpression: getterExpression);
         return icon;
     }
 
-    public static Icon BindOpticalSize<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+    public static Icon BindOpticalSize<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        icon.SetBinding(Icon.OpticalSizeProperty, source, getter, setter);
+        icon.SetBinding(Icon.OpticalSizeProperty, source, getter, setter, getterExpression: getterExpression);
         return icon;
     }
 
-    public static Icon BindSize<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+    public static Icon BindSize<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        icon.SetBinding(Icon.SizeProperty, source, getter, setter);
+        icon.SetBinding(Icon.SizeProperty, source, getter, setter, getterExpression: getterExpression);
         return icon;
     }
 
-    public static Icon BindStrokeWidth<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null)
+    public static Icon BindStrokeWidth<TSource>(this Icon icon, TSource source, Func<TSource, float> getter, Action<TSource, float>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        icon.SetBinding(Icon.StrokeWidthProperty, source, getter, setter);
+        icon.SetBinding(Icon.StrokeWidthProperty, source, getter, setter, getterExpression: getterExpression);
         return icon;
     }
 
-    public static Icon BindPathData<TSource>(this Icon icon, TSource source, Func<TSource, string?> getter, Action<TSource, string?>? setter = null)
+    public static Icon BindPathData<TSource>(this Icon icon, TSource source, Func<TSource, string?> getter, Action<TSource, string?>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        icon.SetBinding(Icon.PathDataProperty, source, getter, setter);
+        icon.SetBinding(Icon.PathDataProperty, source, getter, setter, getterExpression: getterExpression);
         return icon;
     }
 
@@ -1753,10 +1801,11 @@ public static class MarkupExtensions
         this TreeView treeView,
         TSource source,
         Func<TSource, object?> getter,
-        Action<TSource, object?>? setter = null)
+        Action<TSource, object?>? setter = null,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
-        treeView.SetBinding(TreeView.SelectedItemProperty, source, getter, setter);
+        treeView.SetBinding(TreeView.SelectedItemProperty, source, getter, setter, getterExpression: getterExpression);
         return treeView;
     }
 

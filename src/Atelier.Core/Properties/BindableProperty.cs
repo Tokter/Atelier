@@ -337,7 +337,11 @@ public abstract class BindableProperty
         }
     }
 
-    internal abstract void InvokePropertyChangedUntyped(BindableObject sender, object? oldValue, object? newValue);
+    /// <summary>
+    /// Raises all change notifications for this property on <paramref name="target"/>, unboxing the values once so the
+    /// typed notification path is shared by typed and untyped changes.
+    /// </summary>
+    internal abstract void RaiseChanged(BindableObject target, object? oldValue, object? newValue);
 
     /// <summary>
     /// Gets the default value that applies to objects of <paramref name="objectType"/>, taking
@@ -620,9 +624,9 @@ public sealed class BindableProperty<T> : BindableProperty
 
     internal override bool HasCoercion => CoerceValue != null;
 
-    internal override void InvokePropertyChangedUntyped(BindableObject sender, object? oldValue, object? newValue)
+    internal override void RaiseChanged(BindableObject target, object? oldValue, object? newValue)
     {
-        PropertyChanged?.Invoke(sender, (T)oldValue!, (T)newValue!);
+        target.RaiseEffectiveValueChanged(this, (T)oldValue!, (T)newValue!);
     }
 
     internal override object? GetDefaultValueUntyped(Type objectType)
