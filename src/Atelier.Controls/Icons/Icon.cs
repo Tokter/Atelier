@@ -13,70 +13,98 @@ namespace Atelier.Controls;
 /// using its variable font capabilities across 4 axes: FILL, wght (weight), GRAD (grade), and opsz (optical size),
 /// or custom vector geometry from an <see cref="SKPath"/> or SVG path data string.
 /// </summary>
+/// <remarks>
+/// The axis properties are clamped to the font's ranges by coercion, so values from bindings and styles are clamped too.
+/// While <see cref="Foreground"/> is not set anywhere the theme's icon color is used.
+/// </remarks>
 public class Icon : Control
 {
+    /// <summary>The smallest optical size the Material Symbols font supports.</summary>
+    private const float MinOpticalSize = 20f;
+
+    /// <summary>The largest optical size the Material Symbols font supports.</summary>
+    private const float MaxOpticalSize = 48f;
+
     #region Bindable Properties
 
+    /// <summary>Identifies the <see cref="Kind"/> property.</summary>
     public static readonly BindableProperty<MaterialIconKind> KindProperty =
         BindableProperty.Register<Icon, MaterialIconKind>(
             nameof(Kind),
             MaterialIconKind.None,
-            (s, o, n) => ((Icon)s).OnKindChanged(o, n)
+            options: PropertyOptions.AffectsMeasure | PropertyOptions.AffectsRender
         );
 
+    /// <summary>Identifies the <see cref="Data"/> property.</summary>
     public static readonly BindableProperty<SKPath?> DataProperty =
         BindableProperty.Register<Icon, SKPath?>(
             nameof(Data),
             null,
-            (s, o, n) => ((Icon)s).OnDataChanged(o, n)
+            (s, o, n) => ((Icon)s).OnDataChanged(o, n),
+            options: PropertyOptions.AffectsMeasure | PropertyOptions.AffectsRender
         );
 
+    /// <summary>Identifies the <see cref="PathData"/> property.</summary>
     public static readonly BindableProperty<string?> PathDataProperty =
         BindableProperty.Register<Icon, string?>(
             nameof(PathData),
             null,
-            (s, o, n) => ((Icon)s).OnPathDataChanged(o, n)
+            (s, o, n) => ((Icon)s).OnPathDataChanged(n)
         );
 
+    /// <summary>Identifies the <see cref="StrokeWidth"/> property.</summary>
     public static readonly BindableProperty<float> StrokeWidthProperty =
         BindableProperty.Register<Icon, float>(
             nameof(StrokeWidth),
             0f,
+            coerceValue: static (_, value) => float.IsNaN(value) ? 0f : Math.Max(0f, value),
             options: PropertyOptions.AffectsRender
         );
 
+    /// <summary>Identifies the <see cref="Size"/> property.</summary>
     public static readonly BindableProperty<float> SizeProperty =
         BindableProperty.Register<Icon, float>(
             nameof(Size),
             24f,
-            (s, o, n) => ((Icon)s).OnSizeChanged(o, n)
+            options: PropertyOptions.AffectsMeasure | PropertyOptions.AffectsRender
         );
 
+    /// <summary>Identifies the <see cref="Fill"/> property.</summary>
     public static readonly BindableProperty<float> FillProperty =
         BindableProperty.Register<Icon, float>(
             nameof(Fill),
             0f,
+            coerceValue: static (_, value) => ClampAxis(value, 0f, 1f, 0f),
             options: PropertyOptions.AffectsRender
         );
 
+    /// <summary>Identifies the <see cref="Weight"/> property.</summary>
     public static readonly BindableProperty<float> WeightProperty =
         BindableProperty.Register<Icon, float>(
             nameof(Weight),
             400f,
+            coerceValue: static (_, value) => ClampAxis(value, 100f, 700f, 400f),
             options: PropertyOptions.AffectsRender
         );
 
+    /// <summary>Identifies the <see cref="Grade"/> property.</summary>
     public static readonly BindableProperty<float> GradeProperty =
         BindableProperty.Register<Icon, float>(
             nameof(Grade),
             0f,
+            coerceValue: static (_, value) => ClampAxis(value, -25f, 200f, 0f),
             options: PropertyOptions.AffectsRender
         );
 
+    /// <summary>
+    /// Identifies the <see cref="OpticalSize"/> property. Its stored default is 24; while it is not set, the
+    /// <see cref="OpticalSize"/> accessor follows <see cref="Size"/>.
+    /// </summary>
     public static readonly BindableProperty<float> OpticalSizeProperty =
         BindableProperty.Register<Icon, float>(
             nameof(OpticalSize),
             24f,
+            coerceValue: static (_, value) => ClampAxis(value, MinOpticalSize, MaxOpticalSize, 24f),
             options: PropertyOptions.AffectsRender
         );
 
@@ -103,12 +131,12 @@ public class Icon : Control
     }
 
     /// <summary>
-    /// Gets or sets the variable font FILL axis (0.0 = Outlined, 1.0 = Filled).
+    /// Gets or sets the variable font FILL axis (0.0 = Outlined, 1.0 = Filled), clamped to 0..1.
     /// </summary>
     public float Fill
     {
         get => GetValue(FillProperty);
-        set => SetValue(FillProperty, Math.Clamp(value, 0f, 1f));
+        set => SetValue(FillProperty, value);
     }
 
     /// <summary>
@@ -121,35 +149,38 @@ public class Icon : Control
     }
 
     /// <summary>
-    /// Gets or sets the variable font stroke weight axis (100 to 700). Defaults to 400 (Regular).
+    /// Gets or sets the variable font stroke weight axis, clamped to 100..700. Defaults to 400 (Regular).
     /// </summary>
     public float Weight
     {
         get => GetValue(WeightProperty);
-        set => SetValue(WeightProperty, Math.Clamp(value, 100f, 700f));
+        set => SetValue(WeightProperty, value);
     }
 
     /// <summary>
-    /// Gets or sets the variable font grade/contrast axis (-25 to 200). Defaults to 0.
+    /// Gets or sets the variable font grade/contrast axis, clamped to -25..200. Defaults to 0.
     /// </summary>
     public float Grade
     {
         get => GetValue(GradeProperty);
-        set => SetValue(GradeProperty, Math.Clamp(value, -25f, 200f));
+        set => SetValue(GradeProperty, value);
     }
 
     /// <summary>
-    /// Gets or sets the variable font optical size axis (20 to 48). Defaults to 24.
+    /// Gets or sets the variable font optical size axis, clamped to 20..48. While it is not set (locally, by a style
+    /// or a binding) it follows <see cref="Size"/>, clamped to that range; so the default for a 24dp icon is 24.
     /// </summary>
     public float OpticalSize
     {
-        get => GetValue(OpticalSizeProperty);
-        set => SetValue(OpticalSizeProperty, Math.Clamp(value, 20f, 48f));
+        get => GetValueSource(OpticalSizeProperty) == ValueSource.Default
+            ? ClampAxis(Size, MinOpticalSize, MaxOpticalSize, 24f)
+            : GetValue(OpticalSizeProperty);
+        set => SetValue(OpticalSizeProperty, value);
     }
 
     /// <summary>
     /// Gets or sets the custom vector geometry as an <see cref="SKPath"/>.
-    /// When set, this path is rendered instead of a Material font glyph.
+    /// When set, this path is rendered instead of a Material font glyph. The icon doesn't dispose paths assigned here.
     /// </summary>
     public SKPath? Data
     {
@@ -159,7 +190,8 @@ public class Icon : Control
 
     /// <summary>
     /// Gets or sets the custom vector geometry as an SVG path data string (e.g. "M10 20v-6h4v6...").
-    /// Automatically parsed into <see cref="Data"/>.
+    /// Automatically parsed into <see cref="Data"/>; invalid data gives no geometry. The parsed path is owned by the
+    /// icon and disposed when it is replaced.
     /// </summary>
     public string? PathData
     {
@@ -168,21 +200,30 @@ public class Icon : Control
     }
 
     /// <summary>
-    /// Gets or sets the stroke width when rendering custom vector geometry.
+    /// Gets or sets the stroke width when rendering custom vector geometry (not negative).
     /// When 0 (default), the path is filled. When > 0, the path outline is stroked.
     /// </summary>
     public float StrokeWidth
     {
         get => GetValue(StrokeWidthProperty);
-        set => SetValue(StrokeWidthProperty, Math.Max(0f, value));
+        set => SetValue(StrokeWidthProperty, value);
     }
 
     #endregion
 
+    // The path parsed from PathData, which this icon created and therefore disposes when it is replaced.
+    private SKPath? _ownedPath;
+
+    /// <summary>Initializes an empty icon (no glyph, 24dp).</summary>
     public Icon()
     {
     }
 
+    /// <summary>Initializes an icon showing a Material Symbols glyph.</summary>
+    /// <param name="kind">The glyph.</param>
+    /// <param name="size">The size in dp.</param>
+    /// <param name="isFilled">Whether to use the filled variant.</param>
+    /// <param name="foreground">The icon color, or <c>null</c> for the theme color.</param>
     public Icon(MaterialIconKind kind, float size = 24f, bool isFilled = false, Color? foreground = null) : this()
     {
         Kind = kind;
@@ -194,6 +235,10 @@ public class Icon : Control
         }
     }
 
+    /// <summary>Initializes an icon drawing custom geometry, scaled uniformly to <paramref name="size"/>.</summary>
+    /// <param name="path">The geometry; not disposed by the icon.</param>
+    /// <param name="size">The size in dp.</param>
+    /// <param name="foreground">The icon color, or <c>null</c> for the theme color.</param>
     public Icon(SKPath path, float size = 24f, Color? foreground = null) : this()
     {
         Data = path;
@@ -204,6 +249,10 @@ public class Icon : Control
         }
     }
 
+    /// <summary>Initializes an icon drawing SVG path data, scaled uniformly to <paramref name="size"/>.</summary>
+    /// <param name="svgPathData">The SVG path data (see <see cref="PathData"/>).</param>
+    /// <param name="size">The size in dp.</param>
+    /// <param name="foreground">The icon color, or <c>null</c> for the theme color.</param>
     public Icon(string svgPathData, float size = 24f, Color? foreground = null) : this()
     {
         PathData = svgPathData;
@@ -214,49 +263,38 @@ public class Icon : Control
         }
     }
 
-    private void OnKindChanged(MaterialIconKind oldVal, MaterialIconKind newVal)
-    {
-        InvalidateMeasure();
-        InvalidateVisual();
-    }
+    private static float ClampAxis(float value, float min, float max, float fallback) =>
+        float.IsNaN(value) ? fallback : Math.Clamp(value, min, max);
 
     private void OnDataChanged(SKPath? oldVal, SKPath? newVal)
     {
-        InvalidateMeasure();
-        InvalidateVisual();
+        if (oldVal != null && ReferenceEquals(oldVal, _ownedPath) && !ReferenceEquals(oldVal, newVal))
+        {
+            _ownedPath = null;
+            oldVal.Dispose();
+        }
     }
 
-    private void OnPathDataChanged(string? oldVal, string? newVal)
+    private void OnPathDataChanged(string? newVal)
     {
-        if (string.IsNullOrWhiteSpace(newVal))
-        {
-            Data = null;
-        }
-        else
+        SKPath? path = null;
+        if (!string.IsNullOrWhiteSpace(newVal))
         {
             try
             {
-                Data = SKPath.ParseSvgPathData(newVal);
+                path = SKPath.ParseSvgPathData(newVal);
             }
             catch
             {
-                Data = null;
+                path = null;
             }
         }
+
+        Data = path;
+        _ownedPath = path;
     }
 
-    private void OnSizeChanged(float oldVal, float newVal)
-    {
-        // Automatically sync OpticalSize to Size if OpticalSize was kept at default (24) or matched oldVal
-        if (MathF.Abs(OpticalSize - oldVal) < 0.01f || MathF.Abs(OpticalSize - 24f) < 0.01f)
-        {
-            OpticalSize = Math.Clamp(newVal, 20f, 48f);
-        }
-
-        InvalidateMeasure();
-        InvalidateVisual();
-    }
-
+    /// <inheritdoc/>
     protected override PrimitiveSize MeasureOverride(PrimitiveSize availableSize)
     {
         if (Size <= 0)
@@ -267,6 +305,7 @@ public class Icon : Control
         return new PrimitiveSize(Size, Size);
     }
 
+    /// <inheritdoc/>
     protected override PrimitiveSize ArrangeOverride(PrimitiveSize finalSize)
     {
         return finalSize;

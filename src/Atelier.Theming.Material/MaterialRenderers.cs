@@ -414,8 +414,13 @@ public class MaterialSwitchRenderer(MaterialColorScheme colors) : ControlRendere
     }
 }
 
+/// <summary>
+/// Draws a Material Design 3 <see cref="TextBox"/>: container, leading icon, floating label, text with selection and
+/// caret (using the text box's cached character offsets), and supporting text.
+/// </summary>
 public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRenderer<TextBox>
 {
+    /// <inheritdoc/>
     public override void Render(TextBox textBox, ref DrawingContext context)
     {
         var bounds = new Rect(Point.Zero, textBox.Bounds.Size);
@@ -519,12 +524,12 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
                 ? colors.OnSurface.WithAlpha(0.38f)
                 : (isFocused ? colors.Primary : colors.OnSurfaceVariant);
 
-            string glyph = char.ConvertFromUtf32((int)textBox.LeadingIconKind);
+            string glyph = MaterialIconFontManager.GetGlyph(textBox.LeadingIconKind);
             var tf = MaterialIconFontManager.GetTypeface(0, 400, 0, iconSize);
             var font = context.PaintRegistry.GetFont(iconSize, tf);
             var paint = context.PaintRegistry.GetFillPaint(iconColor);
             font.GetFontMetrics(out var metrics);
-            float glyphWidth = font.MeasureText(glyph);
+            float glyphWidth = font.MeasureText(glyph.AsSpan());
             float ix = iconLeft + (iconSize - glyphWidth) * 0.5f;
             float iy = iconTop + (iconSize - (metrics.Ascent + metrics.Descent)) * 0.5f;
             context.Canvas.DrawText(glyph, ix, iy, SKTextAlign.Left, font, paint);
@@ -589,7 +594,9 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
             textY = containerRect.Top + (containerRect.Height + textBox.FontSize) * 0.5f - 2f;
         }
 
-        var textPos = new Point(textStartX - textBox.ScrollOffset, textY);
+        // Offsets come from the text box's per-text cache, so nothing is measured or allocated per frame.
+        float originX = textBox.GetTextOriginX();
+        bool hasText = textBox.Text.Length > 0;
 
         float viewportWidth = textBox.GetViewportWidth();
         var textClipRect = new Rect(textStartX, containerRect.Top + 1f, viewportWidth, Math.Max(0f, containerRect.Height - 2f));
@@ -597,20 +604,11 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
         using (context.PushClip(textClipRect))
         {
             // Selection highlight
-            if (isFocused && textBox.HasSelection && !string.IsNullOrEmpty(textBox.Text))
+            if (isFocused && textBox.HasSelection && hasText)
             {
                 int selStart = textBox.SelectionStart;
-                int selLen = textBox.SelectionLength;
-
-                float selStartX = textStartX - textBox.ScrollOffset;
-                if (selStart > 0)
-                {
-                    var prefix = textBox.Text[..Math.Min(selStart, textBox.Text.Length)];
-                    selStartX += context.MeasureText(prefix, textBox.FontSize, textBox.FontFamily).Width;
-                }
-
-                var selSubstring = textBox.Text.Substring(selStart, Math.Min(selLen, textBox.Text.Length - selStart));
-                float selWidth = context.MeasureText(selSubstring, textBox.FontSize, textBox.FontFamily).Width;
+                float selStartX = originX + textBox.GetCharacterOffset(selStart);
+                float selWidth = textBox.GetCharacterOffset(selStart + textBox.SelectionLength) - textBox.GetCharacterOffset(selStart);
 
                 float selTop = textY - textBox.FontSize - 1f;
                 float selHeight = textBox.FontSize + 4f;
@@ -618,27 +616,30 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
                 context.DrawRect(new Rect(selStartX, selTop, selWidth, selHeight), colors.Primary.WithAlpha(0.35f));
             }
 
-            if (!string.IsNullOrEmpty(textBox.Text))
+            if (hasText)
             {
-                Color textColor = isEnabled ? colors.OnSurface : colors.OnSurface.WithAlpha(0.38f);
-                context.DrawText(textBox.Text, textPos, textColor, textBox.FontSize, textBox.FontFamily);
+                // An unset foreground means the theme color; anything set (black included) is honored.
+                Color baseColor = MaterialTextBlockRenderer.HasExplicitForeground(textBox) ? textBox.Foreground : colors.OnSurface;
+                Color textColor = isEnabled ? baseColor : baseColor.WithAlpha(baseColor.Af * 0.38f);
+                context.DrawText(textBox.DisplayText, new Point(originX, textY), textColor, textBox.FontSize, textBox.FontFamily);
             }
             else if (!string.IsNullOrEmpty(textBox.Placeholder) && (!textBox.HasLabel || progress > 0.8f))
             {
+                float placeholderX = originX;
+                if (textBox.TextAlignment != TextAlignment.Left)
+                {
+                    float free = viewportWidth - context.MeasureText(textBox.Placeholder, textBox.FontSize, textBox.FontFamily).Width;
+                    placeholderX = textStartX + Math.Max(0f, textBox.TextAlignment == TextAlignment.Center ? free * 0.5f : free);
+                }
+
                 Color placeholderColor = isEnabled ? colors.OnSurfaceVariant.WithAlpha(0.6f) : colors.OnSurface.WithAlpha(0.38f);
-                context.DrawText(textBox.Placeholder, textPos, placeholderColor, textBox.FontSize, textBox.FontFamily);
+                context.DrawText(textBox.Placeholder, new Point(placeholderX, textY), placeholderColor, textBox.FontSize, textBox.FontFamily);
             }
 
             // Caret
             if (isFocused && isEnabled && textBox.CaretVisible && !textBox.HasSelection)
             {
-                float caretX = textStartX - textBox.ScrollOffset;
-                if (!string.IsNullOrEmpty(textBox.Text) && textBox.CaretIndex > 0)
-                {
-                    var textBeforeCaret = textBox.Text[..Math.Min(textBox.CaretIndex, textBox.Text.Length)];
-                    var measured = context.MeasureText(textBeforeCaret, textBox.FontSize, textBox.FontFamily);
-                    caretX += measured.Width;
-                }
+                float caretX = originX + textBox.GetCharacterOffset(textBox.CaretIndex);
 
                 float caretWidth = Math.Max(1f, MathF.Round(textBox.CaretWidth));
                 float caretTop = textY - textBox.FontSize;
@@ -762,15 +763,25 @@ public class MaterialProgressBarRenderer(MaterialColorScheme colors) : ControlRe
     }
 }
 
+/// <summary>Draws <see cref="TextBlock"/> text using the line layout the text block computed during measure.</summary>
 public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRenderer<TextBlock>
 {
+    /// <summary>
+    /// Returns whether <paramref name="element"/>'s foreground was set anywhere (locally, by a style, a binding, an
+    /// animation or inherited from an ancestor that set it). An unset foreground (the default) means "use the theme color".
+    /// </summary>
+    internal static bool HasExplicitForeground(UIElement element) =>
+        element.GetValueSource(Control.ForegroundProperty) != Atelier.Core.Properties.ValueSource.Default;
+
+    /// <summary>
+    /// Resolves the color <paramref name="textBlock"/> is drawn in: the theme's text color while
+    /// <see cref="TextBlock.Foreground"/> is unset, otherwise the foreground (any color, black included); muted text
+    /// uses the secondary text color or the foreground at 60% opacity, and disabled text 38% opacity.
+    /// </summary>
     public Color GetTextColor(TextBlock textBlock)
     {
         Color textColor;
-        bool hasCustomForeground = textBlock.Foreground != Color.Black &&
-                                   textBlock.Foreground != Color.Transparent &&
-                                   textBlock.Foreground != colors.OnSurface &&
-                                   textBlock.Foreground != colors.OnSurfaceVariant;
+        bool hasCustomForeground = HasExplicitForeground(textBlock);
 
         if (textBlock.Muted)
         {
@@ -810,62 +821,28 @@ public class MaterialTextBlockRenderer(MaterialColorScheme colors) : ControlRend
 
         try
         {
-            if (textBlock.TextWrapping == TextWrapping.Wrap && textBlock.Bounds.Width > 0)
+            // The lines were laid out during measure/arrange and are reused here: no wrapping or measuring per frame.
+            var lines = textBlock.GetLines();
+            var alignment = textBlock.TextAlignment;
+            float width = textBlock.Bounds.Width;
+            float textY = textBlock.FirstBaseline;
+            float advance = textBlock.LineAdvance;
+
+            for (int i = 0; i < lines.Count; i++)
             {
-                var (_, lines) = TextMeasurer.MeasureWrapped(
-                    textBlock.Text,
-                    textBlock.Bounds.Width,
-                    textBlock.FontSize,
-                    textBlock.FontFamily,
-                    textBlock.Bold,
-                    textBlock.Italic
-                );
-
-                float lineHeight = TextMeasurer.GetFontSpacing(textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
-                if (lineHeight <= 0) lineHeight = textBlock.FontSize * 1.35f;
-                float textY = textBlock.FontSize;
-
-                for (int i = 0; i < lines.Count; i++)
+                var line = lines[i];
+                if (line.Length > 0 || line.HasEllipsis)
                 {
-                    string line = lines[i];
-                    float textX = 0;
-
-                    if (textBlock.TextAlignment != TextAlignment.Left)
+                    float textX = alignment switch
                     {
-                        var measured = context.MeasureText(line, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
-                        if (textBlock.TextAlignment == TextAlignment.Center)
-                        {
-                            textX = (textBlock.Bounds.Width - measured.Width) * 0.5f;
-                        }
-                        else if (textBlock.TextAlignment == TextAlignment.Right)
-                        {
-                            textX = textBlock.Bounds.Width - measured.Width;
-                        }
-                    }
+                        TextAlignment.Center => (width - line.Width) * 0.5f,
+                        TextAlignment.Right => width - line.Width,
+                        _ => 0f
+                    };
 
-                    context.DrawText(line, new Point(textX, textY), textColor, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
-                    textY += lineHeight;
+                    context.DrawText(textBlock.GetLineText(i), new Point(textX, textY), textColor, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
                 }
-            }
-            else
-            {
-                float textY = textBlock.FontSize;
-                float textX = 0;
-
-                if (textBlock.TextAlignment != TextAlignment.Left)
-                {
-                    var measured = context.MeasureText(textBlock.Text, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
-                    if (textBlock.TextAlignment == TextAlignment.Center)
-                    {
-                        textX = (textBlock.Bounds.Width - measured.Width) * 0.5f;
-                    }
-                    else if (textBlock.TextAlignment == TextAlignment.Right)
-                    {
-                        textX = textBlock.Bounds.Width - measured.Width;
-                    }
-                }
-
-                context.DrawText(textBlock.Text, new Point(textX, textY), textColor, textBlock.FontSize, textBlock.FontFamily, textBlock.Bold, textBlock.Italic);
+                textY += advance;
             }
         }
         finally
@@ -1232,8 +1209,10 @@ public class MaterialDialogRenderer(MaterialColorScheme colors) : ControlRendere
     }
 }
 
+/// <summary>Draws <see cref="Icon"/>s: custom geometry scaled into the bounds, or a Material Symbols glyph.</summary>
 public class MaterialIconRenderer(MaterialColorScheme colors) : ControlRenderer<Icon>
 {
+    /// <inheritdoc/>
     public override void Render(Icon icon, ref DrawingContext context)
     {
         if (icon.Size <= 0) return;
@@ -1241,7 +1220,8 @@ public class MaterialIconRenderer(MaterialColorScheme colors) : ControlRenderer<
         var bounds = new Rect(Point.Zero, icon.Bounds.Size);
         if (bounds.Width <= 0 || bounds.Height <= 0) return;
 
-        Color fg = (icon.Foreground != Color.Black && icon.Foreground.A > 0) ? icon.Foreground : colors.OnSurface;
+        // An unset foreground means the theme color; anything set (black included) is honored.
+        Color fg = MaterialTextBlockRenderer.HasExplicitForeground(icon) ? icon.Foreground : colors.OnSurface;
         if (!icon.IsEnabled)
         {
             fg = fg.WithAlpha(fg.Af * 0.38f);
@@ -1284,7 +1264,8 @@ public class MaterialIconRenderer(MaterialColorScheme colors) : ControlRenderer<
 
         if (icon.Kind == MaterialIconKind.None) return;
 
-        string glyph = char.ConvertFromUtf32((int)icon.Kind);
+        // Cached per kind, so drawing doesn't allocate a string per frame.
+        string glyph = MaterialIconFontManager.GetGlyph(icon.Kind);
 
         // 1. Resolve variable font typeface using the 4 axes
         var tf = MaterialIconFontManager.GetTypeface(icon.Fill, icon.Weight, icon.Grade, icon.OpticalSize);
@@ -1295,7 +1276,7 @@ public class MaterialIconRenderer(MaterialColorScheme colors) : ControlRenderer<
 
         // 3. Precise optical centering using font metrics
         font.GetFontMetrics(out var metrics);
-        float glyphWidth = font.MeasureText(glyph);
+        float glyphWidth = font.MeasureText(glyph.AsSpan());
 
         float x = bounds.X + (bounds.Width - glyphWidth) * 0.5f;
         float y = bounds.Y + (bounds.Height - (metrics.Ascent + metrics.Descent)) * 0.5f;
@@ -1304,75 +1285,70 @@ public class MaterialIconRenderer(MaterialColorScheme colors) : ControlRenderer<
     }
 }
 
+/// <summary>
+/// Draws an <see cref="Image"/>'s source inside its padding, scaled per <see cref="Image.Stretch"/> and
+/// <see cref="Image.StretchDirection"/> and clipped to the padded area. The element's opacity is applied by the tree
+/// renderer, not here.
+/// </summary>
 public class MaterialImageRenderer : ControlRenderer<Image>
 {
+    /// <inheritdoc/>
     public override void Render(Image element, ref DrawingContext context)
     {
         var source = element.Source;
         if (source == null || element.Bounds.Width <= 0 || element.Bounds.Height <= 0) return;
 
-        Rect destRect = ComputeDestRect(element.Bounds.Size, new Size(source.Width, source.Height), element.Stretch, element.HorizontalAlignment, element.VerticalAlignment);
-        context.DrawImage(source, destRect, element.Opacity);
+        var padding = element.Padding;
+        var content = new Rect(
+            padding.Left,
+            padding.Top,
+            Math.Max(0f, element.Bounds.Width - padding.Horizontal),
+            Math.Max(0f, element.Bounds.Height - padding.Vertical));
+        if (content.Width <= 0 || content.Height <= 0) return;
+
+        Rect destRect = ComputeDestRect(content, new Size(source.Width, source.Height), element.Stretch, element.StretchDirection,
+            element.HorizontalAlignment, element.VerticalAlignment);
+
+        bool overflows = destRect.Left < content.Left - 0.01f || destRect.Top < content.Top - 0.01f ||
+                         destRect.Right > content.Right + 0.01f || destRect.Bottom > content.Bottom + 0.01f;
+
+        // Opacity 1: VisualTreeRenderer already applies element.Opacity through a layer.
+        if (overflows)
+        {
+            using (context.PushClip(content))
+            {
+                context.DrawImage(source, destRect);
+            }
+        }
+        else
+        {
+            context.DrawImage(source, destRect);
+        }
     }
 
-    private static Rect ComputeDestRect(Size boundsSize, Size sourceSize, Stretch stretch, HorizontalAlignment hAlign, VerticalAlignment vAlign)
+    private static Rect ComputeDestRect(Rect content, Size sourceSize, Stretch stretch, StretchDirection direction,
+        HorizontalAlignment hAlign, VerticalAlignment vAlign)
     {
-        if (sourceSize.IsEmpty || boundsSize.IsEmpty) return Rect.Zero;
+        if (sourceSize.IsEmpty) return Rect.Zero;
 
-        float targetW = boundsSize.Width;
-        float targetH = boundsSize.Height;
-        float srcW = sourceSize.Width;
-        float srcH = sourceSize.Height;
+        var scale = Image.ComputeScale(new Size(content.Width, content.Height), sourceSize, stretch, direction);
+        float drawW = sourceSize.Width * scale.Width;
+        float drawH = sourceSize.Height * scale.Height;
 
-        float drawW = srcW;
-        float drawH = srcH;
-
-        switch (stretch)
+        float x = hAlign switch
         {
-            case Stretch.None:
-                drawW = srcW;
-                drawH = srcH;
-                break;
-            case Stretch.Fill:
-                drawW = targetW;
-                drawH = targetH;
-                break;
-            case Stretch.Uniform:
-                float scale = Math.Min(targetW / srcW, targetH / srcH);
-                drawW = srcW * scale;
-                drawH = srcH * scale;
-                break;
-            case Stretch.UniformToFill:
-                float fillScale = Math.Max(targetW / srcW, targetH / srcH);
-                drawW = srcW * fillScale;
-                drawH = srcH * fillScale;
-                break;
-        }
+            HorizontalAlignment.Center or HorizontalAlignment.Stretch => (content.Width - drawW) * 0.5f,
+            HorizontalAlignment.Right => content.Width - drawW,
+            _ => 0f
+        };
 
-        float x = 0;
-        switch (hAlign)
+        float y = vAlign switch
         {
-            case HorizontalAlignment.Center:
-            case HorizontalAlignment.Stretch:
-                x = (targetW - drawW) * 0.5f;
-                break;
-            case HorizontalAlignment.Right:
-                x = targetW - drawW;
-                break;
-        }
+            VerticalAlignment.Center or VerticalAlignment.Stretch => (content.Height - drawH) * 0.5f,
+            VerticalAlignment.Bottom => content.Height - drawH,
+            _ => 0f
+        };
 
-        float y = 0;
-        switch (vAlign)
-        {
-            case VerticalAlignment.Center:
-            case VerticalAlignment.Stretch:
-                y = (targetH - drawH) * 0.5f;
-                break;
-            case VerticalAlignment.Bottom:
-                y = targetH - drawH;
-                break;
-        }
-
-        return new Rect(x, y, drawW, drawH);
+        return new Rect(content.X + x, content.Y + y, drawW, drawH);
     }
 }
