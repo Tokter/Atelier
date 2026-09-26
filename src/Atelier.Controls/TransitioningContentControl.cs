@@ -10,6 +10,13 @@ namespace Atelier.Controls;
 /// A <see cref="ContentControl"/> that animates transitions between outgoing and incoming content
 /// using an <see cref="ITransition"/> (such as slide, fade, zoom, or composite motions).
 /// </summary>
+/// <remarks>
+/// A transition runs when <see cref="ContentControl.Content"/> changes while a view is shown, a <see cref="Transition"/>
+/// is set and an <see cref="AnimationClock"/> is available (<see cref="Clock"/> or the global clock); otherwise the
+/// content is swapped instantly. Changing the content during a transition stops the running one (the outgoing view is
+/// removed at once) and starts a new transition from the view that was coming in. Changing
+/// <see cref="ContentControl.ContentTemplate"/> or <see cref="ContentControl.ViewLocator"/> cancels the running transition.
+/// </remarks>
 public class TransitioningContentControl : ContentControl
 {
     private static AnimationClock? _globalClock;
@@ -17,17 +24,27 @@ public class TransitioningContentControl : ContentControl
     /// <summary>
     /// Sets the application-wide animation clock used by default when no local clock is configured.
     /// </summary>
+    /// <param name="clock">The clock, or <c>null</c> to disable transitions for controls without a local clock.</param>
     public static void SetGlobalAnimationClock(AnimationClock? clock) => _globalClock = clock;
 
+    /// <summary>Identifies the <see cref="Transition"/> property.</summary>
     public static readonly BindableProperty<ITransition?> TransitionProperty =
         BindableProperty.Register<TransitioningContentControl, ITransition?>(
             nameof(Transition),
             null
         );
 
+    /// <summary>Identifies the <see cref="Duration"/> property.</summary>
     public static readonly BindableProperty<TimeSpan?> DurationProperty =
         BindableProperty.Register<TransitioningContentControl, TimeSpan?>(
             nameof(Duration),
+            null
+        );
+
+    /// <summary>Identifies the <see cref="Easing"/> property.</summary>
+    public static readonly BindableProperty<Func<float, float>?> EasingProperty =
+        BindableProperty.Register<TransitioningContentControl, Func<float, float>?>(
+            nameof(Easing),
             null
         );
 
@@ -51,6 +68,17 @@ public class TransitioningContentControl : ContentControl
     }
 
     /// <summary>
+    /// Gets or sets an optional easing override for the transition (see <see cref="Atelier.Core.Animation.Easing"/>).
+    /// If null, the <see cref="Transition"/>'s easing is used, or <see cref="Atelier.Core.Animation.Easing.Emphasized"/>
+    /// when it has none.
+    /// </summary>
+    public Func<float, float>? Easing
+    {
+        get => GetValue(EasingProperty);
+        set => SetValue(EasingProperty, value);
+    }
+
+    /// <summary>
     /// Gets or sets an optional local <see cref="AnimationClock"/> driving this control's transitions.
     /// When null, falls back to the globally registered clock.
     /// </summary>
@@ -59,7 +87,7 @@ public class TransitioningContentControl : ContentControl
     /// <summary>
     /// Gets a value indicating whether a transition animation is actively in progress.
     /// </summary>
-    public bool IsTransitioning => _activeAnimation != null && _previousView != null;
+    public bool IsTransitioning => _activeAnimation != null && PreviousView != null;
 
     /// <summary>
     /// Occurs when a content transition begins.
@@ -67,34 +95,50 @@ public class TransitioningContentControl : ContentControl
     public event EventHandler? TransitionStarted;
 
     /// <summary>
-    /// Occurs when a content transition finishes.
+    /// Occurs when a content transition finishes, or is completed early with <see cref="CompleteCurrentTransition"/>.
+    /// Not raised for a transition that is interrupted by another content change or canceled with
+    /// <see cref="CancelCurrentTransition"/>.
     /// </summary>
     public event EventHandler? TransitionCompleted;
 
-    protected UIElement? _previousView;
-    private IAnimation? _activeAnimation;
+    /// <summary>Gets the outgoing view while a transition runs, or <c>null</c>.</summary>
+    protected UIElement? PreviousView { get; private set; }
+
+    private object? _previousContent;
+    private FloatAnimation? _activeAnimation;
     private ITransition? _activeTransition;
+
+    // Incremented whenever a transition starts or ends, so callbacks of a stopped animation are ignored.
+    private int _generation;
 
     static TransitioningContentControl()
     {
+        // Clip children by default so sliding or zooming visuals do not spill outside bounds
         ClipToBoundsProperty.OverrideDefaultValue<TransitioningContentControl>(true);
     }
 
+    /// <summary>Initializes a new, empty <see cref="TransitioningContentControl"/> without a transition.</summary>
     public TransitioningContentControl()
     {
-        // Clip children by default so sliding or zooming visuals do not spill outside bounds
     }
 
+    /// <summary>Initializes a new <see cref="TransitioningContentControl"/> showing <paramref name="content"/>.</summary>
+    /// <param name="content">The initial content (shown without a transition).</param>
     public TransitioningContentControl(object? content) : this()
     {
         Content = content;
     }
 
+    /// <summary>Initializes a new <see cref="TransitioningContentControl"/> with initial content and a transition.</summary>
+    /// <param name="content">The initial content (shown without a transition).</param>
+    /// <param name="transition">The transition used for later content changes.</param>
     public TransitioningContentControl(object? content, ITransition? transition) : this(content)
     {
         Transition = transition;
     }
 
+    /// <inheritdoc/>
+    /// <remarks>Starts a transition from the current view to the new content's view, or swaps instantly (see the class remarks).</remarks>
     protected override void OnContentChanged(object? oldContent, object? newContent)
     {
         var clock = Clock ?? _globalClock;
@@ -102,67 +146,52 @@ public class TransitioningContentControl : ContentControl
 
         // If no transition is configured, no animation clock is ticking, or there is no existing view,
         // fall back to instantaneous content swap (same as standard ContentControl).
-        if (transition == null || clock == null || _currentView == null)
+        if (transition == null || clock == null || CurrentView == null)
         {
-            CancelCurrentTransition();
             base.OnContentChanged(oldContent, newContent);
             return;
         }
 
-        // Cancel and finalize any active transition currently in progress (e.g. rapid content switches)
-        if (_activeAnimation != null)
-        {
-            if (_previousView != null)
-            {
-                _activeTransition?.Reset(_previousView, null);
-                RemoveChild(_previousView);
-                _previousView.IsHitTestVisible = true;
-                _previousView = null;
-            }
-            _activeAnimation = null;
-        }
+        // Finish any transition in progress (rapid content switches): its outgoing view goes away now.
+        CancelCurrentTransition();
 
-        // Promote the current visual element to outgoing previous view
-        _previousView = _currentView;
-        _previousView.IsHitTestVisible = false;
-
-        // Resolve and mount the new incoming view
+        var outgoing = CurrentView;
+        var outgoingContent = CurrentViewContent;
         var newView = ResolveContentView(newContent);
-        _currentView = newView;
 
-        if (_currentView != null)
+        if (newView == null || ReferenceEquals(newView, outgoing))
         {
-            AddChild(_currentView);
-        }
-        else
-        {
-            // If new content resolved to null, finish immediately
-            if (_previousView != null)
+            // Nothing to transition to (null content), or the same view shows the new content.
+            if (newView == null)
             {
-                RemoveChild(_previousView);
-                _previousView.IsHitTestVisible = true;
-                _previousView = null;
+                SetCurrentView(null, null);
+                ReleaseView(outgoing, outgoingContent);
+            }
+            else
+            {
+                SetCurrentView(newView, newContent);
             }
             InvalidateMeasure();
             InvalidateVisual();
             return;
         }
 
+        // Promote the current visual element to outgoing previous view and mount the incoming one
+        PreviousView = outgoing;
+        _previousContent = outgoingContent;
+        outgoing.IsHitTestVisible = false;
+
+        SetCurrentView(newView, newContent);
+        AddChild(newView);
+
         _activeTransition = transition;
         var effectiveDuration = Duration ?? transition.Duration;
-        var effectiveEasing = transition.Easing ?? Atelier.Core.Animation.Easing.Emphasized;
+        var effectiveEasing = Easing ?? transition.Easing ?? Atelier.Core.Animation.Easing.Emphasized;
 
         // Apply starting frame (progress = 0)
-        var contentSize = Bounds.Size;
-        if (contentSize.Width <= 0 || contentSize.Height <= 0)
-        {
-            contentSize = DesiredSize;
-        }
+        transition.Apply(outgoing, newView, 0.0f, GetTransitionSize());
 
-        _activeTransition.Apply(_previousView, _currentView, 0.0f, contentSize);
-
-        TransitionStarted?.Invoke(this, EventArgs.Empty);
-
+        int generation = ++_generation;
         var anim = new FloatAnimation(
             from: 0.0f,
             to: 1.0f,
@@ -170,15 +199,17 @@ public class TransitioningContentControl : ContentControl
             easing: effectiveEasing,
             onUpdate: progress =>
             {
-                var currentSize = Bounds.Size;
-                if (currentSize.Width <= 0 || currentSize.Height <= 0)
-                {
-                    currentSize = DesiredSize;
-                }
-                _activeTransition?.Apply(_previousView, _currentView, progress, currentSize);
+                if (generation != _generation) return;
+                _activeTransition?.Apply(PreviousView, CurrentView, progress, GetTransitionSize());
                 InvalidateVisual();
             },
-            onCompleted: EndTransition
+            onCompleted: () =>
+            {
+                if (generation == _generation)
+                {
+                    EndTransition(raiseCompleted: true);
+                }
+            }
         );
 
         _activeAnimation = anim;
@@ -186,96 +217,134 @@ public class TransitioningContentControl : ContentControl
 
         InvalidateMeasure();
         InvalidateVisual();
+
+        TransitionStarted?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>Cancels a running transition first, so its outgoing view is reset and removed.</remarks>
+    protected override void UpdateContentDisplay()
+    {
+        CancelCurrentTransition();
+        base.UpdateContentDisplay();
+    }
+
+    private Size GetTransitionSize()
+    {
+        var size = Bounds.Size;
+        if (size.Width <= 0 || size.Height <= 0)
+        {
+            size = DesiredSize;
+        }
+        return size;
     }
 
     /// <summary>
-    /// Cancels any running transition and removes the outgoing visual immediately.
+    /// Cancels any running transition: stops its animation, removes the outgoing view immediately and resets both views
+    /// to their untransformed state. Raises no event.
     /// </summary>
     public void CancelCurrentTransition()
     {
-        if (_activeAnimation != null)
+        if (_activeAnimation == null && PreviousView == null && _activeTransition == null)
         {
-            _activeAnimation = null;
+            return;
         }
 
-        if (_previousView != null)
-        {
-            _activeTransition?.Reset(_previousView, null);
-            RemoveChild(_previousView);
-            _previousView.IsHitTestVisible = true;
-            _previousView = null;
-        }
-
-        if (_currentView != null)
-        {
-            _activeTransition?.Reset(null, _currentView);
-        }
-
-        _activeTransition = null;
+        EndTransition(raiseCompleted: false);
     }
 
-    private void EndTransition()
+    /// <summary>
+    /// Jumps a running transition to its end state: like <see cref="CancelCurrentTransition"/>, but raises
+    /// <see cref="TransitionCompleted"/>. Does nothing when no transition is running.
+    /// </summary>
+    public void CompleteCurrentTransition()
     {
+        if (_activeAnimation == null)
+        {
+            return;
+        }
+
+        EndTransition(raiseCompleted: true);
+    }
+
+    private void EndTransition(bool raiseCompleted)
+    {
+        _generation++;
+        _activeAnimation?.Stop();
         _activeAnimation = null;
 
-        if (_previousView != null)
-        {
-            _activeTransition?.Reset(_previousView, null);
-            RemoveChild(_previousView);
-            _previousView.IsHitTestVisible = true;
-            _previousView = null;
-        }
-
-        if (_currentView != null)
-        {
-            _activeTransition?.Reset(null, _currentView);
-        }
-
+        var transition = _activeTransition;
         _activeTransition = null;
 
-        TransitionCompleted?.Invoke(this, EventArgs.Empty);
+        var previous = PreviousView;
+        if (previous != null)
+        {
+            var previousContent = _previousContent;
+            PreviousView = null;
+            _previousContent = null;
+            transition?.Reset(previous, null);
+            ReleaseView(previous, previousContent);
+            previous.IsHitTestVisible = true;
+        }
+
+        var current = CurrentView;
+        if (current != null)
+        {
+            transition?.Reset(null, current);
+        }
 
         InvalidateMeasure();
         InvalidateVisual();
+
+        if (raiseCompleted)
+        {
+            TransitionCompleted?.Invoke(this, EventArgs.Empty);
+        }
     }
 
+    /// <inheritdoc/>
+    /// <remarks>While a transition runs, the result covers both the incoming and the outgoing view.</remarks>
     protected override Size MeasureOverride(Size availableSize)
     {
         var padding = Padding;
         var contentArea = availableSize.Deflate(padding);
         Size maxDesired = Size.Zero;
 
-        if (_currentView != null && _currentView.Visibility != Visibility.Collapsed)
+        var current = CurrentView;
+        if (current != null && current.Visibility != Visibility.Collapsed)
         {
-            _currentView.Measure(contentArea);
-            maxDesired = _currentView.DesiredSize;
+            current.Measure(contentArea);
+            maxDesired = current.DesiredSize;
         }
 
-        if (_previousView != null && _previousView.Visibility != Visibility.Collapsed)
+        var previous = PreviousView;
+        if (previous != null && previous.Visibility != Visibility.Collapsed)
         {
-            _previousView.Measure(contentArea);
+            previous.Measure(contentArea);
             maxDesired = new Size(
-                Math.Max(maxDesired.Width, _previousView.DesiredSize.Width),
-                Math.Max(maxDesired.Height, _previousView.DesiredSize.Height)
+                Math.Max(maxDesired.Width, previous.DesiredSize.Width),
+                Math.Max(maxDesired.Height, previous.DesiredSize.Height)
             );
         }
 
         return maxDesired.Inflate(padding.Horizontal, padding.Vertical);
     }
 
+    /// <inheritdoc/>
     protected override Size ArrangeOverride(Size finalSize)
     {
-        var padding = Padding;
-        var contentRect = new Rect(Point.Zero, finalSize).Deflate(padding);
+        var contentRect = new Rect(Point.Zero, finalSize).Deflate(Padding);
 
-        if (_currentView != null && _currentView.Visibility != Visibility.Collapsed)
+        var current = CurrentView;
+        if (current != null && current.Visibility != Visibility.Collapsed)
         {
-            _currentView.Arrange(contentRect);
+            current.Arrange(GetContentSlot(current, contentRect));
         }
 
-        if (_previousView != null && _previousView.Visibility != Visibility.Collapsed)
+        var previous = PreviousView;
+        if (previous != null && previous.Visibility != Visibility.Collapsed)
         {
-            _previousView.Arrange(contentRect);
+            previous.Arrange(GetContentSlot(previous, contentRect));
         }
 
         return finalSize;

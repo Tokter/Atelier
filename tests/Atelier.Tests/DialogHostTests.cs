@@ -552,31 +552,40 @@ public class DialogHostTests
         pageLayout.Add(localHost);
         rootHost.Content = pageLayout;
 
-        // 1. Show a dialog targeting the Local host
-        var localDialog = new Dialog("Local Alert", "Confined to local card", DialogButtons.Ok);
-        var localTask = localDialog.ShowAsync(localHost);
+        // Lookup by identifier only finds hosts displayed in a window.
+        rootHost.AttachToHost();
+        try
+        {
+            // 1. Show a dialog targeting the Local host
+            var localDialog = new Dialog("Local Alert", "Confined to local card", DialogButtons.Ok);
+            var localTask = localDialog.ShowAsync(localHost);
 
-        Assert.True(localHost.IsOpen);
-        Assert.Same(localDialog, localHost.Dialog);
-        Assert.False(rootHost.IsOpen);
-        Assert.Null(rootHost.Dialog);
+            Assert.True(localHost.IsOpen);
+            Assert.Same(localDialog, localHost.Dialog);
+            Assert.False(rootHost.IsOpen);
+            Assert.Null(rootHost.Dialog);
 
-        localDialog.Close(DialogResult.Ok);
-        await localTask;
-        Assert.False(localHost.IsOpen);
+            localDialog.Close(DialogResult.Ok);
+            await localTask;
+            Assert.False(localHost.IsOpen);
 
-        // 2. Show a dialog targeting the Global host
-        var globalDialog = new Dialog("Global Alert", "Covers entire application", DialogButtons.Ok);
-        var globalTask = DialogHost.ShowAsync(globalDialog, "RootHost");
+            // 2. Show a dialog targeting the Global host
+            var globalDialog = new Dialog("Global Alert", "Covers entire application", DialogButtons.Ok);
+            var globalTask = DialogHost.ShowAsync(globalDialog, "RootHost");
 
-        Assert.True(rootHost.IsOpen);
-        Assert.Same(globalDialog, rootHost.Dialog);
-        Assert.False(localHost.IsOpen);
-        Assert.Null(localHost.Dialog);
+            Assert.True(rootHost.IsOpen);
+            Assert.Same(globalDialog, rootHost.Dialog);
+            Assert.False(localHost.IsOpen);
+            Assert.Null(localHost.Dialog);
 
-        globalDialog.Close(DialogResult.Ok);
-        await globalTask;
-        Assert.False(rootHost.IsOpen);
+            globalDialog.Close(DialogResult.Ok);
+            await globalTask;
+            Assert.False(rootHost.IsOpen);
+        }
+        finally
+        {
+            rootHost.DetachFromHost();
+        }
     }
 
     [Fact]

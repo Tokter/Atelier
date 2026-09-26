@@ -1202,9 +1202,13 @@ public class MaterialPopupRenderer(MaterialColorScheme colors) : ControlRenderer
         Color bg = popup.Background.A > 0 ? popup.Background : colors.SurfaceContainerHigh;
         context.DrawRoundedRect(bounds, popup.CornerRadius, bg);
 
-        Color border = popup.BorderBrush.A > 0 ? popup.BorderBrush : colors.OutlineVariant.WithAlpha(0.5f);
-        float borderThickness = popup.BorderThickness.Left > 0 ? popup.BorderThickness.Left : 1f;
-        context.DrawRoundedRectOutline(bounds, popup.CornerRadius, border, borderThickness);
+        // Outline: BorderThickness defaults to 1; 0 draws none.
+        float borderThickness = popup.BorderThickness.Left;
+        if (borderThickness > 0)
+        {
+            Color border = popup.BorderBrush.A > 0 ? popup.BorderBrush : colors.OutlineVariant.WithAlpha(0.5f);
+            context.DrawRoundedRectOutline(bounds, popup.CornerRadius, border, borderThickness);
+        }
     }
 }
 
@@ -1225,10 +1229,13 @@ public class MaterialDialogRenderer(MaterialColorScheme colors) : ControlRendere
         Color bg = dialog.Background.A > 0 ? dialog.Background : colors.SurfaceContainerHigh;
         context.DrawRoundedRect(bounds, dialog.CornerRadius, bg);
 
-        // 3. Draw subtle outline border
-        Color border = dialog.BorderBrush.A > 0 ? dialog.BorderBrush : colors.OutlineVariant.WithAlpha(0.35f);
-        float borderThickness = dialog.BorderThickness.Left > 0 ? dialog.BorderThickness.Left : 1f;
-        context.DrawRoundedRectOutline(bounds, dialog.CornerRadius, border, borderThickness);
+        // 3. Draw subtle outline border (BorderThickness defaults to 1; 0 draws none)
+        float borderThickness = dialog.BorderThickness.Left;
+        if (borderThickness > 0)
+        {
+            Color border = dialog.BorderBrush.A > 0 ? dialog.BorderBrush : colors.OutlineVariant.WithAlpha(0.35f);
+            context.DrawRoundedRectOutline(bounds, dialog.CornerRadius, border, borderThickness);
+        }
     }
 }
 

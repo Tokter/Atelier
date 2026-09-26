@@ -13,18 +13,30 @@ namespace Atelier.Controls;
 /// A container control placed in the visual tree that hosts child content and can display
 /// modal dialogs on top while darkening the underlying content and blocking all input to it.
 /// </summary>
+/// <remarks>
+/// Dialogs stack: showing a dialog while another is open (for example from one of its button handlers) puts the new one
+/// on top, with the scrim between it and the dialogs below; closing it restores the previous dialog and its focus. Each
+/// open dialog is a <see cref="FocusManager"/> modal scope. Every way a dialog leaves the host completes its
+/// <see cref="Controls.Dialog.ShowAsync(DialogHost)"/> task: <see cref="Controls.Dialog.Close"/>, setting
+/// <see cref="Dialog"/> or <see cref="IsOpen"/>, a scrim click, or the host being removed from a displayed tree (those
+/// complete with <see cref="DialogResult.None"/> unless noted otherwise).
+/// </remarks>
 public class DialogHost : Control
 {
-    // Weak: hosts must not be kept alive after their window or page is gone (entries are pruned during lookups).
+    // Weak: hosts must not be kept alive after their window or page is gone. Dead entries are pruned whenever the list
+    // reaches s_pruneThreshold, which then doubles relative to the survivors (amortized O(1) per host).
     private static readonly List<WeakReference<DialogHost>> _hostRefs = [];
+    private static int s_pruneThreshold = 16;
 
     /// <summary>
-    /// Optional delegate that returns the root visual node of the window for fallback host resolution.
+    /// Optional delegate that returns the root visual node of the active window, searched by <see cref="FindNearestHost"/>
+    /// when the start node has no host ancestor.
     /// </summary>
     public static Func<VisualNode?>? RootVisualProvider { get; set; }
 
     #region Bindable Properties
 
+    /// <summary>Identifies the <see cref="Content"/> property.</summary>
     public static readonly BindableProperty<UIElement?> ContentProperty =
         BindableProperty.Register<DialogHost, UIElement?>(
             nameof(Content),
@@ -32,6 +44,7 @@ public class DialogHost : Control
             (s, o, n) => ((DialogHost)s).OnContentChanged(o, n)
         );
 
+    /// <summary>Identifies the <see cref="Dialog"/> property.</summary>
     public static readonly BindableProperty<UIElement?> DialogProperty =
         BindableProperty.Register<DialogHost, UIElement?>(
             nameof(Dialog),
@@ -39,19 +52,23 @@ public class DialogHost : Control
             (s, o, n) => ((DialogHost)s).OnDialogChanged(o, n)
         );
 
+    /// <summary>Identifies the <see cref="IsOpen"/> property.</summary>
     public static readonly BindableProperty<bool> IsOpenProperty =
         BindableProperty.Register<DialogHost, bool>(
             nameof(IsOpen),
             false,
-            (s, o, n) => ((DialogHost)s).OnIsOpenChanged(o, n)
+            (s, o, n) => ((DialogHost)s).OnIsOpenChanged(o, n),
+            coerceValue: static (s, v) => v && ((DialogHost)s)._dialogStack.Count > 0
         );
 
+    /// <summary>Identifies the <see cref="CloseOnClickAway"/> property.</summary>
     public static readonly BindableProperty<bool> CloseOnClickAwayProperty =
         BindableProperty.Register<DialogHost, bool>(
             nameof(CloseOnClickAway),
             false
         );
 
+    /// <summary>Identifies the <see cref="OverlayColor"/> property.</summary>
     public static readonly BindableProperty<Color> OverlayColorProperty =
         BindableProperty.Register<DialogHost, Color>(
             nameof(OverlayColor),
@@ -59,6 +76,7 @@ public class DialogHost : Control
             (s, o, n) => ((DialogHost)s).OnOverlayColorChanged(o, n)
         );
 
+    /// <summary>Identifies the <see cref="Identifier"/> property.</summary>
     public static readonly BindableProperty<string?> IdentifierProperty =
         BindableProperty.Register<DialogHost, string?>(
             nameof(Identifier),
@@ -79,8 +97,13 @@ public class DialogHost : Control
     }
 
     /// <summary>
-    /// Gets or sets the currently active modal dialog element. Setting to null closes the dialog.
+    /// Gets or sets the topmost open dialog element (a <see cref="Controls.Dialog"/> or any other element).
     /// </summary>
+    /// <remarks>
+    /// Setting it replaces all open dialogs with the new one; setting <c>null</c> closes them all. Removed
+    /// <see cref="Controls.Dialog"/>s complete with <see cref="DialogResult.None"/>. Use
+    /// <see cref="Controls.Dialog.ShowAsync(DialogHost)"/> to stack a dialog on top of the open ones instead.
+    /// </remarks>
     public UIElement? Dialog
     {
         get => GetValue(DialogProperty);
@@ -88,7 +111,8 @@ public class DialogHost : Control
     }
 
     /// <summary>
-    /// Gets or sets whether a dialog is currently open.
+    /// Gets or sets whether a dialog is open. Setting <c>false</c> closes all open dialogs (completing them with
+    /// <see cref="DialogResult.None"/>); setting <c>true</c> has no effect unless a dialog is open.
     /// </summary>
     public bool IsOpen
     {
@@ -97,7 +121,10 @@ public class DialogHost : Control
     }
 
     /// <summary>
-    /// Gets or sets whether clicking the darkened overlay area dismisses the active dialog.
+    /// Gets or sets whether clicking the darkened overlay dismisses the topmost dialog: a <see cref="Controls.Dialog"/>
+    /// closes with <see cref="DialogResult.Cancel"/>, other content is removed. With it set, Escape also removes non-dialog
+    /// content (a <see cref="Controls.Dialog"/> handles Escape itself, see <see cref="Controls.Dialog.CloseOnEscape"/>).
+    /// The default is <c>false</c>.
     /// </summary>
     public bool CloseOnClickAway
     {
@@ -106,7 +133,7 @@ public class DialogHost : Control
     }
 
     /// <summary>
-    /// Gets or sets the color of the semi-transparent darkening scrim.
+    /// Gets or sets the color of the semi-transparent darkening scrim. The default is 50% black.
     /// </summary>
     public Color OverlayColor
     {
@@ -125,15 +152,43 @@ public class DialogHost : Control
 
     #endregion
 
-    private readonly DialogScrim _scrim;
+    /// <summary>Gets the open dialogs, bottom to top; the last one is <see cref="Dialog"/>.</summary>
+    public IReadOnlyList<UIElement> OpenDialogs => _dialogStack;
 
+    /// <summary>Occurs after a dialog has been shown in this host.</summary>
+    public event EventHandler<DialogHostEventArgs>? DialogOpened;
+
+    /// <summary>Occurs after a dialog has been removed from this host, with the response it closed with.</summary>
+    public event EventHandler<DialogHostEventArgs>? DialogClosed;
+
+    private readonly DialogScrim _scrim;
+    private readonly List<UIElement> _dialogStack = [];
+    private readonly EventHandler<KeyEventArgs> _contentKeyDownHandler;
+
+    // Set while the host itself writes Dialog/IsOpen to mirror the stack, so the change callbacks ignore those writes.
+    private bool _syncingState;
+
+    private static readonly DialogResponse NoneResponse = new(DialogResult.None);
+
+    /// <summary>Initializes a new <see cref="DialogHost"/> without content or dialogs.</summary>
     public DialogHost()
     {
         _scrim = new DialogScrim(this)
         {
             Background = OverlayColor
         };
-        _hostRefs.Add(new WeakReference<DialogHost>(this));
+        _contentKeyDownHandler = OnContentKeyDown;
+        RegisterHost(this);
+    }
+
+    private static void RegisterHost(DialogHost host)
+    {
+        if (_hostRefs.Count >= s_pruneThreshold)
+        {
+            _hostRefs.RemoveAll(static r => !r.TryGetTarget(out _));
+            s_pruneThreshold = Math.Max(16, _hostRefs.Count * 2);
+        }
+        _hostRefs.Add(new WeakReference<DialogHost>(host));
     }
 
     private void OnContentChanged(UIElement? oldVal, UIElement? newVal)
@@ -154,49 +209,34 @@ public class DialogHost : Control
 
     private void OnDialogChanged(UIElement? oldVal, UIElement? newVal)
     {
-        if (oldVal != null)
+        if (_syncingState)
         {
-            FocusManager.PopModal(oldVal);
-            RemoveChild(oldVal);
+            return;
         }
 
-        if (newVal != null)
+        // Set from outside: the new value replaces every open dialog.
+        for (int i = _dialogStack.Count - 1; i >= 0; i--)
         {
-            IsOpen = true;
-            _scrim.Background = OverlayColor;
-
-            // Ensure _scrim is placed right after Content
-            if (!Children.Contains(_scrim))
+            if (i < _dialogStack.Count && _dialogStack[i] != newVal)
             {
-                AddChild(_scrim);
-            }
-
-            // Ensure Dialog is added on top of _scrim
-            if (!Children.Contains(newVal))
-            {
-                AddChild(newVal);
-            }
-
-            FocusManager.PushModal(newVal);
-        }
-        else
-        {
-            IsOpen = false;
-            if (Children.Contains(_scrim))
-            {
-                RemoveChild(_scrim);
+                RemoveAt(i, NoneResponse);
             }
         }
 
-        InvalidateMeasure();
-        InvalidateVisual();
+        if (newVal != null && !_dialogStack.Contains(newVal))
+        {
+            PushCore(newVal);
+        }
+
+        SyncState();
+        RaiseOpenedIfTop(newVal);
     }
 
     private void OnIsOpenChanged(bool oldVal, bool newVal)
     {
-        if (!newVal && Dialog != null)
+        if (!_syncingState && !newVal)
         {
-            Dialog = null;
+            CloseAllDialogs();
         }
     }
 
@@ -206,48 +246,246 @@ public class DialogHost : Control
         _scrim.InvalidateVisual();
     }
 
+    /// <summary>
+    /// Closes all open dialogs, topmost first, completing <see cref="Controls.Dialog"/>s with <see cref="DialogResult.None"/>.
+    /// </summary>
+    public void CloseAllDialogs()
+    {
+        if (_dialogStack.Count == 0)
+        {
+            return;
+        }
+
+        while (_dialogStack.Count > 0)
+        {
+            RemoveAt(_dialogStack.Count - 1, NoneResponse);
+        }
+        SyncState();
+    }
+
+    /// <summary>Closes the open dialogs when the host leaves the displayed tree, so their tasks don't stay pending.</summary>
+    protected override void OnDetachedFromVisualTree()
+    {
+        CloseAllDialogs();
+        base.OnDetachedFromVisualTree();
+    }
+
+    // Shows a dialog on top of the open ones. Called by Dialog.ShowAsync.
+    internal void PushDialog(UIElement dialog)
+    {
+        if (_dialogStack.Contains(dialog))
+        {
+            throw new InvalidOperationException("The dialog is already open in this DialogHost.");
+        }
+
+        PushCore(dialog);
+        SyncState();
+        RaiseOpenedIfTop(dialog);
+    }
+
+    // Removes a dialog (and the dialogs stacked above it) and completes it with the response. Called by Dialog.Close.
+    internal bool RemoveDialog(UIElement dialog, DialogResponse response)
+    {
+        int index = _dialogStack.IndexOf(dialog);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        while (_dialogStack.Count - 1 > index)
+        {
+            RemoveAt(_dialogStack.Count - 1, NoneResponse);
+        }
+        RemoveAt(index, response);
+        SyncState();
+        return true;
+    }
+
+    private void PushCore(UIElement dialog)
+    {
+        _dialogStack.Add(dialog);
+        _scrim.Background = OverlayColor;
+
+        // Children: Content, lower dialogs..., scrim, topmost dialog. AddChild moves an existing child to the end.
+        AddChild(_scrim);
+        AddChild(dialog);
+
+        if (dialog is Controls.Dialog d)
+        {
+            d.OnShownIn(this);
+        }
+        else
+        {
+            dialog.KeyDown += _contentKeyDownHandler;
+        }
+
+        FocusManager.PushModal(dialog);
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    private void RaiseOpenedIfTop(UIElement? dialog)
+    {
+        if (dialog == null || _dialogStack.Count == 0 || _dialogStack[^1] != dialog)
+        {
+            return;
+        }
+
+        (dialog as Controls.Dialog)?.RaiseOpened();
+        DialogOpened?.Invoke(this, new DialogHostEventArgs(dialog, null));
+    }
+
+    private void RemoveAt(int index, DialogResponse response)
+    {
+        var dialog = _dialogStack[index];
+        _dialogStack.RemoveAt(index);
+
+        FocusManager.PopModal(dialog);
+        if (dialog is not Controls.Dialog)
+        {
+            dialog.KeyDown -= _contentKeyDownHandler;
+        }
+        RemoveChild(dialog);
+
+        if (_dialogStack.Count > 0)
+        {
+            // Keep the scrim directly below the (new) topmost dialog. InsertChild removes the scrim before inserting.
+            int topIndex = IndexOfChild(_dialogStack[^1]);
+            int scrimIndex = IndexOfChild(_scrim);
+            if (scrimIndex != topIndex - 1)
+            {
+                InsertChild(scrimIndex >= 0 && scrimIndex < topIndex ? topIndex - 1 : topIndex, _scrim);
+            }
+        }
+        else
+        {
+            RemoveChild(_scrim);
+        }
+
+        InvalidateMeasure();
+        InvalidateVisual();
+
+        (dialog as Controls.Dialog)?.OnRemovedFromHost(this, response);
+        DialogClosed?.Invoke(this, new DialogHostEventArgs(dialog, response));
+    }
+
+    private int IndexOfChild(VisualNode child)
+    {
+        var children = Children;
+        for (int i = 0; i < children.Count; i++)
+        {
+            if (children[i] == child)
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    // Mirrors the stack into the Dialog and IsOpen properties.
+    private void SyncState()
+    {
+        bool wasSyncing = _syncingState;
+        _syncingState = true;
+        try
+        {
+            Dialog = _dialogStack.Count > 0 ? _dialogStack[^1] : null;
+            IsOpen = _dialogStack.Count > 0;
+        }
+        finally
+        {
+            _syncingState = wasSyncing;
+        }
+    }
+
+    // Escape on non-Dialog content that did not handle it itself.
+    private void OnContentKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && !e.Handled && CloseOnClickAway && sender is UIElement dialog
+            && _dialogStack.Count > 0 && _dialogStack[^1] == dialog)
+        {
+            e.Handled = true;
+            RemoveDialog(dialog, NoneResponse);
+        }
+    }
+
+    private void DismissTopmost()
+    {
+        if (_dialogStack.Count == 0)
+        {
+            return;
+        }
+
+        var top = _dialogStack[^1];
+        if (top is Controls.Dialog dlg)
+        {
+            dlg.Close(DialogResult.Cancel);
+        }
+        else
+        {
+            RemoveDialog(top, NoneResponse);
+        }
+    }
+
+    /// <inheritdoc/>
     protected override Size MeasureOverride(Size availableSize)
     {
-        Content?.Measure(availableSize);
+        var content = Content;
+        content?.Measure(availableSize);
 
-        float width = Content?.DesiredSize.Width ?? 0f;
-        float height = Content?.DesiredSize.Height ?? 0f;
+        float width = content?.DesiredSize.Width ?? 0f;
+        float height = content?.DesiredSize.Height ?? 0f;
 
-        if (Dialog != null)
+        if (_dialogStack.Count > 0)
         {
             _scrim.Measure(availableSize);
-            Dialog.Measure(availableSize);
-
-            width = Math.Max(width, Dialog.DesiredSize.Width);
-            height = Math.Max(height, Dialog.DesiredSize.Height);
+            for (int i = 0; i < _dialogStack.Count; i++)
+            {
+                var dialog = _dialogStack[i];
+                dialog.Measure(availableSize);
+                width = Math.Max(width, dialog.DesiredSize.Width);
+                height = Math.Max(height, dialog.DesiredSize.Height);
+            }
         }
 
         return new Size(width, height);
     }
 
+    /// <inheritdoc/>
+    /// <remarks>The content fills the host; every open dialog is centered at its desired size, capped to the host.</remarks>
     protected override Size ArrangeOverride(Size finalSize)
     {
         Content?.Arrange(new Rect(Point.Zero, finalSize));
 
-        if (Dialog != null)
+        if (_dialogStack.Count > 0)
         {
             _scrim.Arrange(new Rect(Point.Zero, finalSize));
 
-            var dSize = Dialog.DesiredSize;
-            float w = Math.Min(dSize.Width, finalSize.Width);
-            float h = Math.Min(dSize.Height, finalSize.Height);
-            float x = Math.Max(0, (finalSize.Width - w) * 0.5f);
-            float y = Math.Max(0, (finalSize.Height - h) * 0.5f);
+            for (int i = 0; i < _dialogStack.Count; i++)
+            {
+                var dialog = _dialogStack[i];
+                var dSize = dialog.DesiredSize;
+                float w = Math.Min(dSize.Width, finalSize.Width);
+                float h = Math.Min(dSize.Height, finalSize.Height);
+                float x = Math.Max(0, (finalSize.Width - w) * 0.5f);
+                float y = Math.Max(0, (finalSize.Height - h) * 0.5f);
 
-            Dialog.Arrange(new Rect(x, y, w, h));
+                dialog.Arrange(new Rect(x, y, w, h));
+            }
         }
 
         return finalSize;
     }
 
     /// <summary>
-    /// Traverses up the visual tree starting at <paramref name="startNode"/> to locate the nearest <see cref="DialogHost"/>.
+    /// Locates the <see cref="DialogHost"/> to show a dialog in: the nearest ancestor of <paramref name="startNode"/>
+    /// (with the requested identifier), else one in the active window's tree (<see cref="RootVisualProvider"/>), else the
+    /// most recently created host that is displayed in a window.
     /// </summary>
+    /// <remarks>Hosts that are not part of a displayed tree are only found as ancestors of <paramref name="startNode"/>.</remarks>
+    /// <param name="startNode">The node to start from, or <c>null</c> to skip the ancestor search.</param>
+    /// <param name="hostIdentifier">The required <see cref="Identifier"/>, or <c>null</c> for any host.</param>
+    /// <returns>The host, or <c>null</c> if none was found.</returns>
     public static DialogHost? FindNearestHost(VisualNode? startNode, string? hostIdentifier = null)
     {
         VisualNode? current = startNode;
@@ -271,9 +509,7 @@ public class DialogHost : Control
             if (found != null) return found;
         }
 
-        // Fallback: any registered host (with the requested identifier), most recent first, preferring hosts that are
-        // displayed in a window.
-        DialogHost? displayed = null, other = null;
+        // Fallback: any registered host displayed in a window (with the requested identifier), most recent first.
         for (int i = _hostRefs.Count - 1; i >= 0; i--)
         {
             if (!_hostRefs[i].TryGetTarget(out var registered))
@@ -282,22 +518,13 @@ public class DialogHost : Control
                 continue;
             }
 
-            if (hostIdentifier != null && registered.Identifier != hostIdentifier)
+            if ((hostIdentifier == null || registered.Identifier == hostIdentifier) && registered.IsAttachedToVisualTree)
             {
-                continue;
-            }
-
-            if (registered.IsAttachedToVisualTree)
-            {
-                displayed ??= registered;
-            }
-            else
-            {
-                other ??= registered;
+                return registered;
             }
         }
 
-        return displayed ?? other;
+        return null;
     }
 
     private static DialogHost? FindHostInSubtree(VisualNode node, string? hostIdentifier)
@@ -319,6 +546,10 @@ public class DialogHost : Control
     /// <summary>
     /// Displays a dialog within the nearest <see cref="DialogHost"/> found from the specified <paramref name="visualContext"/>.
     /// </summary>
+    /// <param name="dialog">The dialog to show.</param>
+    /// <param name="visualContext">An element inside (or in the window of) the target host.</param>
+    /// <returns>A task completing with the dialog's response when it closes.</returns>
+    /// <exception cref="InvalidOperationException">No host was found, or the dialog is already open.</exception>
     public static Task<DialogResponse> ShowAsync(Dialog dialog, UIElement visualContext)
     {
         ArgumentNullException.ThrowIfNull(dialog);
@@ -327,8 +558,13 @@ public class DialogHost : Control
     }
 
     /// <summary>
-    /// Displays a dialog within the specified <see cref="DialogHost"/>, or the default host if <paramref name="hostIdentifier"/> is null.
+    /// Displays a dialog within the displayed host with the given <paramref name="hostIdentifier"/>, or in the active
+    /// window's host when it is <c>null</c> (see <see cref="FindNearestHost"/>).
     /// </summary>
+    /// <param name="dialog">The dialog to show.</param>
+    /// <param name="hostIdentifier">The <see cref="Identifier"/> of the target host, or <c>null</c>.</param>
+    /// <returns>A task completing with the dialog's response when it closes.</returns>
+    /// <exception cref="InvalidOperationException">No displayed host was found, or the dialog is already open.</exception>
     public static Task<DialogResponse> ShowAsync(Dialog dialog, string? hostIdentifier = null)
     {
         ArgumentNullException.ThrowIfNull(dialog);
@@ -337,8 +573,8 @@ public class DialogHost : Control
         {
             throw new InvalidOperationException(
                 string.IsNullOrEmpty(hostIdentifier)
-                    ? "No DialogHost was found in the visual tree or active registry."
-                    : $"No DialogHost with Identifier '{hostIdentifier}' was found.");
+                    ? "No DialogHost is displayed in a window. Add a DialogHost to the window's content, or pass the host explicitly."
+                    : $"No displayed DialogHost with Identifier '{hostIdentifier}' was found.");
         }
         return dialog.ShowAsync(host);
     }
@@ -361,14 +597,7 @@ public class DialogHost : Control
             e.Handled = true;
             if (_host.CloseOnClickAway)
             {
-                if (_host.Dialog is Dialog dlg)
-                {
-                    dlg.Close(DialogResult.Cancel);
-                }
-                else
-                {
-                    _host.Dialog = null;
-                }
+                _host.DismissTopmost();
             }
         }
 

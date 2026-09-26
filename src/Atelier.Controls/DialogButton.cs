@@ -37,10 +37,18 @@ public class DialogButton
     /// </summary>
     public object? Tag { get; set; }
 
+    /// <summary>Initializes a new <see cref="DialogButton"/> with empty text and <see cref="DialogResult.Ok"/>.</summary>
     public DialogButton()
     {
     }
 
+    /// <summary>Initializes a new <see cref="DialogButton"/>.</summary>
+    /// <param name="text">The label text.</param>
+    /// <param name="result">The result returned when the button is clicked.</param>
+    /// <param name="isDefault">Whether Enter triggers the button.</param>
+    /// <param name="isCancel">Whether Escape triggers the button.</param>
+    /// <param name="variant">The button's visual variant.</param>
+    /// <param name="tag">Optional user data returned in <see cref="DialogResponse.Tag"/>.</param>
     public DialogButton(string text, DialogResult result = DialogResult.Ok, bool isDefault = false, bool isCancel = false, ButtonVariant variant = ButtonVariant.Text, object? tag = null)
     {
         Text = text;
