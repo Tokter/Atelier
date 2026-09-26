@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using Atelier.Core.Events;
+using Atelier.Core.Platform;
 using Atelier.Core.Primitives;
 using Atelier.Core.Properties;
 using Atelier.Core.Tree;
@@ -123,7 +124,7 @@ public class TitleBar : Control
         set => SetValue(IsMaximizedProperty, value);
     }
 
-    // Direct window reference or fallback to SilkWindow.Current
+    // Optional overrides; by default the buttons act on the window hosting this title bar (see VisualNode.Host).
     public Action? OnMinimize { get; set; }
     public Action? OnMaximize { get; set; }
     public Action? OnClose { get; set; }
@@ -207,27 +208,13 @@ public class TitleBar : Control
         _maxIcon.Kind = isMax ? MaterialIconKind.FilterNone : MaterialIconKind.CropSquare;
     }
 
-    private void TriggerWindowAction(Action<dynamic> action)
+    // Acts on the window displaying this title bar (not the "current" window, which may be another one).
+    private void TriggerWindowAction(Action<IHostWindow> action)
     {
-        try
+        if (Host is { } host)
         {
-            var silkWindowType = Type.GetType("Atelier.Platform.Silk.SilkWindow, Atelier.Platform.Silk");
-            var currentProp = silkWindowType?.GetProperty("Current");
-            var currentWin = currentProp?.GetValue(null);
-            if (currentWin != null)
-            {
-                action(currentWin);
-                var stateProp = silkWindowType?.GetProperty("WindowState");
-                if (stateProp != null)
-                {
-                    var state = stateProp.GetValue(currentWin)?.ToString();
-                    IsMaximized = state == "Maximized";
-                }
-            }
-        }
-        catch
-        {
-            // Fallback when window is not running SilkWindow
+            action(host);
+            IsMaximized = host.IsMaximized;
         }
     }
 

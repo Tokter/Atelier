@@ -383,8 +383,9 @@ public abstract class VisualNode : BindableObject
     /// Marks this node as the root of a hosted tree and raises <see cref="AttachedToVisualTree"/> for it and all
     /// descendants. Called by hosts such as windows when they start displaying the tree.
     /// </summary>
+    /// <param name="host">The window displaying the tree, made available to its elements through <see cref="Host"/>.</param>
     /// <exception cref="InvalidOperationException">This node has a parent.</exception>
-    public void AttachToHost()
+    public void AttachToHost(Platform.IHostWindow? host = null)
     {
         if (_parent != null)
         {
@@ -392,7 +393,26 @@ public abstract class VisualNode : BindableObject
         }
 
         _isHostRoot = true;
+        _host = host;
         SetAttachedToVisualTree(true);
+    }
+
+    private Platform.IHostWindow? _host;
+
+    /// <summary>
+    /// Gets the window displaying the tree this node belongs to, or <c>null</c> if the tree is not hosted in a window.
+    /// </summary>
+    public Platform.IHostWindow? Host
+    {
+        get
+        {
+            VisualNode node = this;
+            while (node._parent != null)
+            {
+                node = node._parent;
+            }
+            return node._isHostRoot ? node._host : null;
+        }
     }
 
     /// <summary>
@@ -407,6 +427,7 @@ public abstract class VisualNode : BindableObject
         }
 
         _isHostRoot = false;
+        _host = null;
         SetAttachedToVisualTree(false);
     }
 

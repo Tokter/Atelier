@@ -28,7 +28,7 @@ using SilkKey = global::Silk.NET.Input.Key;
 
 namespace Atelier.Platform.Silk;
 
-public class SilkWindow : IDisposable
+public class SilkWindow : IDisposable, IHostWindow
 {
     private readonly IWindow _window;
     private IInputContext? _inputContext;
@@ -37,10 +37,6 @@ public class SilkWindow : IDisposable
     private GRBackendRenderTarget? _renderTarget;
     private SKSurface? _surface;
     private PaintRegistry? _paintRegistry;
-    private readonly AnimationClock _animationClock = new();
-
-    private readonly ConcurrentQueue<Action> _dispatchQueue = new();
-    private readonly ConcurrentQueue<Action> _backgroundQueue = new();
     private Func<UIElement>? _contentFactory;
 
     private UIElement? _rootElement;
@@ -119,14 +115,14 @@ public class SilkWindow : IDisposable
         catch { }
     }
 
-    // Threading & Dispatch
-    private int _mainThreadId;
-    public int MainThreadId => _mainThreadId;
+    /// <summary>Gets the managed thread id of the UI thread, shared by all windows (see <see cref="SilkApplication.MainThreadId"/>).</summary>
+    public int MainThreadId => SilkApplication.MainThreadId;
 
     // Performance & Frame Stats
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
     private int _frameCount = 0;
     private double _fpsSampleStart = 0;
+    private double _lastFrameTime = double.NegativeInfinity;
     private string _fpsText = string.Empty;
     private double _fpsTextValue = double.NaN;
     private int _fpsTextAnimations = -1;
@@ -148,12 +144,12 @@ public class SilkWindow : IDisposable
         set { _showFpsOverlay = value; InvalidateRender(); }
     }
 
-    // Render-on-demand. A frame is drawn only when something changed. When nothing is animating, repeating or queued,
-    // the loop switches Silk to event-driven mode and sleeps until OS input arrives or InvalidateRender() wakes it,
-    // instead of redrawing an unchanged screen at the display refresh rate.
+    // Render-on-demand. A frame is drawn only when something changed; when no window needs a frame and nothing is
+    // animating or queued, SilkApplication's loop sleeps until OS input arrives or InvalidateRender() wakes it.
     private volatile bool _needsRender = true;
     private volatile bool _isLoaded;
-    private bool _resumingFromIdle;
+    private bool _isShown;
+    private bool _renderedThisFrame;
 
     /// <summary>
     /// Requests a new frame, waking the render loop if it is idle. Safe to call from any thread.
@@ -165,10 +161,7 @@ public class SilkWindow : IDisposable
     public void InvalidateRender()
     {
         _needsRender = true;
-        if (_isLoaded && !_isClosing && !_isDisposed && _window.IsEventDriven)
-        {
-            _window.ContinueEvents();
-        }
+        SilkApplication.Wake();
     }
 
     // Also wakes the loop, so changes made from a background thread (e.g. a timer updating a bound view model) show up
@@ -190,7 +183,14 @@ public class SilkWindow : IDisposable
 
     private void OnWindowStateChanged(WindowState state) => InvalidateRender();
 
-    private void OnWindowFocusChanged(bool focused) => InvalidateRender();
+    private void OnWindowFocusChanged(bool focused)
+    {
+        if (focused)
+        {
+            SilkApplication.SetActive(this);
+        }
+        InvalidateRender();
+    }
 
     /// <summary>
     /// Gets or sets the root element displayed in the window.
@@ -219,7 +219,7 @@ public class SilkWindow : IDisposable
             {
                 _rootElement.NeedsVisualUpdate += OnTreeInvalidated;
                 _rootElement.NeedsLayoutUpdate += OnTreeInvalidated;
-                _rootElement.AttachToHost();
+                _rootElement.AttachToHost(this);
 
                 // Crisp pixel-aligned layout on screen, unless the app decided otherwise.
                 if (_rootElement.GetValueSource(UIElement.UseLayoutRoundingProperty) == Atelier.Core.Properties.ValueSource.Default)
@@ -230,53 +230,27 @@ public class SilkWindow : IDisposable
                 _rootElement.InvalidateMeasure();
                 _rootElement.InvalidateVisual();
             }
+
+            if (SilkApplication.ActiveWindow == this)
+            {
+                FocusManager.ActivateRoot(_rootElement);
+            }
+
             InvalidateRender();
         }
     }
 
     /// <summary>
-    /// Queues <paramref name="action"/> to run on the UI thread at the start of the next frame, waking the loop if idle.
-    /// Safe to call from any thread.
+    /// Queues <paramref name="action"/> to run on the UI thread at the start of the next loop iteration, waking the loop if
+    /// idle. Safe to call from any thread. Equivalent to <see cref="SilkApplication.Dispatch"/>: all windows share the UI thread.
     /// </summary>
-    public void Dispatch(Action action)
-    {
-        _dispatchQueue.Enqueue(action);
-        InvalidateRender();
-    }
+    public void Dispatch(Action action) => SilkApplication.Dispatch(action);
 
     /// <summary>
     /// Queues <paramref name="action"/> to run on the UI thread: <see cref="DispatcherPriority.Normal"/> at the start of the
-    /// next frame, <see cref="DispatcherPriority.Background"/> after the next frame has been rendered. Safe to call from any thread.
+    /// next loop iteration, <see cref="DispatcherPriority.Background"/> after the windows have rendered. Safe to call from any thread.
     /// </summary>
-    public void Dispatch(Action action, DispatcherPriority priority)
-    {
-        if (priority == DispatcherPriority.Background)
-        {
-            _backgroundQueue.Enqueue(action);
-            InvalidateRender();
-        }
-        else
-        {
-            Dispatch(action);
-        }
-    }
-
-    // Runs background work queued before this call; work queued by these actions waits for the next frame.
-    private void ProcessBackgroundQueue()
-    {
-        int count = _backgroundQueue.Count;
-        for (int i = 0; i < count && _backgroundQueue.TryDequeue(out var action); i++)
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Atelier.Dispatch] Error: {ex}");
-            }
-        }
-    }
+    public void Dispatch(Action action, DispatcherPriority priority) => SilkApplication.Dispatch(action, priority);
 
     public void SetContent(Func<UIElement> contentFactory)
     {
@@ -306,7 +280,10 @@ public class SilkWindow : IDisposable
         });
     }
 
-    public static SilkWindow? Current { get; private set; }
+    /// <summary>
+    /// Gets the active window: the one that most recently received OS focus, or the main window.
+    /// </summary>
+    public static SilkWindow? Current => SilkApplication.ActiveWindow;
 
     public bool IsTitleLess { get; }
     public bool IsTransparent { get; }
@@ -367,6 +344,9 @@ public class SilkWindow : IDisposable
             Console.WriteLine($"[SilkWindow] Failed to set window icon: {ex.Message}");
         }
     }
+
+    /// <inheritdoc/>
+    public bool IsMaximized => WindowState == WindowState.Maximized;
 
     public WindowState WindowState
     {
@@ -662,7 +642,6 @@ public class SilkWindow : IDisposable
         int resizeBorderThickness = 4,
         string? iconPath = "Assets/Icons/Atelier.png")
     {
-        Current = this;
         IsTitleLess = isTitleLess;
         IsTransparent = isTransparent || windowOpacity < 1.0f;
         WindowOpacity = windowOpacity;
@@ -708,36 +687,94 @@ public class SilkWindow : IDisposable
         PopupManager.PopupOpened += OnPopupChanged;
         PopupManager.PopupClosed += OnPopupChanged;
 
-        Atelier.Controls.Button.SetGlobalAnimationClock(_animationClock);
-        CheckBox.SetGlobalAnimationClock(_animationClock);
-        Atelier.Controls.Switch.SetGlobalAnimationClock(_animationClock);
-        TextBox.SetGlobalAnimationClock(_animationClock);
-        Slider.SetGlobalAnimationClock(_animationClock);
-        ScrollViewer.SetGlobalAnimationClock(_animationClock);
-        TransitioningContentControl.SetGlobalAnimationClock(_animationClock);
-        DialogHost.RootVisualProvider = () => Current?.Content;
-
         HotReloadManager.HotReloadTriggered += OnHotReloadTriggered;
     }
 
+    /// <summary>
+    /// Shows this window and runs the application loop until the application shuts down (by default when the last window
+    /// closes). If the application is already running, this only shows the window.
+    /// </summary>
     public void Run()
     {
-        Current = this;
-        _mainThreadId = Environment.CurrentManagedThreadId;
-        Dispatcher.UIThread = new SilkDispatcher(this);
-        var oldContext = SynchronizationContext.Current;
-        SynchronizationContext.SetSynchronizationContext(new SilkSynchronizationContext(this));
-        try
+        Show();
+        if (!SilkApplication.IsRunning)
         {
-            _window.Run();
-        }
-        finally
-        {
-            SynchronizationContext.SetSynchronizationContext(oldContext);
-            Dispatcher.UIThread = Dispatcher.ImmediateDispatcher.Instance;
-            Dispose();
+            SilkApplication.Run();
         }
     }
+
+    /// <summary>
+    /// Opens this window. Before <see cref="SilkApplication.Run"/> it opens once the loop starts; while running it opens on
+    /// the next loop iteration. The first window shown becomes <see cref="SilkApplication.MainWindow"/>.
+    /// </summary>
+    public void Show()
+    {
+        if (_isShown || _isDisposed)
+        {
+            return;
+        }
+
+        _isShown = true;
+        SilkApplication.Show(this);
+    }
+
+    #region Application loop hooks
+
+    /// <summary>Creates the native window and its graphics context (raises <c>Load</c>). Called on the UI thread.</summary>
+    internal void InitializeNative()
+    {
+        _window.Initialize();
+        SilkApplication.SetActive(this);
+    }
+
+    /// <summary>Gets whether the user or the app closed the window; the application then disposes it.</summary>
+    internal bool IsClosed => _isClosing || _isDisposed || _window.IsClosing;
+
+    /// <summary>Gets whether this window needs the loop to keep running: a frame is pending or a key is auto-repeating.</summary>
+    internal bool NeedsLoop => !IsClosed && (_needsRender || _repeatingKey != SilkKey.Unknown);
+
+    /// <summary>Processes OS events; only one window per iteration may wait, as GLFW's event queue is shared.</summary>
+    internal void PumpEvents(bool wait)
+    {
+        if (IsClosed)
+        {
+            return;
+        }
+
+        _window.IsEventDriven = wait;
+        _window.DoEvents();
+    }
+
+    /// <summary>Runs one update and, if needed, one render of this window. Returns whether a frame was presented.</summary>
+    internal bool RunFrame()
+    {
+        _renderedThisFrame = false;
+        if (IsClosed)
+        {
+            return false;
+        }
+
+        _window.DoUpdate();
+        if (!IsClosed)
+        {
+            _window.DoRender();
+        }
+        return _renderedThisFrame;
+    }
+
+    /// <summary>Wakes the shared OS event wait. Safe to call from any thread.</summary>
+    internal bool TryWakeEventLoop()
+    {
+        if (!_isLoaded || IsClosed)
+        {
+            return false;
+        }
+
+        _window.ContinueEvents();
+        return true;
+    }
+
+    #endregion
 
     private void SetupWindowsTitlelessFrame()
     {
@@ -875,7 +912,9 @@ public class SilkWindow : IDisposable
         _inputContext = _window.CreateInput();
         HookInputEvents();
 
-        // 2. Initialize SkiaSharp OpenGL context
+        // 2. Initialize SkiaSharp OpenGL context. Make this window's context current first: with several windows another
+        //    window's context may still be current, and Skia must bind to this one.
+        MakeContextCurrent();
         _glInterface = GRGlInterface.Create(name =>
             _window.GLContext!.TryGetProcAddress(name, out var addr) ? addr : IntPtr.Zero);
 
@@ -913,6 +952,9 @@ public class SilkWindow : IDisposable
     private void RecreateSurface(Vector2D<int> size)
     {
         if (_isDisposed || _isClosing || _grContext == null || size.X <= 0 || size.Y <= 0) return;
+
+        // Resize events arrive while the shared event pump runs, when another window's context may be current.
+        MakeContextCurrent();
 
         _surface?.Dispose();
         _renderTarget?.Dispose();
@@ -974,6 +1016,26 @@ public class SilkWindow : IDisposable
     private UIElement? _pressedElement;
     private UIElement? _hoveredPopupElement;
 
+    // Pointer capture is global (there is one mouse); a window only routes captured input to an element in its own tree.
+    private UIElement? CapturedInThisWindow
+    {
+        get
+        {
+            var captured = UIElement.CapturedElement;
+            if (captured == null || _rootElement == null)
+            {
+                return null;
+            }
+
+            VisualNode node = captured;
+            while (node.Parent != null)
+            {
+                node = node.Parent;
+            }
+            return node == _rootElement ? captured : null;
+        }
+    }
+
     private void OnMouseDown(IMouse mouse, MouseButton button)
     {
         _needsRender = true; // discrete input usually changes something on screen
@@ -991,7 +1053,7 @@ public class SilkWindow : IDisposable
         int clickCount = RegisterClick(mouse, btn, screenPos);
         var modifiers = CurrentModifiers();
 
-        if (PopupManager.HandleMouseDown(screenPos, btn, modifiers, clickCount))
+        if (PopupManager.HandleMouseDown(screenPos, btn, modifiers, clickCount, _rootElement))
         {
             _pressedElement = null;
             return;
@@ -1009,7 +1071,7 @@ public class SilkWindow : IDisposable
         }
         else
         {
-            FocusManager.SetFocus(null);
+            FocusManager.ClearFocus(_rootElement);
         }
     }
 
@@ -1031,13 +1093,13 @@ public class SilkWindow : IDisposable
         int clickCount = _clickCounter.GetReleaseCount(btn);
         var modifiers = CurrentModifiers();
 
-        if (PopupManager.HandleMouseUp(screenPos, btn, modifiers, clickCount))
+        if (PopupManager.HandleMouseUp(screenPos, btn, modifiers, clickCount, _rootElement))
         {
             _pressedElement = null;
             return;
         }
 
-        var target = UIElement.CapturedElement ?? _pressedElement ?? _rootElement.HitTest(screenPos);
+        var target = CapturedInThisWindow ?? _pressedElement ?? _rootElement.HitTest(screenPos);
 
         if (target != null)
         {
@@ -1045,9 +1107,9 @@ public class SilkWindow : IDisposable
             target.DispatchPointerEvent(e, static (el, a) => el.OnPreviewPointerReleased(a), static (el, a) => el.OnPointerReleased(a));
         }
 
-        if (button == MouseButton.Left && UIElement.CapturedElement != null)
+        if (button == MouseButton.Left && CapturedInThisWindow is { } capturedElement)
         {
-            UIElement.CapturedElement.ReleasePointerCapture();
+            capturedElement.ReleasePointerCapture();
         }
 
         _isManualDragging = false;
@@ -1077,14 +1139,14 @@ public class SilkWindow : IDisposable
         var modifiers = CurrentModifiers();
 
         // If pointer is captured by an element, deliver move directly to it
-        if (UIElement.CapturedElement != null)
+        if (CapturedInThisWindow is { } captured)
         {
             var moveE = new PointerEventArgs(screenPos, screenPos, modifiers: modifiers);
-            UIElement.CapturedElement.DispatchPointerEvent(moveE, static (el, a) => el.OnPreviewPointerMoved(a), static (el, a) => el.OnPointerMoved(a));
+            captured.DispatchPointerEvent(moveE, static (el, a) => el.OnPreviewPointerMoved(a), static (el, a) => el.OnPointerMoved(a));
             return;
         }
 
-        if (PopupManager.HandleMouseMove(screenPos, ref _hoveredPopupElement, modifiers))
+        if (PopupManager.HandleMouseMove(screenPos, ref _hoveredPopupElement, modifiers, _rootElement))
         {
             if (_hoveredElement != null)
             {
@@ -1134,7 +1196,7 @@ public class SilkWindow : IDisposable
 
         var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
         var scrollModifiers = CurrentModifiers();
-        if (PopupManager.HandleMouseScroll(screenPos, scroll.X, scroll.Y, scrollModifiers))
+        if (PopupManager.HandleMouseScroll(screenPos, scroll.X, scroll.Y, scrollModifiers, _rootElement))
         {
             return;
         }
@@ -1191,7 +1253,7 @@ public class SilkWindow : IDisposable
             if (atelierKey != Core.Events.Key.None)
             {
                 var keyEventArgs = new KeyEventArgs(atelierKey, _repeatingKeyCode, GetModifiers(_repeatingKeyboard), isDown: true, isRepeat: true);
-                if (!PopupManager.HandleKeyDown(keyEventArgs))
+                if (!PopupManager.HandleKeyDown(keyEventArgs, _rootElement))
                 {
                     FocusManager.DispatchKeyDown(keyEventArgs, _rootElement);
                 }
@@ -1236,7 +1298,7 @@ public class SilkWindow : IDisposable
         }
 
         var keyEventArgs = new KeyEventArgs(atelierKey, keyCode, GetModifiers(keyboard), true);
-        if (PopupManager.HandleKeyDown(keyEventArgs))
+        if (PopupManager.HandleKeyDown(keyEventArgs, _rootElement))
         {
             return;
         }
@@ -1419,28 +1481,10 @@ public class SilkWindow : IDisposable
     {
         if (_isDisposed || _isClosing) return;
 
-        // Process key repeat for held navigation & editing keys
+        // Dispatched work and animations are advanced once per iteration by SilkApplication for all windows.
+
+        // 1. Process key repeat for held navigation & editing keys
         ProcessKeyRepeat();
-
-        // 0. Process thread-safe dispatch queue (e.g. Hot Reload notifications)
-        while (_dispatchQueue.TryDequeue(out var action))
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[Atelier.Dispatch] Error: {ex}");
-            }
-        }
-
-        // 1. Advance Animation Clock (sub-pixel spring & tween updates).
-        // After an idle period deltaTime spans the whole sleep; animations started by the input that woke the loop
-        // must start from zero instead of jumping to their end, so the first update after idling advances nothing.
-        double animationDelta = _resumingFromIdle ? 0 : Math.Min(deltaTime, MaxAnimationStepSeconds);
-        _resumingFromIdle = false;
-        _animationClock.Update(animationDelta);
 
         // 2. Re-apply styles once if the global styles changed since the last frame
         if (_globalStylesChanged)
@@ -1470,31 +1514,22 @@ public class SilkWindow : IDisposable
             _rootElement.Arrange(new Rect(Point.Zero, availableSize));
 
             // Measure & Arrange active popups
-            PopupManager.UpdatePopups(winSize);
+            PopupManager.UpdatePopups(winSize, _rootElement);
         }
     }
-
-    // Longest animation step per frame, so a stalled frame (e.g. while the OS drags the window) doesn't skip animations.
-    private const double MaxAnimationStepSeconds = 0.1;
-
-    // Work that needs the loop to keep ticking even when nothing has been invalidated yet.
-    private bool HasContinuousWork =>
-        _animationClock.ActiveAnimationCount > 0 || _repeatingKey != SilkKey.Unknown || !_dispatchQueue.IsEmpty || !_backgroundQueue.IsEmpty;
 
     private void OnRender(double deltaTime)
     {
         if (_isDisposed || _isClosing || _surface == null || _paintRegistry == null || _grContext == null) return;
 
-        bool continuous = HasContinuousWork;
-        if (!_needsRender && !continuous)
+        if (!_needsRender)
         {
-            // Nothing changed: skip drawing and swapping, and sleep until input or InvalidateRender() wakes the loop.
-            EnterIdle();
+            // Nothing changed in this window: skip drawing and presenting.
             return;
         }
 
         _needsRender = false;
-        _window.IsEventDriven = false;
+        MakeContextCurrent();
 
         var canvas = _surface.Canvas;
 
@@ -1522,7 +1557,7 @@ public class SilkWindow : IDisposable
         }
 
         // 2b. Render active popups above the visual tree
-        PopupManager.RenderPopups(ref drawingContext, ThemeVisualPresenter.Instance);
+        PopupManager.RenderPopups(ref drawingContext, ThemeVisualPresenter.Instance, _rootElement);
 
         // 3. FPS & Performance overlay (Bottom-Left)
         TrackRenderedFrame();
@@ -1538,35 +1573,31 @@ public class SilkWindow : IDisposable
             drawingContext.DrawText(fpsText, new Point(boxX + 6f, boxY + 16f), Color.FromHex("#00E676"), 12f, bold: true);
         }
 
-        // 4. Flush GPU commands and present (VSync throttles the loop here while frames are being rendered)
+        // 4. Flush GPU commands and present. The first window presenting in a loop iteration waits for vertical sync
+        //    (which throttles the loop); the others present immediately, so windows don't halve each other's frame rate.
         canvas.Flush();
         _grContext.Flush();
-        _window.GLContext?.SwapBuffers();
-
-        // 5. Background-priority work runs once the frame is on screen
-        ProcessBackgroundQueue();
-    }
-
-    private void EnterIdle()
-    {
-        if (_window.IsEventDriven)
+        if (_window.GLContext is { } glContext)
         {
-            return;
+            glContext.SwapInterval(SilkApplication.ClaimVSync() ? 1 : 0);
+            glContext.SwapBuffers();
         }
-
-        _window.IsEventDriven = true;
-        _resumingFromIdle = true;
-
-        // Restart the frame-rate sample so the next measurement doesn't include the idle period.
-        _frameCount = 0;
-        _fpsSampleStart = _stopwatch.Elapsed.TotalSeconds;
-        CurrentFps = 0;
+        _renderedThisFrame = true;
     }
 
     private void TrackRenderedFrame()
     {
-        _frameCount++;
         double now = _stopwatch.Elapsed.TotalSeconds;
+
+        // After an idle period, start a new sample instead of averaging the idle time in.
+        if (now - _lastFrameTime > 0.5)
+        {
+            _frameCount = 0;
+            _fpsSampleStart = now;
+        }
+        _lastFrameTime = now;
+
+        _frameCount++;
         double elapsed = now - _fpsSampleStart;
         if (elapsed >= 0.5)
         {
@@ -1580,7 +1611,7 @@ public class SilkWindow : IDisposable
     private string GetFpsText()
     {
         double fps = Math.Round(CurrentFps);
-        int animations = _animationClock.ActiveAnimationCount;
+        int animations = SilkApplication.AnimationClock.ActiveAnimationCount;
         if (fps != _fpsTextValue || animations != _fpsTextAnimations)
         {
             _fpsTextValue = fps;
@@ -1590,8 +1621,23 @@ public class SilkWindow : IDisposable
         return _fpsText;
     }
 
+    // Every window has its own GL context; GL and Skia calls for this window need it to be current.
+    private void MakeContextCurrent()
+    {
+        try
+        {
+            _window.GLContext?.MakeCurrent();
+        }
+        catch
+        {
+            // The native window may already be gone during shutdown.
+        }
+    }
+
     private void CleanupGraphicsResources()
     {
+        MakeContextCurrent();
+
         try
         {
             if (_grContext != null)
@@ -1670,7 +1716,24 @@ public class SilkWindow : IDisposable
         }
     }
 
+    private SilkWindow? FindOtherLoadedWindow()
+    {
+        foreach (var window in SilkApplication.Windows)
+        {
+            if (window != this && window._isLoaded && !window.IsClosed)
+            {
+                return window;
+            }
+        }
+        return null;
+    }
+
     private bool _isDisposed;
+
+    /// <summary>
+    /// Releases the window's graphics resources and native window. The application does this automatically when a
+    /// window closes.
+    /// </summary>
     public void Dispose()
     {
         if (_isDisposed) return;
@@ -1706,24 +1769,25 @@ public class SilkWindow : IDisposable
         catch { }
         _inputContext = null;
 
-        if (Current == this)
+        // The clipboard is accessed through a window; hand it to another open window, if any.
+        if (Clipboard.Current is SilkClipboard clipboard && clipboard.Window == _window)
         {
-            Current = null;
+            var other = FindOtherLoadedWindow();
+            Clipboard.Current = other != null ? new SilkClipboard(other._window) : null!;
         }
 
-        if (Clipboard.Current is SilkClipboard)
+        if (_isLoaded)
         {
-            Clipboard.Current = null!;
+            // Same teardown as Silk's own run loop: flush pending events, then destroy the native window. The window may
+            // still be in event-driven mode from the last loop iteration, where DoEvents would block until the next event.
+            try
+            {
+                _window.IsEventDriven = false;
+                _window.DoEvents();
+                _window.Reset();
+            }
+            catch { }
         }
-
-        Atelier.Controls.Button.SetGlobalAnimationClock(null!);
-        CheckBox.SetGlobalAnimationClock(null!);
-        Atelier.Controls.Switch.SetGlobalAnimationClock(null!);
-        TextBox.SetGlobalAnimationClock(null!);
-        Slider.SetGlobalAnimationClock(null!);
-        ScrollViewer.SetGlobalAnimationClock(null!);
-        TransitioningContentControl.SetGlobalAnimationClock(null!);
-        DialogHost.RootVisualProvider = null;
 
         try
         {

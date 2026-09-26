@@ -6,24 +6,32 @@ using Atelier.Core.Threading;
 namespace Atelier.Platform.Silk;
 
 /// <summary>
-/// Implements <see cref="IDispatcher"/> by enqueueing work to the <see cref="SilkWindow"/> dispatch queue.
+/// Implements <see cref="IDispatcher"/> by queueing work to the <see cref="SilkApplication"/> UI loop, which serves all windows.
 /// </summary>
 public sealed class SilkDispatcher : IDispatcher
 {
-    private readonly SilkWindow _window;
-
-    public SilkDispatcher(SilkWindow window)
+    /// <summary>Initializes a dispatcher for the <see cref="SilkApplication"/> UI loop.</summary>
+    public SilkDispatcher()
     {
-        _window = window;
     }
 
-    public bool CheckAccess() => Thread.CurrentThread.ManagedThreadId == _window.MainThreadId;
-
-    public void Post(Action action) => _window.Dispatch(action);
+    /// <summary>Initializes a dispatcher for the <see cref="SilkApplication"/> UI loop.</summary>
+    /// <param name="window">Ignored: all windows share one UI thread and dispatcher.</param>
+    [Obsolete("All windows share one dispatcher; use the parameterless constructor.")]
+    public SilkDispatcher(SilkWindow window)
+    {
+    }
 
     /// <inheritdoc/>
-    public void Post(Action action, DispatcherPriority priority) => _window.Dispatch(action, priority);
+    public bool CheckAccess() => SilkApplication.CheckAccess();
 
+    /// <inheritdoc/>
+    public void Post(Action action) => SilkApplication.Dispatch(action);
+
+    /// <inheritdoc/>
+    public void Post(Action action, DispatcherPriority priority) => SilkApplication.Dispatch(action, priority);
+
+    /// <inheritdoc/>
     public void Send(Action action)
     {
         if (CheckAccess())
@@ -32,9 +40,14 @@ public sealed class SilkDispatcher : IDispatcher
             return;
         }
 
+        SendAndWait(action);
+    }
+
+    internal static void SendAndWait(Action action)
+    {
         using var evt = new ManualResetEventSlim();
         Exception? error = null;
-        _window.Dispatch(() =>
+        SilkApplication.Dispatch(() =>
         {
             try
             {
@@ -59,54 +72,40 @@ public sealed class SilkDispatcher : IDispatcher
 }
 
 /// <summary>
-/// Synchronization context that posts continuations back to the <see cref="SilkWindow"/> render loop.
+/// Synchronization context that posts continuations back to the <see cref="SilkApplication"/> UI loop.
 /// </summary>
 public sealed class SilkSynchronizationContext : SynchronizationContext
 {
-    private readonly SilkWindow _window;
+    /// <summary>Initializes a context for the <see cref="SilkApplication"/> UI loop.</summary>
+    public SilkSynchronizationContext()
+    {
+    }
 
+    /// <summary>Initializes a context for the <see cref="SilkApplication"/> UI loop.</summary>
+    /// <param name="window">Ignored: all windows share one UI thread.</param>
+    [Obsolete("All windows share one UI thread; use the parameterless constructor.")]
     public SilkSynchronizationContext(SilkWindow window)
     {
-        _window = window;
     }
 
+    /// <inheritdoc/>
     public override void Post(SendOrPostCallback d, object? state)
     {
-        _window.Dispatch(() => d(state));
+        SilkApplication.Dispatch(() => d(state));
     }
 
+    /// <inheritdoc/>
     public override void Send(SendOrPostCallback d, object? state)
     {
-        if (Thread.CurrentThread.ManagedThreadId == _window.MainThreadId)
+        if (SilkApplication.CheckAccess())
         {
             d(state);
             return;
         }
 
-        using var evt = new ManualResetEventSlim();
-        Exception? error = null;
-        _window.Dispatch(() =>
-        {
-            try
-            {
-                d(state);
-            }
-            catch (Exception ex)
-            {
-                error = ex;
-            }
-            finally
-            {
-                evt.Set();
-            }
-        });
-
-        evt.Wait();
-        if (error != null)
-        {
-            ExceptionDispatchInfo.Capture(error).Throw();
-        }
+        SilkDispatcher.SendAndWait(() => d(state));
     }
 
+    /// <inheritdoc/>
     public override SynchronizationContext CreateCopy() => this;
 }

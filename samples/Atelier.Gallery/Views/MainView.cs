@@ -78,6 +78,21 @@ namespace Atelier.Gallery.Views
                         },
                         new Button
                         {
+                            Variant = ButtonVariant.Text,
+                            Height = 32,
+                            Padding = new Thickness(14, 4),
+                            CornerRadius = new CornerRadius(16),
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Command = _viewModel.NewWindowCommand,
+                            Content =
+                                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
+                                .Children(
+                                    new Icon { Kind = MaterialIconKind.OpenInNew, Size = 18, VerticalAlignment = VerticalAlignment.Center },
+                                    new TextBlock("New window").LabelMedium().VerticalAlign(VerticalAlignment.Center)
+                                )
+                        },
+                        new Button
+                        {
                             Variant = ButtonVariant.Tonal,
                             Height = 32,
                             Padding = new Thickness(14, 4),

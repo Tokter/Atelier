@@ -374,14 +374,23 @@ public abstract class UIElement : VisualNode
     {
         base.OnInheritanceParentChanged(oldParent, newParent);
 
-        if (newParent == null)
+        // Focus is tracked per tree (window). When this subtree leaves its tree, that tree must stop referencing and
+        // routing input to it; when a former root is adopted into another tree, its own focus state no longer applies.
+        if (oldParent is VisualNode oldParentNode)
         {
-            // Removed from the tree: static input state must not keep the detached subtree alive or keep routing to it.
-            FocusManager.OnSubtreeDetached(this);
-            if (CapturedElement != null && (CapturedElement == this || CapturedElement.IsDescendantOf(this)))
+            var oldRoot = GetTreeRoot(oldParentNode);
+            if (oldRoot != GetTreeRoot(this))
             {
-                ReleaseCurrentPointerCapture();
+                FocusManager.OnSubtreeLeftTree(this, oldRoot);
+                if (CapturedElement != null && (CapturedElement == this || CapturedElement.IsDescendantOf(this)))
+                {
+                    ReleaseCurrentPointerCapture();
+                }
             }
+        }
+        else if (newParent != null)
+        {
+            FocusManager.OnRootAdopted(this);
         }
 
         // Style resolution walks up the tree, so the whole moved subtree may resolve different styles now.
@@ -707,7 +716,7 @@ public abstract class UIElement : VisualNode
 
     /// <summary>
     /// Raises a keyboard or text event on this element and then on each ancestor until a handler sets
-    /// <see cref="RoutedEventArgs.Handled"/>, the current modal root (<see cref="FocusManager.CurrentModal"/>) or an
+    /// <see cref="RoutedEventArgs.Handled"/>, the modal root of this element's tree (<see cref="FocusManager.GetModal"/>) or an
     /// overlay element has been processed, or the root is reached.
     /// </summary>
     /// <typeparam name="T">The event args type.</typeparam>
@@ -718,6 +727,7 @@ public abstract class UIElement : VisualNode
     {
         e.Source ??= this;
         e.OriginalSource ??= this;
+        var modal = FocusManager.GetModal(this);
 
         UIElement? current = this;
         while (current != null)
@@ -729,7 +739,7 @@ public abstract class UIElement : VisualNode
                 break;
             }
 
-            if (current == FocusManager.CurrentModal || current.IsOverlayElement)
+            if (current == modal || current.IsOverlayElement)
             {
                 break;
             }
@@ -847,6 +857,7 @@ public abstract class UIElement : VisualNode
     {
         e.Source ??= this;
         e.OriginalSource ??= this;
+        var modal = FocusManager.GetModal(this);
 
         var route = RentRoute();
         try
@@ -855,7 +866,7 @@ public abstract class UIElement : VisualNode
             while (current != null)
             {
                 route.Add(current, Point.Zero);
-                if (current == FocusManager.CurrentModal || current.IsOverlayElement)
+                if (current == modal || current.IsOverlayElement)
                 {
                     break;
                 }
@@ -881,6 +892,15 @@ public abstract class UIElement : VisualNode
     }
 
     #endregion
+
+    private static VisualNode GetTreeRoot(VisualNode node)
+    {
+        while (node.Parent != null)
+        {
+            node = node.Parent;
+        }
+        return node;
+    }
 
     // Layout rounding. Infinite and NaN sizes pass through unchanged.
     private static float RoundUp(float value) => float.IsFinite(value) ? MathF.Ceiling(value - 0.0001f) : value;

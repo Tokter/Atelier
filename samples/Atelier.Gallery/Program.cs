@@ -45,13 +45,29 @@ internal static class Program
             .Register<KeybindingViewModel>(vm => new KeybindingView(vm))
             .Register<TransitionsViewModel>(vm => new TransitionsView(vm));
 
-        // 1. Initialize ViewModel (state is preserved across Hot Reload passes)
-        var vm = new MainViewModel();
-
-        // 2. Set default initial theme
+        // 1. Set default initial theme
         ThemeManager.Current = MaterialTheme.CreateLight();
 
-        // 3. Create window and bind content factory for Hot Reload
+        // 2. Open the main window; ATELIER_GALLERY_WINDOWS=N opens N windows at startup (used for multi-window testing)
+        var mainWindow = OpenGalleryWindow();
+        int extraWindows = int.TryParse(Environment.GetEnvironmentVariable("ATELIER_GALLERY_WINDOWS"), out int count) ? count - 1 : 0;
+        for (int i = 0; i < extraWindows; i++)
+        {
+            OpenGalleryWindow();
+        }
+
+        // 3. Run until the last window closes
+        mainWindow.Run();
+    }
+
+    /// <summary>
+    /// Opens a Gallery window with its own view model. Works before and while the application runs.
+    /// </summary>
+    internal static SilkWindow OpenGalleryWindow()
+    {
+        // Each window keeps its own state, which is preserved across Hot Reload passes
+        var vm = new MainViewModel();
+
         var window = new SilkWindow(
             title: "Atelier UI - Material Design 3 Showcase",
             width: 1100,
@@ -63,6 +79,7 @@ internal static class Program
 
         // Setting content via factory lambda enables instant Hot Reload!
         window.SetContent(() => new MainView(vm));
-        window.Run();
+        window.Show();
+        return window;
     }
 }

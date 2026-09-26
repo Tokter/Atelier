@@ -16,7 +16,8 @@ namespace Atelier.Controls;
 /// </summary>
 public class DialogHost : Control
 {
-    private static readonly List<DialogHost> _activeHosts = [];
+    // Weak: hosts must not be kept alive after their window or page is gone (entries are pruned during lookups).
+    private static readonly List<WeakReference<DialogHost>> _hostRefs = [];
 
     /// <summary>
     /// Optional delegate that returns the root visual node of the window for fallback host resolution.
@@ -133,7 +134,7 @@ public class DialogHost : Control
         {
             Background = OverlayColor
         };
-        _activeHosts.Add(this);
+        _hostRefs.Add(new WeakReference<DialogHost>(this));
     }
 
     private void OnContentChanged(UIElement? oldVal, UIElement? newVal)
@@ -281,19 +282,7 @@ public class DialogHost : Control
             current = current.Parent;
         }
 
-        // Search active hosts if identifier was explicitly specified
-        if (!string.IsNullOrEmpty(hostIdentifier))
-        {
-            for (int i = _activeHosts.Count - 1; i >= 0; i--)
-            {
-                if (_activeHosts[i].Identifier == hostIdentifier)
-                {
-                    return _activeHosts[i];
-                }
-            }
-        }
-
-        // Fallback: search tree from root visual provider if available
+        // Next: the active window's tree, so that with several windows a dialog opens where the user is working
         var root = RootVisualProvider?.Invoke();
         if (root != null)
         {
@@ -301,13 +290,33 @@ public class DialogHost : Control
             if (found != null) return found;
         }
 
-        // Fallback: If only one active host exists, return it
-        if (_activeHosts.Count > 0 && hostIdentifier == null)
+        // Fallback: any registered host (with the requested identifier), most recent first, preferring hosts that are
+        // displayed in a window.
+        DialogHost? displayed = null, other = null;
+        for (int i = _hostRefs.Count - 1; i >= 0; i--)
         {
-            return _activeHosts[^1];
+            if (!_hostRefs[i].TryGetTarget(out var registered))
+            {
+                _hostRefs.RemoveAt(i);
+                continue;
+            }
+
+            if (hostIdentifier != null && registered.Identifier != hostIdentifier)
+            {
+                continue;
+            }
+
+            if (registered.IsAttachedToVisualTree)
+            {
+                displayed ??= registered;
+            }
+            else
+            {
+                other ??= registered;
+            }
         }
 
-        return null;
+        return displayed ?? other;
     }
 
     private static DialogHost? FindHostInSubtree(VisualNode node, string? hostIdentifier)

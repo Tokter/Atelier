@@ -45,6 +45,9 @@ namespace Atelier.Gallery.ViewModels
 
 
         [RelayCommand]
+        private void NewWindow() => Program.OpenGalleryWindow();
+
+        [RelayCommand]
         private void ToggleTheme()
         {
             if (ThemeManager.Current.IsDark)

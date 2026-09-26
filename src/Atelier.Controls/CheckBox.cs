@@ -261,6 +261,9 @@ public class RadioButton : CheckBox
         }
     }
 
+    // Like WPF: a named group is scoped to the window (element tree) it is displayed in, so windows never affect each
+    // other; radio buttons that are not displayed share one scope. Radio buttons without a group name form a group with
+    // the radio buttons that share their parent.
     private void DeselectSiblings()
     {
         string key = GroupName ?? string.Empty;
@@ -268,12 +271,31 @@ public class RadioButton : CheckBox
 
         list.RemoveAll(r => !r.TryGetTarget(out _));
 
-        foreach (var wr in list)
+        var scope = GetGroupScope(this);
+        foreach (var wr in list.ToArray())
         {
-            if (wr.TryGetTarget(out var rb) && rb != this)
+            if (wr.TryGetTarget(out var rb) && rb != this && IsInSameGroup(rb, scope))
             {
                 rb.IsChecked = false;
             }
         }
+    }
+
+    private bool IsInSameGroup(RadioButton other, VisualNode? scope) =>
+        GroupName == null ? other.Parent == Parent && Parent != null : GetGroupScope(other) == scope;
+
+    // The window's tree root while displayed; null (the shared scope) otherwise.
+    private static VisualNode? GetGroupScope(VisualNode node)
+    {
+        if (!node.IsAttachedToVisualTree)
+        {
+            return null;
+        }
+
+        while (node.Parent != null)
+        {
+            node = node.Parent;
+        }
+        return node;
     }
 }

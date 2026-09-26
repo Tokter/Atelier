@@ -8,6 +8,9 @@ namespace Atelier.Platform.Silk;
 public class SilkClipboard : IClipboard
 {
     private readonly IWindow _window;
+
+    /// <summary>Gets the window this clipboard accesses the system clipboard through.</summary>
+    internal IWindow Window => _window;
     private string? _fallbackBuffer;
 
     private const uint CF_UNICODETEXT = 13;
