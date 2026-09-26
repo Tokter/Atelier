@@ -129,12 +129,11 @@ public abstract class UIElement : VisualNode
                 }
             }
 
-            ClearStyleSetters();
-            ApplyStyleSetters(new List<Setter>(effectiveSetters.Values));
+            SetStyleValues(effectiveSetters.Values);
         }
         else
         {
-            ClearStyleSetters();
+            SetStyleValues(null);
         }
     }
 
@@ -213,7 +212,9 @@ public abstract class UIElement : VisualNode
     internal override void OnInheritanceParentChanged(BindableObject? oldParent, BindableObject? newParent)
     {
         base.OnInheritanceParentChanged(oldParent, newParent);
-        ApplyStyles();
+
+        // Style resolution walks up the tree, so the whole moved subtree may resolve different styles now.
+        ApplyStylesToTree();
     }
 
     protected override void OnChildAdded(VisualNode child)

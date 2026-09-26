@@ -16,7 +16,7 @@ public enum Dock
 public class DockPanel : Panel
 {
     public static readonly BindableProperty<Dock> DockProperty =
-        BindableProperty.Register<UIElement, Dock>("Dock", Dock.Left, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
+        BindableProperty.RegisterAttached<DockPanel, UIElement, Dock>("Dock", Dock.Left, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
 
     public static readonly BindableProperty<bool> LastChildFillProperty =
         BindableProperty.Register<DockPanel, bool>(nameof(LastChildFill), true, (s, o, n) => ((DockPanel)s).InvalidateArrange());

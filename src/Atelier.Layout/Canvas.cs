@@ -8,10 +8,10 @@ namespace Atelier.Layout;
 public class Canvas : Panel
 {
     public static readonly BindableProperty<float> LeftProperty =
-        BindableProperty.Register<UIElement, float>("Left", 0f, (s, o, n) => (s as UIElement)?.InvalidateArrange());
+        BindableProperty.RegisterAttached<Canvas, UIElement, float>("Left", 0f, (s, o, n) => (s as UIElement)?.InvalidateArrange());
 
     public static readonly BindableProperty<float> TopProperty =
-        BindableProperty.Register<UIElement, float>("Top", 0f, (s, o, n) => (s as UIElement)?.InvalidateArrange());
+        BindableProperty.RegisterAttached<Canvas, UIElement, float>("Top", 0f, (s, o, n) => (s as UIElement)?.InvalidateArrange());
 
     public static void SetLeft(UIElement element, float value) => element.SetValue(LeftProperty, value);
     public static float GetLeft(UIElement element) => element.GetValue(LeftProperty);

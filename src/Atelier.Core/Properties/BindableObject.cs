@@ -26,17 +26,25 @@ namespace Atelier.Core.Properties;
 /// values are evaluated in the following priority order:
 /// </para>
 /// <list type="number">
-///   <item><term>1. Local / Explicit Value</term><description>Directly set via <see cref="SetValue{T}(BindableProperty{T}, T)"/> or <see cref="SetValueUntyped(BindableProperty, object?)"/>.</description></item>
+///   <item><term>1. Local / Explicit Value</term><description>Directly set via <see cref="SetValue{T}(BindableProperty{T}, T)"/> or <see cref="SetValueUntyped(BindableProperty, object?)"/>. Data bindings also write to this layer, so a local set replaces a one-way bound value until the source changes again.</description></item>
 ///   <item><term>2. Styled Value</term><description>Applied by active themes, style setters, or triggers.</description></item>
 ///   <item><term>3. Inherited Value</term><description>Inherited from an ancestor in the visual/logical tree if <see cref="BindableProperty.Inherits"/> is <c>true</c>.</description></item>
 ///   <item><term>4. Default Value</term><description>The fallback value defined at property registration time via <see cref="BindableProperty{T}.DefaultValue"/>.</description></item>
 /// </list>
+/// <para>
+/// Change callbacks and <see cref="PropertyChanged"/> are raised only when the <em>effective</em> value actually changes,
+/// on this object and on every descendant that inherits it.
+/// </para>
 /// </remarks>
 public class BindableObject : INotifyPropertyChanged
 {
     private readonly Dictionary<int, object?> _localValues = new();
     private readonly Dictionary<int, object?> _styleValues = new();
     private readonly Dictionary<int, IBindingSubscription> _bindings = new();
+
+    // Uncoerced values, kept only for entries where coercion changed the value, so CoerceValue() can re-evaluate them.
+    private Dictionary<int, object?>? _localBaseValues;
+    private Dictionary<int, object?>? _styleBaseValues;
 
     /// <summary>
     /// Occurs when a property value changes, implementing <see cref="INotifyPropertyChanged"/>.
@@ -101,25 +109,16 @@ public class BindableObject : INotifyPropertyChanged
     /// <returns>The current effective value of the property.</returns>
     public T GetValue<T>(BindableProperty<T> property)
     {
-        // 1. Local / Explicit value (highest precedence)
-        if (_localValues.TryGetValue(property.Id, out var localVal))
+        if (TryGetOwnValue(property.Id, out var own))
         {
-            return (T)localVal!;
+            return (T)own!;
         }
 
-        // 2. Styled value
-        if (_styleValues.TryGetValue(property.Id, out var styleVal))
+        if (property.Inherits && TryGetInheritedValue(property, out var inherited))
         {
-            return (T)styleVal!;
+            return (T)inherited!;
         }
 
-        // 3. Inherited value
-        if (property.Inherits && TryGetInheritedValue<T>(property, out var inheritedVal))
-        {
-            return inheritedVal;
-        }
-
-        // 4. Default value
         return property.DefaultValue;
     }
 
@@ -131,19 +130,14 @@ public class BindableObject : INotifyPropertyChanged
     /// <returns>The current effective value of the property, or <c>null</c>.</returns>
     public object? GetValueUntyped(BindableProperty property)
     {
-        if (_localValues.TryGetValue(property.Id, out var localVal))
+        if (TryGetOwnValue(property.Id, out var own))
         {
-            return localVal;
+            return own;
         }
 
-        if (_styleValues.TryGetValue(property.Id, out var styleVal))
+        if (property.Inherits && TryGetInheritedValue(property, out var inherited))
         {
-            return styleVal;
-        }
-
-        if (property.Inherits && TryGetInheritedValueUntyped(property, out var inheritedVal))
-        {
-            return inheritedVal;
+            return inherited;
         }
 
         return property.GetDefaultValueUntyped();
@@ -158,9 +152,9 @@ public class BindableObject : INotifyPropertyChanged
     /// <list type="bullet">
     ///   <item><description>The property's <see cref="BindableProperty{T}.PropertyChanged"/> callback is invoked.</description></item>
     ///   <item><description>The <see cref="PropertyChanged"/> event is raised.</description></item>
-    ///   <item><description>If <see cref="BindableProperty.Inherits"/> is <c>true</c>, the new value is propagated down the inheritance tree.</description></item>
-    ///   <item><description>Any active two-way data binding on this property is updated.</description></item>
+    ///   <item><description>If <see cref="BindableProperty.Inherits"/> is <c>true</c>, descendants whose inherited value changed are notified.</description></item>
     /// </list>
+    /// Any active two-way data binding on this property is updated whenever the local value changes.
     /// </remarks>
     /// <typeparam name="T">The type of the property value.</typeparam>
     /// <param name="property">The strongly-typed bindable property to set.</param>
@@ -168,35 +162,8 @@ public class BindableObject : INotifyPropertyChanged
     /// <returns><c>true</c> if the local value was updated; <c>false</c> if the local value was already equal to the coerced value.</returns>
     public bool SetValue<T>(BindableProperty<T> property, T value)
     {
-        T effectiveValue = property.CoerceValue != null ? property.CoerceValue(this, value) : value;
-        T oldEffectiveValue = GetValue(property);
-
-        bool hadLocal = _localValues.TryGetValue(property.Id, out var boxedLocal);
-        if (hadLocal && EqualityComparer<T>.Default.Equals((T)boxedLocal!, effectiveValue))
-        {
-            return false;
-        }
-
-        _localValues[property.Id] = effectiveValue;
-
-        if (!EqualityComparer<T>.Default.Equals(oldEffectiveValue, effectiveValue))
-        {
-            property.PropertyChanged?.Invoke(this, oldEffectiveValue, effectiveValue);
-            OnPropertyChanged(property.Name);
-
-            if (property.Inherits)
-            {
-                NotifyInheritedPropertyChanged(property, oldEffectiveValue, effectiveValue);
-            }
-        }
-
-        // Update active two-way binding if present
-        if (_bindings.TryGetValue(property.Id, out var binding))
-        {
-            binding.OnTargetPropertyChanged(effectiveValue);
-        }
-
-        return true;
+        object? coerced = property.CoerceValue != null ? property.CoerceValue(this, value) : value;
+        return SetLocalValueCore(property, value, coerced);
     }
 
     /// <summary>
@@ -204,33 +171,33 @@ public class BindableObject : INotifyPropertyChanged
     /// </summary>
     /// <param name="property">The bindable property to set.</param>
     /// <param name="value">The untyped value to set.</param>
-    /// <returns><c>true</c> if the local value was updated; <c>false</c> if the local value was already equal to the provided value.</returns>
+    /// <returns><c>true</c> if the local value was updated; <c>false</c> if the local value was already equal to the coerced value.</returns>
+    /// <exception cref="ArgumentException"><paramref name="value"/> is not valid for the property's type.</exception>
     public bool SetValueUntyped(BindableProperty property, object? value)
     {
-        object? oldEffectiveValue = GetValueUntyped(property);
+        object? coerced = property.CoerceUntyped(this, value);
+        return SetLocalValueCore(property, value, coerced);
+    }
 
-        bool hadLocal = _localValues.TryGetValue(property.Id, out var boxedLocal);
-        if (hadLocal && Equals(boxedLocal, value))
+    private bool SetLocalValueCore(BindableProperty property, object? baseValue, object? coerced)
+    {
+        if (property.HasCoercion)
+        {
+            TrackBaseValue(ref _localBaseValues, property.Id, baseValue, coerced);
+        }
+
+        if (_localValues.TryGetValue(property.Id, out var current) && Equals(current, coerced))
         {
             return false;
         }
 
-        _localValues[property.Id] = value;
-
-        if (!Equals(oldEffectiveValue, value))
-        {
-            property.InvokePropertyChangedUntyped(this, oldEffectiveValue, value);
-            OnPropertyChanged(property.Name);
-
-            if (property.Inherits)
-            {
-                NotifyInheritedPropertyChanged(property, oldEffectiveValue, value);
-            }
-        }
+        var change = BeginChange(property, captureDescendants: true);
+        _localValues[property.Id] = coerced;
+        EndChange(property, change);
 
         if (_bindings.TryGetValue(property.Id, out var binding))
         {
-            binding.OnTargetPropertyChanged(value);
+            binding.OnTargetPropertyChanged(coerced);
         }
 
         return true;
@@ -242,262 +209,335 @@ public class BindableObject : INotifyPropertyChanged
     /// </summary>
     /// <typeparam name="T">The type of the property value.</typeparam>
     /// <param name="property">The strongly-typed bindable property to clear.</param>
-    public void ClearValue<T>(BindableProperty<T> property)
-    {
-        if (_localValues.Remove(property.Id, out var boxedOld))
-        {
-            T oldEffective = (T)boxedOld!;
-            T newEffective = GetValue(property);
-
-            if (!EqualityComparer<T>.Default.Equals(oldEffective, newEffective))
-            {
-                property.PropertyChanged?.Invoke(this, oldEffective, newEffective);
-                OnPropertyChanged(property.Name);
-
-                if (property.Inherits)
-                {
-                    NotifyInheritedPropertyChanged(property, oldEffective, newEffective);
-                }
-            }
-        }
-    }
+    public void ClearValue<T>(BindableProperty<T> property) => ClearValue((BindableProperty)property);
 
     /// <summary>
     /// Clears the local (explicit) value for the specified untyped bindable property,
     /// causing its effective value to fall back to the next level in the precedence chain (Styled, Inherited, or Default).
     /// </summary>
+    /// <remarks>An active binding on the property is not removed; use <see cref="ClearBinding(BindableProperty)"/> for that.</remarks>
     /// <param name="property">The bindable property to clear.</param>
     public void ClearValue(BindableProperty property)
     {
-        if (_localValues.Remove(property.Id, out var boxedOld))
+        if (!_localValues.ContainsKey(property.Id))
         {
-            object? oldEffective = boxedOld;
-            object? newEffective = GetValueUntyped(property);
+            return;
+        }
 
-            if (!Equals(oldEffective, newEffective))
-            {
-                property.InvokePropertyChangedUntyped(this, oldEffective, newEffective);
-                OnPropertyChanged(property.Name);
+        _localBaseValues?.Remove(property.Id);
 
-                if (property.Inherits)
-                {
-                    NotifyInheritedPropertyChanged(property, oldEffective, newEffective);
-                }
-            }
+        var change = BeginChange(property, captureDescendants: true);
+        _localValues.Remove(property.Id);
+        EndChange(property, change);
+    }
+
+    /// <summary>
+    /// Re-runs the property's coercion callback against the originally requested (uncoerced) local and styled values.
+    /// </summary>
+    /// <remarks>
+    /// Call this from the change callback of a property that the coercion depends on, e.g. re-coerce <c>Value</c> when
+    /// <c>Maximum</c> changes. A value that was clamped earlier is restored once the constraint allows it again.
+    /// </remarks>
+    /// <param name="property">The bindable property to re-coerce.</param>
+    public void CoerceValue(BindableProperty property)
+    {
+        if (!property.HasCoercion)
+        {
+            return;
+        }
+
+        bool hasLocal = _localValues.TryGetValue(property.Id, out var local);
+        bool hasStyle = _styleValues.TryGetValue(property.Id, out var styled);
+        if (!hasLocal && !hasStyle)
+        {
+            return;
+        }
+
+        object? newLocal = hasLocal ? Recoerce(property, ref _localBaseValues, local) : null;
+        object? newStyle = hasStyle ? Recoerce(property, ref _styleBaseValues, styled) : null;
+
+        bool localChanged = hasLocal && !Equals(local, newLocal);
+        bool styleChanged = hasStyle && !Equals(styled, newStyle);
+        if (!localChanged && !styleChanged)
+        {
+            return;
+        }
+
+        var change = BeginChange(property, captureDescendants: true);
+        if (localChanged) _localValues[property.Id] = newLocal;
+        if (styleChanged) _styleValues[property.Id] = newStyle;
+        EndChange(property, change);
+
+        if (localChanged && _bindings.TryGetValue(property.Id, out var binding))
+        {
+            binding.OnTargetPropertyChanged(newLocal);
         }
     }
 
-    internal void ApplyStyleSetters(IReadOnlyList<Setter> setters)
+    private object? Recoerce(BindableProperty property, ref Dictionary<int, object?>? bases, object? current)
     {
-        foreach (var setter in setters)
-        {
-            var prop = setter.Property;
-            object? oldVal = GetValueUntyped(prop);
-            _styleValues[prop.Id] = setter.Value;
-
-            if (!HasLocalValue(prop))
-            {
-                object? newVal = GetValueUntyped(prop);
-                if (!Equals(oldVal, newVal))
-                {
-                    prop.InvokePropertyChangedUntyped(this, oldVal, newVal);
-                    OnPropertyChanged(prop.Name);
-
-                    if (prop.Inherits)
-                    {
-                        NotifyInheritedPropertyChanged(prop, oldVal, newVal);
-                    }
-                }
-            }
-        }
+        object? baseValue = bases != null && bases.TryGetValue(property.Id, out var b) ? b : current;
+        object? coerced = property.CoerceUntyped(this, baseValue);
+        TrackBaseValue(ref bases, property.Id, baseValue, coerced);
+        return coerced;
     }
 
-    internal void ClearStyleSetters(IEnumerable<BindableProperty>? propertiesToClear = null)
+    private static void TrackBaseValue(ref Dictionary<int, object?>? bases, int id, object? baseValue, object? coerced)
     {
-        if (propertiesToClear != null)
+        if (Equals(baseValue, coerced))
         {
-            foreach (var prop in propertiesToClear)
-            {
-                if (_styleValues.Remove(prop.Id, out _))
-                {
-                    if (!HasLocalValue(prop))
-                    {
-                        object? newVal = GetValueUntyped(prop);
-                        prop.InvokePropertyChangedUntyped(this, null, newVal);
-                        OnPropertyChanged(prop.Name);
-
-                        if (prop.Inherits)
-                        {
-                            NotifyInheritedPropertyChanged(prop, null, newVal);
-                        }
-                    }
-                }
-            }
+            bases?.Remove(id);
         }
         else
         {
-            _styleValues.Clear();
+            (bases ??= new())[id] = baseValue;
         }
     }
 
-    private bool TryGetInheritedValue<T>(BindableProperty<T> property, out T value)
+    /// <summary>
+    /// Replaces the complete set of styled values on this object. Properties no longer present revert to their
+    /// inherited or default value; notifications are raised only for properties whose effective value changed.
+    /// </summary>
+    /// <param name="setters">The effective setters, later entries winning over earlier ones for the same property; <c>null</c> clears all styled values.</param>
+    internal void SetStyleValues(IEnumerable<Setter>? setters)
     {
-        var current = InheritanceParent;
-        while (current != null)
+        Dictionary<int, Setter>? next = null;
+        if (setters != null)
         {
-            if (current._localValues.TryGetValue(property.Id, out var local))
+            next = new Dictionary<int, Setter>();
+            foreach (var setter in setters)
             {
-                value = (T)local!;
-                return true;
+                next[setter.Property.Id] = setter;
             }
+        }
 
-            if (current._styleValues.TryGetValue(property.Id, out var styleVal))
+        if (_styleValues.Count > 0)
+        {
+            List<int>? removed = null;
+            foreach (var id in _styleValues.Keys)
             {
-                value = (T)styleVal!;
-                return true;
-            }
-
-            // Cross-type matching for inheritable properties with same name and compatible type
-            var candidates = BindableProperty.GetInheritablePropertiesByName(property.Name);
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                var cand = candidates[i];
-                if (cand.Id != property.Id && (cand.PropertyType == typeof(T) || typeof(T).IsAssignableFrom(cand.PropertyType)))
+                if (next == null || !next.ContainsKey(id))
                 {
-                    if (current._localValues.TryGetValue(cand.Id, out var localCand))
-                    {
-                        value = (T)localCand!;
-                        return true;
-                    }
-                    if (current._styleValues.TryGetValue(cand.Id, out var styleCand))
-                    {
-                        value = (T)styleCand!;
-                        return true;
-                    }
+                    (removed ??= new()).Add(id);
                 }
             }
 
-            current = current.InheritanceParent;
+            if (removed != null)
+            {
+                foreach (var id in removed)
+                {
+                    var property = BindableProperty.FromId(id);
+                    _styleBaseValues?.Remove(id);
+
+                    var change = BeginChange(property, captureDescendants: !_localValues.ContainsKey(id));
+                    _styleValues.Remove(id);
+                    EndChange(property, change);
+                }
+            }
         }
 
-        value = default!;
+        if (next == null)
+        {
+            return;
+        }
+
+        foreach (var setter in next.Values)
+        {
+            var property = setter.Property;
+            object? coerced = property.CoerceUntyped(this, setter.Value);
+
+            if (property.HasCoercion)
+            {
+                TrackBaseValue(ref _styleBaseValues, property.Id, setter.Value, coerced);
+            }
+
+            if (_styleValues.TryGetValue(property.Id, out var current) && Equals(current, coerced))
+            {
+                continue;
+            }
+
+            var change = BeginChange(property, captureDescendants: !_localValues.ContainsKey(property.Id));
+            _styleValues[property.Id] = coerced;
+            EndChange(property, change);
+        }
+    }
+
+    #region Change tracking
+
+    private readonly struct ValueChange
+    {
+        public ValueChange(object? oldValue, List<InheritedValueEntry>? descendants)
+        {
+            OldValue = oldValue;
+            Descendants = descendants;
+        }
+
+        public object? OldValue { get; }
+        public List<InheritedValueEntry>? Descendants { get; }
+    }
+
+    /// <summary>
+    /// A descendant's effective value of an inheritable property, captured before a change so it can be diffed afterwards.
+    /// </summary>
+    internal readonly struct InheritedValueEntry
+    {
+        public InheritedValueEntry(BindableObject target, BindableProperty property, object? oldValue)
+        {
+            Target = target;
+            Property = property;
+            OldValue = oldValue;
+        }
+
+        public BindableObject Target { get; }
+        public BindableProperty Property { get; }
+        public object? OldValue { get; }
+    }
+
+    private ValueChange BeginChange(BindableProperty property, bool captureDescendants)
+    {
+        List<InheritedValueEntry>? descendants = null;
+        if (captureDescendants && property.Inherits)
+        {
+            foreach (var child in InheritanceChildren)
+            {
+                CaptureSubtree(child, property.InheritanceDependents, ref descendants);
+            }
+        }
+
+        return new ValueChange(GetValueUntyped(property), descendants);
+    }
+
+    private void EndChange(BindableProperty property, ValueChange change)
+    {
+        object? newValue = GetValueUntyped(property);
+        if (!Equals(change.OldValue, newValue))
+        {
+            RaiseEffectiveValueChanged(property, change.OldValue, newValue);
+        }
+
+        CommitInheritedValues(change.Descendants);
+    }
+
+    private void RaiseEffectiveValueChanged(BindableProperty property, object? oldValue, object? newValue)
+    {
+        property.InvokePropertyChangedUntyped(this, oldValue, newValue);
+        OnPropertyChanged(property.Name);
+    }
+
+    /// <summary>
+    /// Captures the inherited values of this object and its whole subtree for every inheritable property.
+    /// Call before changing <see cref="InheritanceParent"/>, then pass the result to <see cref="CommitInheritedValues"/> afterwards.
+    /// </summary>
+    internal List<InheritedValueEntry>? CaptureInheritedValues()
+    {
+        List<InheritedValueEntry>? entries = null;
+        CaptureSubtree(this, BindableProperty.AllInheritableArray, ref entries);
+        return entries;
+    }
+
+    /// <summary>
+    /// Raises change notifications for every captured entry whose effective value differs from the captured one.
+    /// Entries are processed in capture (pre-order) order, so ancestors are notified before their descendants.
+    /// </summary>
+    internal static void CommitInheritedValues(List<InheritedValueEntry>? entries)
+    {
+        if (entries == null)
+        {
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            object? newValue = entry.Target.GetValueUntyped(entry.Property);
+            if (!Equals(entry.OldValue, newValue))
+            {
+                entry.Target.RaiseEffectiveValueChanged(entry.Property, entry.OldValue, newValue);
+            }
+        }
+    }
+
+    private static void CaptureSubtree(BindableObject node, BindableProperty[] properties, ref List<InheritedValueEntry>? entries)
+    {
+        bool shadowsAll = true;
+        foreach (var property in properties)
+        {
+            // Only nodes that actually carry the property are notified; this also keeps typed callbacks such as
+            // (s, o, n) => ((TextBlock)s).InvalidateMeasure() from being invoked on unrelated node types.
+            if (!node.HasOwnValue(property.Id) && property.TargetType.IsInstanceOfType(node))
+            {
+                (entries ??= new()).Add(new InheritedValueEntry(node, property, node.GetValueUntyped(property)));
+            }
+
+            if (shadowsAll && !node.HasOwnValueForAny(property.InheritanceSources))
+            {
+                shadowsAll = false;
+            }
+        }
+
+        // If this node supplies its own value for every affected property, nothing below it can change.
+        if (shadowsAll)
+        {
+            return;
+        }
+
+        foreach (var child in node.InheritanceChildren)
+        {
+            CaptureSubtree(child, properties, ref entries);
+        }
+    }
+
+    #endregion
+
+    #region Value lookup
+
+    private bool TryGetOwnValue(int id, out object? value)
+    {
+        return _localValues.TryGetValue(id, out value) || _styleValues.TryGetValue(id, out value);
+    }
+
+    private bool HasOwnValue(int id) => _localValues.ContainsKey(id) || _styleValues.ContainsKey(id);
+
+    private bool HasOwnValueForAny(BindableProperty[] properties)
+    {
+        foreach (var property in properties)
+        {
+            if (HasOwnValue(property.Id))
+            {
+                return true;
+            }
+        }
         return false;
     }
 
-    private bool TryGetInheritedValueUntyped(BindableProperty property, out object? value)
+    private bool TryGetInheritedValue(BindableProperty property, out object? value)
     {
-        var current = InheritanceParent;
-        while (current != null)
+        var sources = property.InheritanceSources;
+        for (var current = InheritanceParent; current != null; current = current.InheritanceParent)
         {
-            if (current._localValues.TryGetValue(property.Id, out var local))
+            // The property itself first, then same-named aliases (e.g. Control.FontSize for TextBlock.FontSize).
+            for (int i = 0; i < sources.Length; i++)
             {
-                value = local;
-                return true;
-            }
-
-            if (current._styleValues.TryGetValue(property.Id, out var styleVal))
-            {
-                value = styleVal;
-                return true;
-            }
-
-            var candidates = BindableProperty.GetInheritablePropertiesByName(property.Name);
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                var cand = candidates[i];
-                if (cand.Id != property.Id && property.PropertyType.IsAssignableFrom(cand.PropertyType))
+                if (current.TryGetOwnValue(sources[i].Id, out value))
                 {
-                    if (current._localValues.TryGetValue(cand.Id, out var localCand))
-                    {
-                        value = localCand;
-                        return true;
-                    }
-                    if (current._styleValues.TryGetValue(cand.Id, out var styleCand))
-                    {
-                        value = styleCand;
-                        return true;
-                    }
+                    return true;
                 }
             }
-
-            current = current.InheritanceParent;
         }
 
         value = null;
         return false;
     }
 
-    private static object? GetValueUntypedFromAncestor(BindableObject? ancestor, BindableProperty property)
-    {
-        if (ancestor == null) return property.GetDefaultValueUntyped();
-        return ancestor.GetValueUntyped(property);
-    }
+    #endregion
 
-    internal void NotifyInheritedPropertyChanged(BindableProperty property, object? oldValue, object? newValue)
-    {
-        foreach (var child in InheritanceChildren)
-        {
-            if (!child.HasLocalValue(property) && !child._styleValues.ContainsKey(property.Id))
-            {
-                property.InvokePropertyChangedUntyped(child, oldValue, newValue);
-                child.OnPropertyChanged(property.Name);
-                child.NotifyInheritedPropertyChanged(property, oldValue, newValue);
-            }
-        }
-    }
-
+    /// <summary>
+    /// Invoked after this object has been attached to, detached from, or moved to a different inheritance parent.
+    /// Inherited value notifications for this object and its subtree have already been raised at this point.
+    /// </summary>
+    /// <param name="oldParent">The previous inheritance parent, or <c>null</c>.</param>
+    /// <param name="newParent">The new inheritance parent, or <c>null</c>.</param>
     internal virtual void OnInheritanceParentChanged(BindableObject? oldParent, BindableObject? newParent)
     {
-        // Propagate DataContext change if not set locally or via style
-        if (!HasLocalValue(DataContextProperty) && !_styleValues.ContainsKey(DataContextProperty.Id))
-        {
-            object? oldDc = oldParent?.DataContext;
-            object? newDc = newParent?.DataContext;
-            if (!Equals(oldDc, newDc))
-            {
-                DataContextProperty.InvokePropertyChangedUntyped(this, oldDc, newDc);
-                OnPropertyChanged(nameof(DataContext));
-                OnDataContextChanged(oldDc, newDc);
-            }
-        }
-
-        // Notify inheritable properties that may have changed due to reparenting
-        var inheritableProps = BindableProperty.GetInheritablePropertiesByName(nameof(DataContext));
-        // Also check font/colors
-        var fontSizes = BindableProperty.GetInheritablePropertiesByName("FontSize");
-        foreach (var prop in fontSizes)
-        {
-            if (!HasLocalValue(prop) && !_styleValues.ContainsKey(prop.Id))
-            {
-                object? oldVal = GetValueUntypedFromAncestor(oldParent, prop);
-                object? newVal = GetValueUntypedFromAncestor(newParent, prop);
-                if (!Equals(oldVal, newVal))
-                {
-                    prop.InvokePropertyChangedUntyped(this, oldVal, newVal);
-                    OnPropertyChanged(prop.Name);
-                }
-            }
-        }
-
-        var foregrounds = BindableProperty.GetInheritablePropertiesByName("Foreground");
-        foreach (var prop in foregrounds)
-        {
-            if (!HasLocalValue(prop) && !_styleValues.ContainsKey(prop.Id))
-            {
-                object? oldVal = GetValueUntypedFromAncestor(oldParent, prop);
-                object? newVal = GetValueUntypedFromAncestor(newParent, prop);
-                if (!Equals(oldVal, newVal))
-                {
-                    prop.InvokePropertyChangedUntyped(this, oldVal, newVal);
-                    OnPropertyChanged(prop.Name);
-                }
-            }
-        }
-
-        foreach (var child in InheritanceChildren)
-        {
-            child.OnInheritanceParentChanged(this, this);
-        }
     }
 
     /// <summary>
@@ -542,8 +582,9 @@ public class BindableObject : INotifyPropertyChanged
     /// If an existing binding was active on this property, it is automatically disposed and replaced.
     /// This binding automatically subscribes to data context changes on this object. When the <see cref="DataContext"/>
     /// changes or if the current data context raises <see cref="INotifyPropertyChanged.PropertyChanged"/>, the target
-    /// property value is updated. If a <paramref name="setter"/> is provided, two-way updates are propagated back to the
-    /// data context according to <paramref name="updateSourceTrigger"/>.
+    /// property value is updated. If the data context becomes <c>null</c> or is not a <typeparamref name="TDataContext"/>,
+    /// the value written by the binding is cleared. If a <paramref name="setter"/> is provided, two-way updates are
+    /// propagated back to the data context according to <paramref name="updateSourceTrigger"/>.
     /// </remarks>
     /// <typeparam name="TTarget">The data type of the target bindable property.</typeparam>
     /// <typeparam name="TDataContext">The expected type of the data context object. Must be a reference type.</typeparam>
@@ -625,7 +666,7 @@ public enum UpdateSourceTrigger
     PropertyChanged = 0,
 
     /// <summary>
-    /// Updates the binding source whenever the target element loses UI focus.
+    /// Updates the binding source whenever the target element loses UI focus. Requires a <see cref="Tree.UIElement"/> target.
     /// </summary>
     LostFocus = 1,
 
@@ -661,6 +702,10 @@ public interface IBindingSubscription : IDisposable
 /// Represents a strongly-typed data binding subscription connecting a target <see cref="BindableProperty{TTarget}"/>
 /// on a <see cref="BindableObject"/> to an explicit source object instance of type <typeparamref name="TSource"/>.
 /// </summary>
+/// <remarks>
+/// The target is held weakly; if it is garbage-collected, the binding unsubscribes from the source on the next source notification.
+/// The source is held strongly for the lifetime of the binding.
+/// </remarks>
 /// <typeparam name="TTarget">The data type of the target property.</typeparam>
 /// <typeparam name="TSource">The type of the source object. Must be a reference type.</typeparam>
 public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
@@ -668,11 +713,11 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
 {
     private readonly WeakReference<BindableObject> _targetRef;
     private readonly BindableProperty<TTarget> _property;
-    private readonly WeakReference<TSource> _sourceRef;
+    private readonly TSource _source;
     private readonly Func<TSource, TTarget> _getter;
     private readonly Action<TSource, TTarget>? _setter;
     private readonly UpdateSourceTrigger _updateSourceTrigger;
-    private readonly INotifyPropertyChanged? _inpc;
+    private INotifyPropertyChanged? _inpc;
     private object? _pendingValue;
     private bool _hasPendingValue;
     private bool _isUpdating;
@@ -686,6 +731,7 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
     /// <param name="getter">The getter delegate to extract values from the source object.</param>
     /// <param name="setter">An optional setter delegate to write values back to the source object for two-way binding.</param>
     /// <param name="updateSourceTrigger">Specifies when two-way changes are pushed back to the source. Defaults to <see cref="UpdateSourceTrigger.PropertyChanged"/>.</param>
+    /// <exception cref="ArgumentException"><paramref name="updateSourceTrigger"/> is <see cref="UpdateSourceTrigger.LostFocus"/> but <paramref name="target"/> is not a <see cref="Tree.UIElement"/>.</exception>
     public PropertyBinding(
         BindableObject target,
         BindableProperty<TTarget> property,
@@ -694,9 +740,11 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
         Action<TSource, TTarget>? setter,
         UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
     {
+        BindingHelpers.ValidateTrigger(target, updateSourceTrigger);
+
         _targetRef = new WeakReference<BindableObject>(target);
         _property = property;
-        _sourceRef = new WeakReference<TSource>(source);
+        _source = source;
         _getter = getter;
         _setter = setter;
         _updateSourceTrigger = updateSourceTrigger;
@@ -726,6 +774,12 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
 
     private void OnSourcePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (!_targetRef.TryGetTarget(out _))
+        {
+            Dispose();
+            return;
+        }
+
         UpdateTarget();
     }
 
@@ -738,11 +792,21 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
         _isUpdating = true;
         try
         {
-            if (_targetRef.TryGetTarget(out var target) && _sourceRef.TryGetTarget(out var source))
+            if (_targetRef.TryGetTarget(out var target))
             {
-                var value = _getter(source);
+                var value = _getter(_source);
                 target.SetValue(_property, value);
                 _hasPendingValue = false;
+
+                // If the target coerced the value, write the coerced value back so source and target agree.
+                if (_setter != null)
+                {
+                    var actual = target.GetValue(_property);
+                    if (!EqualityComparer<TTarget>.Default.Equals(actual, value))
+                    {
+                        _setter(_source, actual);
+                    }
+                }
             }
         }
         finally
@@ -793,10 +857,7 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
         _isUpdating = true;
         try
         {
-            if (_sourceRef.TryGetTarget(out var source))
-            {
-                _setter(source, (TTarget)value!);
-            }
+            _setter(_source, (TTarget)value!);
         }
         finally
         {
@@ -812,6 +873,7 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
         if (_inpc != null)
         {
             _inpc.PropertyChanged -= OnSourcePropertyChanged;
+            _inpc = null;
         }
 
         if (_targetRef.TryGetTarget(out var target) && target is Tree.UIElement uie)
@@ -828,8 +890,9 @@ public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription
 /// <remarks>
 /// This binding dynamically observes the <see cref="BindableObject.DataContext"/> of the target element.
 /// If the data context instance changes or if the active data context raises <see cref="INotifyPropertyChanged.PropertyChanged"/>,
-/// the target property is updated. For two-way bindings (when a setter is provided), changes to the target property
-/// are pushed back to the data context according to <see cref="UpdateSourceTrigger"/>.
+/// the target property is updated. When the data context becomes <c>null</c> or is not a <typeparamref name="TDataContext"/>,
+/// the value previously written by this binding is cleared. For two-way bindings (when a setter is provided), changes to the
+/// target property are pushed back to the data context according to <see cref="UpdateSourceTrigger"/>.
 /// </remarks>
 /// <typeparam name="TTarget">The data type of the target property.</typeparam>
 /// <typeparam name="TDataContext">The expected type of the data context. Must be a reference type.</typeparam>
@@ -845,6 +908,7 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
     private object? _pendingValue;
     private bool _hasPendingValue;
     private bool _isUpdating;
+    private bool _hasAppliedValue;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DataContextBinding{TTarget, TDataContext}"/> class.
@@ -854,6 +918,7 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
     /// <param name="getter">The getter delegate to extract values from the data context.</param>
     /// <param name="setter">An optional setter delegate to write values back to the data context for two-way binding.</param>
     /// <param name="updateSourceTrigger">Specifies when two-way changes are pushed back to the data context. Defaults to <see cref="UpdateSourceTrigger.PropertyChanged"/>.</param>
+    /// <exception cref="ArgumentException"><paramref name="updateSourceTrigger"/> is <see cref="UpdateSourceTrigger.LostFocus"/> but <paramref name="target"/> is not a <see cref="Tree.UIElement"/>.</exception>
     public DataContextBinding(
         BindableObject target,
         BindableProperty<TTarget> property,
@@ -861,6 +926,8 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
         Action<TDataContext, TTarget>? setter,
         UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged)
     {
+        BindingHelpers.ValidateTrigger(target, updateSourceTrigger);
+
         _targetRef = new WeakReference<BindableObject>(target);
         _property = property;
         _getter = getter;
@@ -915,6 +982,12 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
 
     private void OnSourcePropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (!_targetRef.TryGetTarget(out _))
+        {
+            Dispose();
+            return;
+        }
+
         UpdateTarget();
     }
 
@@ -927,10 +1000,33 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
         _isUpdating = true;
         try
         {
-            if (_targetRef.TryGetTarget(out var target) && target.DataContext is TDataContext dc)
+            if (!_targetRef.TryGetTarget(out var target))
+            {
+                return;
+            }
+
+            if (target.DataContext is TDataContext dc)
             {
                 var value = _getter(dc);
                 target.SetValue(_property, value);
+                _hasAppliedValue = true;
+                _hasPendingValue = false;
+
+                // If the target coerced the value, write the coerced value back so source and target agree.
+                if (_setter != null)
+                {
+                    var actual = target.GetValue(_property);
+                    if (!EqualityComparer<TTarget>.Default.Equals(actual, value))
+                    {
+                        _setter(dc, actual);
+                    }
+                }
+            }
+            else if (_hasAppliedValue)
+            {
+                // No usable data context: drop the stale value from the previous one.
+                target.ClearValue(_property);
+                _hasAppliedValue = false;
                 _hasPendingValue = false;
             }
         }
@@ -1011,6 +1107,20 @@ public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscrip
         {
             _currentInpc.PropertyChanged -= OnSourcePropertyChanged;
             _currentInpc = null;
+        }
+    }
+}
+
+internal static class BindingHelpers
+{
+    public static void ValidateTrigger(BindableObject target, UpdateSourceTrigger trigger)
+    {
+        if (trigger == UpdateSourceTrigger.LostFocus && target is not Tree.UIElement)
+        {
+            throw new ArgumentException(
+                $"{nameof(UpdateSourceTrigger)}.{nameof(UpdateSourceTrigger.LostFocus)} requires a {nameof(Tree.UIElement)} target, " +
+                $"but the target is '{target.GetType().Name}'. Use {nameof(UpdateSourceTrigger.Explicit)} instead.",
+                nameof(trigger));
         }
     }
 }

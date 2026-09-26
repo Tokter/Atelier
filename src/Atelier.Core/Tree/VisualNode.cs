@@ -170,33 +170,22 @@ public abstract class VisualNode : BindableObject
         return targetNode.PointToClient(screenPoint);
     }
 
-    public void AddChild(VisualNode child)
+    public void AddChild(VisualNode child) => AttachChild(null, child);
+
+    public void InsertChild(int index, VisualNode child) => AttachChild(index, child);
+
+    private void AttachChild(int? index, VisualNode child)
     {
-        if (child._parent != null)
-        {
-            child._parent.RemoveChild(child);
-        }
+        // Capture inherited values before relinking so a move raises one notification per real change.
+        var inherited = child.CaptureInheritedValues();
 
         var oldParent = child._parent;
+        oldParent?.DetachChild(child);
+
         child._parent = this;
-        _children.Add(child);
+        _children.Insert(index ?? _children.Count, child);
 
-        child.OnInheritanceParentChanged(oldParent, this);
-        OnChildAdded(child);
-        InvalidateLayout();
-    }
-
-    public void InsertChild(int index, VisualNode child)
-    {
-        if (child._parent != null)
-        {
-            child._parent.RemoveChild(child);
-        }
-
-        var oldParent = child._parent;
-        child._parent = this;
-        _children.Insert(index, child);
-
+        CommitInheritedValues(inherited);
         child.OnInheritanceParentChanged(oldParent, this);
         OnChildAdded(child);
         InvalidateLayout();
@@ -204,29 +193,33 @@ public abstract class VisualNode : BindableObject
 
     public bool RemoveChild(VisualNode child)
     {
-        if (_children.Remove(child))
+        if (child._parent != this)
         {
-            child._parent = null;
-            child.OnInheritanceParentChanged(this, null);
-            OnChildRemoved(child);
-            InvalidateLayout();
-            return true;
+            return false;
         }
 
-        return false;
+        var inherited = child.CaptureInheritedValues();
+        DetachChild(child);
+        CommitInheritedValues(inherited);
+        child.OnInheritanceParentChanged(this, null);
+        return true;
+    }
+
+    // Unlinks a child without raising inheritance notifications; callers are responsible for those.
+    private void DetachChild(VisualNode child)
+    {
+        _children.Remove(child);
+        child._parent = null;
+        OnChildRemoved(child);
+        InvalidateLayout();
     }
 
     public void ClearChildren()
     {
-        for (int i = 0; i < _children.Count; i++)
+        while (_children.Count > 0)
         {
-            var child = _children[i];
-            child._parent = null;
-            child.OnInheritanceParentChanged(this, null);
-            OnChildRemoved(child);
+            RemoveChild(_children[^1]);
         }
-        _children.Clear();
-        InvalidateLayout();
     }
 
     protected virtual void OnChildAdded(VisualNode child) { }

@@ -55,16 +55,16 @@ public class ColumnDefinition
 public class Grid : Panel
 {
     public static readonly BindableProperty<int> RowProperty =
-        BindableProperty.Register<UIElement, int>("Row", 0, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
+        BindableProperty.RegisterAttached<Grid, UIElement, int>("Row", 0, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
 
     public static readonly BindableProperty<int> ColumnProperty =
-        BindableProperty.Register<UIElement, int>("Column", 0, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
+        BindableProperty.RegisterAttached<Grid, UIElement, int>("Column", 0, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
 
     public static readonly BindableProperty<int> RowSpanProperty =
-        BindableProperty.Register<UIElement, int>("RowSpan", 1, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
+        BindableProperty.RegisterAttached<Grid, UIElement, int>("RowSpan", 1, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
 
     public static readonly BindableProperty<int> ColumnSpanProperty =
-        BindableProperty.Register<UIElement, int>("ColumnSpan", 1, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
+        BindableProperty.RegisterAttached<Grid, UIElement, int>("ColumnSpan", 1, (s, o, n) => (s as UIElement)?.InvalidateMeasure());
 
     public static void SetRow(UIElement element, int value) => element.SetValue(RowProperty, value);
     public static int GetRow(UIElement element) => element.GetValue(RowProperty);
