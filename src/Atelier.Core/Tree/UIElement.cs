@@ -68,6 +68,22 @@ public abstract class UIElement : VisualNode
     public static readonly BindableProperty<bool> ClipToBoundsProperty =
         BindableProperty.Register<UIElement, bool>(nameof(ClipToBounds), false, options: PropertyOptions.AffectsRender);
 
+    /// <summary>Identifies the <see cref="UseLayoutRounding"/> bindable property.</summary>
+    public static readonly BindableProperty<bool> UseLayoutRoundingProperty =
+        BindableProperty.Register<UIElement, bool>(nameof(UseLayoutRounding), false, options: PropertyOptions.AffectsMeasure, inherits: true);
+
+    /// <summary>
+    /// Gets or sets whether layout snaps this element (and, by inheritance, its descendants) to whole pixels, so edges and
+    /// thin lines render crisply instead of being blurred across two pixels. The default is <c>false</c>; windows enable
+    /// it for their content unless it was set explicitly.
+    /// </summary>
+    /// <remarks>
+    /// Desired sizes are rounded up (so measured text is never clipped) and arranged edges are rounded to the nearest pixel,
+    /// which keeps neighbouring elements from overlapping or leaving gaps. Elements with a <see cref="VisualNode.Transform"/>
+    /// are not rounded. One layout unit is assumed to be one device pixel.
+    /// </remarks>
+    public bool UseLayoutRounding { get => GetValue(UseLayoutRoundingProperty); set => SetValue(UseLayoutRoundingProperty, value); }
+
     /// <summary>Identifies the <see cref="StyleKey"/> bindable property.</summary>
     public static readonly BindableProperty<string?> StyleKeyProperty =
         BindableProperty.Register<UIElement, string?>(
@@ -855,6 +871,19 @@ public abstract class UIElement : VisualNode
 
     #endregion
 
+    // Layout rounding. Infinite and NaN sizes pass through unchanged.
+    private static float RoundUp(float value) => float.IsFinite(value) ? MathF.Ceiling(value - 0.0001f) : value;
+
+    // Rounds the left/top and right/bottom edges independently, so adjacent elements stay flush.
+    private static Rect RoundEdges(float x, float y, float width, float height)
+    {
+        float left = MathF.Round(x);
+        float top = MathF.Round(y);
+        float right = float.IsFinite(width) ? MathF.Round(x + width) : x + width;
+        float bottom = float.IsFinite(height) ? MathF.Round(y + height) : y + height;
+        return new Rect(left, top, right - left, bottom - top);
+    }
+
     private Size _previousAvailableSize = Size.Zero;
     private Rect _previousFinalRect = Rect.Zero;
     private Size _untransformedDesiredSize = Size.Zero;
@@ -993,7 +1022,8 @@ public abstract class UIElement : VisualNode
 
         if (Parent == null || transform.IsIdentity)
         {
-            DesiredSize = new Size(finalWidth, finalHeight).Inflate(margin.Horizontal, margin.Vertical);
+            var desired = new Size(finalWidth, finalHeight).Inflate(margin.Horizontal, margin.Vertical);
+            DesiredSize = UseLayoutRounding ? new Size(RoundUp(desired.Width), RoundUp(desired.Height)) : desired;
         }
         else
         {
@@ -1104,7 +1134,7 @@ public abstract class UIElement : VisualNode
                     break;
             }
 
-            Bounds = new Rect(x, y, width, height);
+            Bounds = UseLayoutRounding ? RoundEdges(x, y, width, height) : new Rect(x, y, width, height);
             IsArrangeValid = true;
             return;
         }

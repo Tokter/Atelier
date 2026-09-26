@@ -219,6 +219,13 @@ public class SilkWindow : IDisposable
                 _rootElement.NeedsVisualUpdate += OnTreeInvalidated;
                 _rootElement.NeedsLayoutUpdate += OnTreeInvalidated;
                 _rootElement.AttachToHost();
+
+                // Crisp pixel-aligned layout on screen, unless the app decided otherwise.
+                if (_rootElement.GetValueSource(UIElement.UseLayoutRoundingProperty) == Atelier.Core.Properties.ValueSource.Default)
+                {
+                    _rootElement.UseLayoutRounding = true;
+                }
+
                 _rootElement.InvalidateMeasure();
                 _rootElement.InvalidateVisual();
             }
