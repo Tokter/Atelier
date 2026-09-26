@@ -19,6 +19,12 @@ public interface IDispatcher
     void Post(Action action);
 
     /// <summary>
+    /// Executes the specified action asynchronously on the dispatcher thread with the given priority.
+    /// </summary>
+    /// <remarks>The default implementation ignores the priority and calls <see cref="Post(Action)"/>.</remarks>
+    void Post(Action action, DispatcherPriority priority) => Post(action);
+
+    /// <summary>
     /// Executes the specified action synchronously on the dispatcher thread.
     /// </summary>
     void Send(Action action);
@@ -55,6 +61,11 @@ public static class Dispatcher
     /// Enqueues an action to be executed asynchronously on the UI thread.
     /// </summary>
     public static void Post(Action action) => UIThread.Post(action);
+
+    /// <summary>
+    /// Enqueues an action to be executed asynchronously on the UI thread with the given priority.
+    /// </summary>
+    public static void Post(Action action, DispatcherPriority priority) => UIThread.Post(action, priority);
 
     /// <summary>
     /// Executes an action synchronously on the UI thread, blocking until completion.

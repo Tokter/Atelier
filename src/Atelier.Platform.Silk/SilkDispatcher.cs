@@ -21,6 +21,9 @@ public sealed class SilkDispatcher : IDispatcher
 
     public void Post(Action action) => _window.Dispatch(action);
 
+    /// <inheritdoc/>
+    public void Post(Action action, DispatcherPriority priority) => _window.Dispatch(action, priority);
+
     public void Send(Action action)
     {
         if (CheckAccess())

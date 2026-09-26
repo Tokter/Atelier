@@ -40,6 +40,7 @@ public class SilkWindow : IDisposable
     private readonly AnimationClock _animationClock = new();
 
     private readonly ConcurrentQueue<Action> _dispatchQueue = new();
+    private readonly ConcurrentQueue<Action> _backgroundQueue = new();
     private Func<UIElement>? _contentFactory;
 
     private UIElement? _rootElement;
@@ -241,6 +242,40 @@ public class SilkWindow : IDisposable
     {
         _dispatchQueue.Enqueue(action);
         InvalidateRender();
+    }
+
+    /// <summary>
+    /// Queues <paramref name="action"/> to run on the UI thread: <see cref="DispatcherPriority.Normal"/> at the start of the
+    /// next frame, <see cref="DispatcherPriority.Background"/> after the next frame has been rendered. Safe to call from any thread.
+    /// </summary>
+    public void Dispatch(Action action, DispatcherPriority priority)
+    {
+        if (priority == DispatcherPriority.Background)
+        {
+            _backgroundQueue.Enqueue(action);
+            InvalidateRender();
+        }
+        else
+        {
+            Dispatch(action);
+        }
+    }
+
+    // Runs background work queued before this call; work queued by these actions waits for the next frame.
+    private void ProcessBackgroundQueue()
+    {
+        int count = _backgroundQueue.Count;
+        for (int i = 0; i < count && _backgroundQueue.TryDequeue(out var action); i++)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Atelier.Dispatch] Error: {ex}");
+            }
+        }
     }
 
     public void SetContent(Func<UIElement> contentFactory)
@@ -1444,7 +1479,7 @@ public class SilkWindow : IDisposable
 
     // Work that needs the loop to keep ticking even when nothing has been invalidated yet.
     private bool HasContinuousWork =>
-        _animationClock.ActiveAnimationCount > 0 || _repeatingKey != SilkKey.Unknown || !_dispatchQueue.IsEmpty;
+        _animationClock.ActiveAnimationCount > 0 || _repeatingKey != SilkKey.Unknown || !_dispatchQueue.IsEmpty || !_backgroundQueue.IsEmpty;
 
     private void OnRender(double deltaTime)
     {
@@ -1507,6 +1542,9 @@ public class SilkWindow : IDisposable
         canvas.Flush();
         _grContext.Flush();
         _window.GLContext?.SwapBuffers();
+
+        // 5. Background-priority work runs once the frame is on screen
+        ProcessBackgroundQueue();
     }
 
     private void EnterIdle()
