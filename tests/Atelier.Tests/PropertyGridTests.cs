@@ -233,6 +233,8 @@ public class PropertyGridTests
 
         // Update with valid integer
         editor.Text = "9090";
+        Assert.Equal(8080, model.Port); // numeric editors commit on Enter / LostFocus, not per keystroke
+        editor.OnKeyDown(new KeyEventArgs(Key.Enter));
         Assert.Equal(9090, model.Port);
 
         // Invalid text should not corrupt model
@@ -256,6 +258,7 @@ public class PropertyGridTests
         Assert.NotNull(editor);
 
         editor.Text = "4.75";
+        editor.OnLostFocus();
         Assert.Equal(4.75, model.TimeoutRatio, 2);
     }
 
@@ -296,6 +299,7 @@ public class PropertyGridTests
 
         // Set green color via hex
         hexBox.Text = "#00FF00";
+        hexBox.OnLostFocus();
         Assert.Equal(Color.FromRgb(0, 255, 0), model.ThemeColor);
     }
 
@@ -483,8 +487,10 @@ public class PropertyGridTests
         propertyGrid.Arrange(new Rect(0, 0, 600, 360));
 
         // Should only match 1 property row: Port Number
-        Assert.Single(contentPanel.Children);
-        var filteredRow = (UIElement)contentPanel.Children[0];
+        // Filtering hides non-matching rows instead of recreating them.
+        var visibleRows = contentPanel.Children.OfType<UIElement>().Where(c => c.Visibility == Visibility.Visible).ToList();
+        Assert.Single(visibleRows);
+        var filteredRow = visibleRows[0];
         Assert.True(filteredRow.Bounds.Height > 0, $"Filtered row height is {filteredRow.Bounds.Height}, expected > 0");
     }
 
@@ -537,9 +543,11 @@ public class PropertyGridTests
 
         // Should filter down to 1 category (Network) and 1 item (Port Number)
         // Categorized view has category header + children panel
-        Assert.Equal(2, contentPanel.Children.Count);
-        var header = (UIElement)contentPanel.Children[0];
-        var panel = (UIElement)contentPanel.Children[1];
+        // Filtering hides non-matching categories instead of recreating them.
+        var visible = contentPanel.Children.OfType<UIElement>().Where(c => c.Visibility == Visibility.Visible).ToList();
+        Assert.Equal(2, visible.Count);
+        var header = visible[0];
+        var panel = visible[1];
         Assert.True(header.Bounds.Height > 0);
         Assert.True(panel.Bounds.Height > 0);
     }

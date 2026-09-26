@@ -28,6 +28,9 @@ public sealed class PropertyDescriptor<TTarget, TProp> : IPropertyDescriptor
     /// <inheritdoc />
     public bool IsReadOnly => _setter is null;
 
+    /// <inheritdoc />
+    public string? Description { get; init; }
+
     /// <summary>
     /// Gets the strongly typed getter delegate.
     /// </summary>

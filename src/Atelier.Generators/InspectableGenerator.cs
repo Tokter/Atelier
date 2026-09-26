@@ -185,13 +185,19 @@ public class InspectableGenerator : IIncrementalGenerator
                 if (IsPropertyIgnored(prop))
                     continue;
 
-                properties.Add(ExtractPropertyModel(prop));
+                properties.Add(ExtractPropertyModel(prop, typeSymbol.IsValueType));
             }
 
             currentType = currentType.BaseType;
         }
 
-        properties.Sort((a, b) => a.Order.CompareTo(b.Order));
+        // Stable sort by (Order, declaration index): List.Sort is unstable and would shuffle equal orders.
+        properties = properties
+            .Select(static (p, i) => (Property: p, Index: i))
+            .OrderBy(static t => t.Property.Order)
+            .ThenBy(static t => t.Index)
+            .Select(static t => t.Property)
+            .ToList();
 
         string targetTypeFullName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         string hintName = GenerateHintName(typeSymbol);
@@ -233,13 +239,14 @@ public class InspectableGenerator : IIncrementalGenerator
         return false;
     }
 
-    private static InspectablePropertyModel ExtractPropertyModel(IPropertySymbol prop)
+    private static InspectablePropertyModel ExtractPropertyModel(IPropertySymbol prop, bool isValueTypeTarget)
     {
         string name = prop.Name;
         string displayName = name;
         string category = "General";
         int order = 0;
         bool isReadOnlyExplicit = false;
+        string? description = null;
 
         // Check attributes
         foreach (var attr in prop.GetAttributes())
@@ -277,6 +284,17 @@ public class InspectableGenerator : IIncrementalGenerator
                     {
                         isReadOnlyExplicit = ro;
                     }
+                    else if (named.Key == "Description" && named.Value.Value is string ndesc && !string.IsNullOrEmpty(ndesc))
+                    {
+                        description = ndesc;
+                    }
+                }
+            }
+            else if (attrName == "System.ComponentModel.DescriptionAttribute" || attrName == "DescriptionAttribute")
+            {
+                if (attr.ConstructorArguments.Length > 0 && attr.ConstructorArguments[0].Value is string desc && !string.IsNullOrEmpty(desc))
+                {
+                    description = desc;
                 }
             }
             else if (attrName == "System.ComponentModel.DisplayNameAttribute" || attrName == "DisplayNameAttribute")
@@ -316,6 +334,10 @@ public class InspectableGenerator : IIncrementalGenerator
                     {
                         order = ord;
                     }
+                    else if (named.Key == "Description" && named.Value.Value is string ddesc && !string.IsNullOrEmpty(ddesc))
+                    {
+                        description = ddesc;
+                    }
                 }
             }
         }
@@ -324,11 +346,12 @@ public class InspectableGenerator : IIncrementalGenerator
                                prop.SetMethod.DeclaredAccessibility == Accessibility.Public &&
                                !prop.SetMethod.IsInitOnly;
 
-        bool isReadOnly = isReadOnlyExplicit || !hasPublicSetter;
+        // Struct targets reach descriptors boxed, so a setter would only modify a copy: expose their properties read-only.
+        bool isReadOnly = isReadOnlyExplicit || !hasPublicSetter || isValueTypeTarget;
 
         string propType = prop.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-        return new InspectablePropertyModel(name, displayName, category, order, isReadOnly, propType);
+        return new InspectablePropertyModel(name, displayName, category, order, isReadOnly, propType, description);
     }
 
     private static string GenerateHintName(INamedTypeSymbol typeSymbol)
@@ -417,7 +440,15 @@ public class InspectableGenerator : IIncrementalGenerator
             sb.AppendLine($"{indent}            \"{escapedCategory}\",");
             sb.AppendLine($"{indent}            static target => target.{p.Name},");
             sb.AppendLine($"{indent}            {setter}");
-            sb.AppendLine($"{indent}        ){(i < model.Properties.Count - 1 ? "," : string.Empty)}");
+            string separator = i < model.Properties.Count - 1 ? "," : string.Empty;
+            if (p.Description is null)
+            {
+                sb.AppendLine($"{indent}        ){separator}");
+            }
+            else
+            {
+                sb.AppendLine($"{indent}        ) {{ Description = \"{EscapeString(p.Description)}\" }}{separator}");
+            }
         }
 
         sb.AppendLine($"{indent}    }};");
@@ -514,6 +545,7 @@ internal sealed class InspectablePropertyModel
     public int Order { get; }
     public bool IsReadOnly { get; }
     public string PropertyType { get; }
+    public string? Description { get; }
 
     public InspectablePropertyModel(
         string name,
@@ -521,8 +553,10 @@ internal sealed class InspectablePropertyModel
         string category,
         int order,
         bool isReadOnly,
-        string propertyType)
+        string propertyType,
+        string? description)
     {
+        Description = description;
         Name = name;
         DisplayName = displayName;
         Category = category;

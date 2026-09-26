@@ -29,6 +29,11 @@ public sealed class InspectablePropertyAttribute : Attribute
     public bool IsReadOnly { get; set; }
 
     /// <summary>
+    /// Gets or sets a description shown by UI inspectors. <c>[System.ComponentModel.Description]</c> is honored as well.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="InspectablePropertyAttribute"/> class with no display name or category.
     /// </summary>
     public InspectablePropertyAttribute()

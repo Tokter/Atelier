@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.Globalization;
 
 namespace Atelier.Core.Primitives;
 
@@ -61,34 +60,58 @@ public readonly struct Color(byte a, byte r, byte g, byte b) : IEquatable<Color>
     /// <exception cref="FormatException">The string is not a valid hex color.</exception>
     public static Color FromHex(string hex)
     {
-        ReadOnlySpan<char> span = hex.AsSpan().Trim();
-        if (span.StartsWith("#")) span = span[1..];
-
-        if (span.Length == 6)
+        if (hex is not null && TryParseHex(hex.AsSpan(), out Color color))
         {
-            byte r = byte.Parse(span[0..2], NumberStyles.HexNumber);
-            byte g = byte.Parse(span[2..4], NumberStyles.HexNumber);
-            byte b = byte.Parse(span[4..6], NumberStyles.HexNumber);
-            return FromRgb(r, g, b);
-        }
-        if (span.Length == 8)
-        {
-            byte a = byte.Parse(span[0..2], NumberStyles.HexNumber);
-            byte r = byte.Parse(span[2..4], NumberStyles.HexNumber);
-            byte g = byte.Parse(span[4..6], NumberStyles.HexNumber);
-            byte b = byte.Parse(span[6..8], NumberStyles.HexNumber);
-            return FromArgb(a, r, g, b);
-        }
-        if (span.Length == 3)
-        {
-            byte r = (byte)(byte.Parse(span[0..1], NumberStyles.HexNumber) * 17);
-            byte g = (byte)(byte.Parse(span[1..2], NumberStyles.HexNumber) * 17);
-            byte b = (byte)(byte.Parse(span[2..3], NumberStyles.HexNumber) * 17);
-            return FromRgb(r, g, b);
+            return color;
         }
 
         throw new FormatException($"Invalid color hex: '{hex}'");
     }
+
+    /// <summary>
+    /// Tries to parse a hex color in the form <c>#RGB</c>, <c>#RRGGBB</c> or <c>#AARRGGBB</c> (the <c>#</c> is optional;
+    /// surrounding white space is ignored) without allocating or throwing.
+    /// </summary>
+    /// <param name="hex">The text to parse.</param>
+    /// <param name="color">The parsed color, or <see cref="Transparent"/> when parsing fails.</param>
+    /// <returns><see langword="true"/> if <paramref name="hex"/> is a valid hex color.</returns>
+    public static bool TryParseHex(ReadOnlySpan<char> hex, out Color color)
+    {
+        color = Transparent;
+        ReadOnlySpan<char> span = hex.Trim();
+        if (span.Length > 0 && span[0] == '#') span = span[1..];
+
+        uint value = 0;
+        foreach (char c in span)
+        {
+            int digit = HexDigit(c);
+            if (digit < 0) return false;
+            value = (value << 4) | (uint)digit;
+        }
+
+        switch (span.Length)
+        {
+            case 3:
+                color = FromRgb((byte)(((value >> 8) & 0xF) * 17), (byte)(((value >> 4) & 0xF) * 17), (byte)((value & 0xF) * 17));
+                return true;
+            case 6:
+                color = FromUint(0xFF000000 | value);
+                return true;
+            case 8:
+                color = FromUint(value);
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static int HexDigit(char c) => c switch
+    {
+        >= '0' and <= '9' => c - '0',
+        >= 'a' and <= 'f' => c - 'a' + 10,
+        >= 'A' and <= 'F' => c - 'A' + 10,
+        _ => -1
+    };
 
     /// <summary>Returns this color with a different alpha byte.</summary>
     public Color WithAlpha(byte alpha) => new(alpha, R, G, B);

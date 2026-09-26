@@ -34,6 +34,12 @@ public interface IPropertyDescriptor
     bool IsReadOnly { get; }
 
     /// <summary>
+    /// Gets an optional description shown by inspectors, or <see langword="null"/> if there is none.
+    /// The default implementation returns <see langword="null"/>.
+    /// </summary>
+    string? Description => null;
+
+    /// <summary>
     /// Gets the current property value from the target object.
     /// </summary>
     object? GetValue(object target);
