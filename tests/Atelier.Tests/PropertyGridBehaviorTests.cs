@@ -256,6 +256,24 @@ public class PropertyGridBehaviorTests
     }
 
     [Fact]
+    public void ExternalInpcChange_OnBackgroundThread_IsAppliedOnTheUIThread()
+    {
+        var model = new PgObservableModel();
+        var grid = new PropertyGrid { SelectedObject = model };
+        grid.AttachToHost();
+        var editor = Editor<TextBox>(grid, "Observed Port");
+        using var dispatcher = new QueueingTestDispatcher();
+
+        var worker = new System.Threading.Thread(() => model.Port = 2);
+        worker.Start();
+        worker.Join();
+
+        Assert.Equal("8080", editor.Text); // not touched off the UI thread
+        dispatcher.RunPending();
+        Assert.Equal("2", editor.Text);
+    }
+
+    [Fact]
     public void InpcDerivedProperty_RefreshesAfterEdit()
     {
         var model = new PgObservableModel();

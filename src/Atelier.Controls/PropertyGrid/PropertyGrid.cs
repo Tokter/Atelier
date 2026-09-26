@@ -24,8 +24,8 @@ namespace Atelier.Controls;
 /// Editors reflect external changes: while the grid is attached to a visual tree it listens to
 /// <see cref="INotifyPropertyChanged.PropertyChanged"/> of the selected object (the subscription is removed when the
 /// object is replaced or the grid is detached). Objects without change notification are re-read after every edit made
-/// through the grid, and <see cref="Refresh"/> re-reads all values on demand. Notifications must be raised on the UI
-/// thread.
+/// through the grid, and <see cref="Refresh"/> re-reads all values on demand. Notifications raised on other threads are
+/// applied on the UI thread.
 /// </para>
 /// <para>
 /// Exceptions thrown by property getters and setters are caught: the row shows the message and
@@ -706,6 +706,13 @@ public class PropertyGrid : Control
 
     private void OnTargetPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        // Like bindings, accept notifications from background work and apply them on the UI thread.
+        if (!Atelier.Core.Threading.Dispatcher.CheckAccess())
+        {
+            Atelier.Core.Threading.Dispatcher.Post(() => OnTargetPropertyChanged(sender, e));
+            return;
+        }
+
         string? name = e.PropertyName;
         if (string.IsNullOrEmpty(name))
         {
