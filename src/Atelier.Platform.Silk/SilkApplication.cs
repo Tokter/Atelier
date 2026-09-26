@@ -53,6 +53,9 @@ public static class SilkApplication
     private static int s_mainThreadId;
     private static bool s_vsyncClaimed;
     private static SilkWindow? s_activeWindow;
+    private static double s_lastFrameTime;
+    private static bool s_isPumpingEvents;
+    private static bool s_isInFrame;
 
     // The window used to wake the event loop; read from any thread, so it is a single volatile reference instead of the list.
     private static volatile SilkWindow? s_wakeWindow;
@@ -214,7 +217,7 @@ public static class SilkApplication
 
     private static void RunLoop()
     {
-        double lastTime = s_clock.Elapsed.TotalSeconds;
+        s_lastFrameTime = s_clock.Elapsed.TotalSeconds;
 
         while (true)
         {
@@ -230,11 +233,30 @@ public static class SilkApplication
             bool busy = HasWork();
             PumpEvents(wait: !busy);
 
+            bool rendered = RunFrame(advanceAnimations: busy);
+
+            // Without a rendered frame nothing throttles the loop to the display; don't spin while waiting for animations.
+            if (!rendered && busy)
+            {
+                Thread.Sleep(1);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Runs one frame for the whole application: dispatched work, animations, then update and render of every window.
+    /// Returns whether any window presented a frame.
+    /// </summary>
+    private static bool RunFrame(bool advanceAnimations)
+    {
+        s_isInFrame = true;
+        try
+        {
             RunQueue(s_dispatchQueue);
 
             double now = s_clock.Elapsed.TotalSeconds;
-            double delta = busy ? Math.Min(now - lastTime, MaxAnimationStepSeconds) : 0;
-            lastTime = now;
+            double delta = advanceAnimations ? Math.Min(now - s_lastFrameTime, MaxAnimationStepSeconds) : 0;
+            s_lastFrameTime = now;
             AnimationClock.Update(delta);
 
             s_vsyncClaimed = false;
@@ -245,13 +267,27 @@ public static class SilkApplication
             }
 
             RunQueue(s_backgroundQueue);
-
-            // Without a rendered frame nothing throttles the loop to the display; don't spin while waiting for animations.
-            if (!rendered && busy)
-            {
-                Thread.Sleep(1);
-            }
+            return rendered;
         }
+        finally
+        {
+            s_isInFrame = false;
+        }
+    }
+
+    /// <summary>
+    /// Called when a window's size changes. While the user drags a window border, Windows runs a modal loop inside the
+    /// event pump, so the application loop doesn't get to run until the mouse is released; rendering a frame from the
+    /// resize notification keeps the content live instead of showing a stretched or empty window.
+    /// </summary>
+    internal static void OnWindowResizedDuringEvents()
+    {
+        if (!s_isPumpingEvents || s_isInFrame)
+        {
+            return;
+        }
+
+        RunFrame(advanceAnimations: true);
     }
 
     private static bool HasWork()
@@ -274,9 +310,17 @@ public static class SilkApplication
     private static void PumpEvents(bool wait)
     {
         // GLFW processes the events of all windows in one call, so only the first window may wait; the rest poll.
-        for (int i = 0; i < s_windows.Count; i++)
+        s_isPumpingEvents = true;
+        try
         {
-            s_windows[i].PumpEvents(wait && i == 0);
+            for (int i = 0; i < s_windows.Count; i++)
+            {
+                s_windows[i].PumpEvents(wait && i == 0);
+            }
+        }
+        finally
+        {
+            s_isPumpingEvents = false;
         }
     }
 

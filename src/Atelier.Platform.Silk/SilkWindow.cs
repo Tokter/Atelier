@@ -676,6 +676,7 @@ public class SilkWindow : IDisposable, IHostWindow
         _window = Window.Create(options);
         _window.Load += OnLoad;
         _window.FramebufferResize += OnFramebufferResize;
+        _window.Resize += OnResize;
         _window.Update += OnUpdate;
         _window.Render += OnRender;
         _window.Closing += OnClosing;
@@ -947,6 +948,14 @@ public class SilkWindow : IDisposable, IHostWindow
     {
         if (_isDisposed || _isClosing || _grContext == null) return;
         RecreateSurface(size);
+    }
+
+    // GLFW reports the framebuffer size first and the window size (used for layout) second, so the live-resize frame
+    // is rendered from here, once both are up to date.
+    private void OnResize(Vector2D<int> size)
+    {
+        if (_isDisposed || _isClosing || _grContext == null) return;
+        SilkApplication.OnWindowResizedDuringEvents();
     }
 
     private void RecreateSurface(Vector2D<int> size)
@@ -1758,6 +1767,7 @@ public class SilkWindow : IDisposable, IHostWindow
         _window.FocusChanged -= OnWindowFocusChanged;
         _window.Load -= OnLoad;
         _window.FramebufferResize -= OnFramebufferResize;
+        _window.Resize -= OnResize;
         _window.Update -= OnUpdate;
         _window.Render -= OnRender;
         _window.Closing -= OnClosing;
