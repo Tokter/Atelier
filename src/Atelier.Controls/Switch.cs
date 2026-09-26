@@ -29,13 +29,37 @@ public class Switch : ToggleButton
         set => SetValue(ShowThumbIconProperty, value);
     }
 
-    /// <summary>The width of the track.</summary>
-    public const float TrackWidth = 40f;
+    /// <summary>Identifies the <see cref="TrackWidth"/> property.</summary>
+    public static readonly BindableProperty<float> TrackWidthProperty =
+        BindableProperty.Register<Switch, float>(nameof(TrackWidth), 52f, options: PropertyOptions.AffectsMeasure, validateValue: IsValidTrackSize);
 
-    /// <summary>The height of the track.</summary>
-    public const float TrackHeight = 22f;
+    /// <summary>Identifies the <see cref="TrackHeight"/> property.</summary>
+    public static readonly BindableProperty<float> TrackHeightProperty =
+        BindableProperty.Register<Switch, float>(nameof(TrackHeight), 32f, options: PropertyOptions.AffectsMeasure, validateValue: IsValidTrackSize);
 
-    private const float ContentSpacing = 10f;
+    /// <summary>
+    /// Gets or sets the width of the track. The default is the Material Design 3 size, 52 px; themes may use a smaller
+    /// desktop size.
+    /// </summary>
+    public float TrackWidth
+    {
+        get => GetValue(TrackWidthProperty);
+        set => SetValue(TrackWidthProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the height of the track; the handle sizes follow it. The default is the Material Design 3 size,
+    /// 32 px; themes may use a smaller desktop size.
+    /// </summary>
+    public float TrackHeight
+    {
+        get => GetValue(TrackHeightProperty);
+        set => SetValue(TrackHeightProperty, value);
+    }
+
+    private static bool IsValidTrackSize(float value) => float.IsFinite(value) && value > 0;
+
+    private const float ContentSpacing = 12f;
 
     /// <summary>
     /// Gets the animated thumb position used for drawing: 0 at the off end, 1 at the on end.

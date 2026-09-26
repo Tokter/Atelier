@@ -175,51 +175,57 @@ public partial class CardTests
     public void Card_Rendering_ShadowDrawsOutsideBounds_AndChildrenAreClipped()
     {
         ThemeManager.Current = MaterialTheme.CreateLight();
-
-        using var bitmap = new SkiaSharp.SKBitmap(200, 200);
-        using var canvas = new SkiaSharp.SKCanvas(bitmap);
-        canvas.Clear(SkiaSharp.SKColors.White);
-
-        using var paintRegistry = new PaintRegistry();
-        var context = new DrawingContext(canvas, paintRegistry);
-
-        // Child that deliberately extends beyond the card bounds
-        var overflowChild = new Border
+        try
         {
-            Background = Color.FromHex("#FF0000") // Red
-        };
+            using var bitmap = new SkiaSharp.SKBitmap(200, 200);
+            using var canvas = new SkiaSharp.SKCanvas(bitmap);
+            canvas.Clear(SkiaSharp.SKColors.White);
 
-        var card = new Card(CardVariant.Elevated)
+            using var paintRegistry = new PaintRegistry();
+            var context = new DrawingContext(canvas, paintRegistry);
+
+            // Child that deliberately extends beyond the card bounds
+            var overflowChild = new Border
+            {
+                Background = Color.FromHex("#FF0000") // Red
+            };
+
+            var card = new Card(CardVariant.Elevated)
+            {
+                Elevation = 4f
+            };
+            card.Child = overflowChild;
+
+            var root = new Border { Width = 200, Height = 200 };
+            root.Child = card;
+
+            root.Measure(new Size(200, 200));
+            root.Arrange(new Rect(0, 0, 200, 200));
+
+            // Position card at (50, 50, 100, 80) inside root
+            card.Arrange(new Rect(50, 50, 100, 80));
+
+            // Arrange child so it extends well outside the card bounds
+            overflowChild.Measure(new Size(100, 120));
+            overflowChild.Arrange(new Rect(0, 0, 100, 120));
+
+            VisualTreeRenderer.Render(root, ref context, ThemeVisualPresenter.Instance);
+
+            // 1. Verify shadow was drawn OUTSIDE card bounds (below card at y=133, x=100)
+            var shadowPixel = bitmap.GetPixel(100, 133);
+            Assert.True(shadowPixel.Alpha > 0, "Shadow should be rendered on canvas");
+            Assert.True(shadowPixel.Red < 255 || shadowPixel.Green < 255 || shadowPixel.Blue < 255,
+                $"Expected shadow pixel below card to be darker than white, got {shadowPixel}");
+
+            // 2. Verify child was CLIPPED at card bounds (card bottom is y=130 on canvas).
+            // At y=135, x=100, the red child should NOT be drawn (clipped by ClipToBounds).
+            var belowCardPixel = bitmap.GetPixel(100, 135);
+            Assert.True(belowCardPixel.Green > 0,
+                $"Expected overflowing red child to be clipped, but found red pixel at y=135: {belowCardPixel}");
+        }
+        finally
         {
-            Elevation = 4f
-        };
-        card.Child = overflowChild;
-
-        var root = new Border { Width = 200, Height = 200 };
-        root.Child = card;
-
-        root.Measure(new Size(200, 200));
-        root.Arrange(new Rect(0, 0, 200, 200));
-
-        // Position card at (50, 50, 100, 80) inside root
-        card.Arrange(new Rect(50, 50, 100, 80));
-
-        // Arrange child so it extends well outside the card bounds
-        overflowChild.Measure(new Size(100, 120));
-        overflowChild.Arrange(new Rect(0, 0, 100, 120));
-
-        VisualTreeRenderer.Render(root, ref context, ThemeVisualPresenter.Instance);
-
-        // 1. Verify shadow was drawn OUTSIDE card bounds (below card at y=133, x=100)
-        var shadowPixel = bitmap.GetPixel(100, 133);
-        Assert.True(shadowPixel.Alpha > 0, "Shadow should be rendered on canvas");
-        Assert.True(shadowPixel.Red < 255 || shadowPixel.Green < 255 || shadowPixel.Blue < 255,
-            $"Expected shadow pixel below card to be darker than white, got {shadowPixel}");
-
-        // 2. Verify child was CLIPPED at card bounds (card bottom is y=130 on canvas).
-        // At y=135, x=100, the red child should NOT be drawn (clipped by ClipToBounds).
-        var belowCardPixel = bitmap.GetPixel(100, 135);
-        Assert.True(belowCardPixel.Green > 0,
-            $"Expected overflowing red child to be clipped, but found red pixel at y=135: {belowCardPixel}");
+            ThemeManager.Reset(); // don't leave the theme's styles active for other tests
+        }
     }
 }

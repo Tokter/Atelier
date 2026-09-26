@@ -45,8 +45,10 @@ internal static class Program
             .Register<KeybindingViewModel>(vm => new KeybindingView(vm))
             .Register<TransitionsViewModel>(vm => new TransitionsView(vm));
 
-        // 1. Set default initial theme
-        ThemeManager.Current = MaterialTheme.CreateLight();
+        // 1. Set the initial theme; ATELIER_GALLERY_THEME=dark starts in the dark theme (used for screenshots)
+        ThemeManager.Current = string.Equals(Environment.GetEnvironmentVariable("ATELIER_GALLERY_THEME"), "dark", StringComparison.OrdinalIgnoreCase)
+            ? MaterialTheme.CreateDark()
+            : MaterialTheme.CreateLight();
 
         // 2. Open the main window; ATELIER_GALLERY_WINDOWS=N opens N windows at startup (used for multi-window testing)
         var mainWindow = OpenGalleryWindow();

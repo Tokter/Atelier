@@ -536,6 +536,6 @@ public class ProgressBar : Control
     /// <remarks>The bar is up to 180 wide and 8 high.</remarks>
     protected override Size MeasureOverride(Size availableSize)
     {
-        return new Size(Math.Min(180, availableSize.Width), 8);
+        return new Size(Math.Min(180, availableSize.Width), 4); // MD3 linear progress track height
     }
 }

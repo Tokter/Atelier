@@ -112,7 +112,7 @@ public class DialogHostView : Grid
         );
 
         // Controls Row
-        var controlsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 20, VerticalAlignment = VerticalAlignment.Center };
+        var controlsRow = new WrapPanel { HorizontalSpacing = 20, VerticalSpacing = 8, VerticalAlignment = VerticalAlignment.Center };
 
         // 1. Host Scope Switcher
         _btnScopeGlobal = new Button("Global Host (RootHost)")

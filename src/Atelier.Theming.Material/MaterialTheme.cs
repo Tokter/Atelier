@@ -4,46 +4,73 @@ using Atelier.Theming.Material.Renderers;
 
 namespace Atelier.Theming.Material;
 
+/// <summary>
+/// The Material Design 3 theme: renderers for every control, the default control styles
+/// (<see cref="MaterialStyles"/>) and the type scale styles (<see cref="MaterialTypography"/>), for a color scheme.
+/// </summary>
+/// <remarks>
+/// Creating a theme has no global effects; activate it with <c>ThemeManager.Current = MaterialTheme.CreateLight()</c>.
+/// Switching between the light and dark theme restyles and redraws open windows. Controls are sized for the desktop by
+/// default (<see cref="MaterialSizing.Desktop"/>); pass <see cref="MaterialSizing.Touch"/> for the MD3 touch sizes.
+/// </remarks>
 public class MaterialTheme : Theme
 {
+    /// <inheritdoc/>
     public override string Name { get; }
+
+    /// <inheritdoc/>
     public override bool IsDark { get; }
+
+    /// <summary>Gets the theme's color scheme.</summary>
     public MaterialColorScheme Colors { get; }
 
-    public MaterialTheme(string name, bool isDark, MaterialColorScheme colors)
+    /// <summary>Gets how large the theme makes controls.</summary>
+    public MaterialSizing Sizing { get; }
+
+    /// <summary>Initializes a Material theme for <paramref name="colors"/>.</summary>
+    /// <param name="name">The display name.</param>
+    /// <param name="isDark">Whether the scheme is dark.</param>
+    /// <param name="colors">The color scheme.</param>
+    /// <param name="sizing">How large controls are; <c>null</c> for <see cref="MaterialSizing.Desktop"/>.</param>
+    public MaterialTheme(string name, bool isDark, MaterialColorScheme colors, MaterialSizing? sizing = null)
     {
         Name = name;
         IsDark = isDark;
         Colors = colors;
+        Sizing = sizing ?? MaterialSizing.Desktop;
 
-        // Register all control renderers for this theme
-        Renderers.Register(new MaterialButtonRenderer(colors));
-        Renderers.Register(new MaterialToggleButtonRenderer(colors));
-        Renderers.Register(new MaterialCheckBoxRenderer(colors));
-        Renderers.Register(new MaterialRadioButtonRenderer(colors));
-        Renderers.Register(new MaterialSwitchRenderer(colors));
-        Renderers.Register(new MaterialTextBoxRenderer(colors));
-        Renderers.Register(new MaterialSliderRenderer(colors));
-        Renderers.Register(new MaterialProgressBarRenderer(colors));
-        Renderers.Register(new MaterialTextBlockRenderer(colors));
-        Renderers.Register(new MaterialBorderRenderer());
-        Renderers.Register(new MaterialPanelRenderer());
-        Renderers.Register(new MaterialCardRenderer(colors));
-        Renderers.Register(new MaterialListBoxItemRenderer(colors));
-        Renderers.Register(new MaterialScrollViewerRenderer(colors));
-        Renderers.Register(new MaterialTitleBarRenderer(colors));
-        Renderers.Register(new MaterialComboBoxRenderer(colors));
-        Renderers.Register(new MaterialPopupRenderer(colors));
-        Renderers.Register(new MaterialDialogRenderer(colors));
-        Renderers.Register(new MaterialIconRenderer(colors));
-        Renderers.Register(new MaterialTreeViewItemRenderer(colors));
-        Renderers.Register(new MaterialImageRenderer());
-        Renderers.Register(new MaterialToolbarRenderer(colors));
+        // Content colors (e.g. a filled button's label) are resolved through this registry.
+        var renderers = Renderers;
+        renderers.Register(new MaterialButtonRenderer(colors));
+        renderers.Register(new MaterialToggleButtonRenderer(colors));
+        renderers.Register(new MaterialCheckBoxRenderer(colors, Sizing));
+        renderers.Register(new MaterialRadioButtonRenderer(colors, Sizing));
+        renderers.Register(new MaterialSwitchRenderer(colors, Sizing));
+        renderers.Register(new MaterialTextBoxRenderer(colors));
+        renderers.Register(new MaterialSliderRenderer(colors, Sizing));
+        renderers.Register(new MaterialProgressBarRenderer(colors));
+        renderers.Register(new MaterialTextBlockRenderer(colors, renderers));
+        renderers.Register(new MaterialBorderRenderer(colors));
+        renderers.Register(new MaterialPanelRenderer());
+        renderers.Register(new MaterialCardRenderer(colors));
+        renderers.Register(new MaterialListBoxItemRenderer(colors));
+        renderers.Register(new MaterialScrollViewerRenderer(colors));
+        renderers.Register(new MaterialTitleBarRenderer(colors));
+        renderers.Register(new MaterialComboBoxRenderer(colors));
+        renderers.Register(new MaterialPopupRenderer(colors));
+        renderers.Register(new MaterialDialogRenderer(colors));
+        renderers.Register(new MaterialIconRenderer(colors, renderers));
+        renderers.Register(new MaterialTreeViewItemRenderer(colors));
+        renderers.Register(new MaterialImageRenderer());
+        renderers.Register(new MaterialToolbarRenderer(colors));
 
-        // Register Material Design 3 Typography Styles globally
-        MaterialTypography.RegisterStyles(Atelier.Core.Styling.StyleManager.GlobalStyles, colors);
+        Styles.AddRange(MaterialStyles.CreateStyles(colors, Sizing));
+        Styles.AddRange(MaterialTypography.CreateStyles());
     }
 
-    public static MaterialTheme CreateLight() => new("Material 3 Light", false, MaterialColorScheme.Light());
-    public static MaterialTheme CreateDark() => new("Material 3 Dark", true, MaterialColorScheme.Dark());
+    /// <summary>Creates the MD3 baseline light theme (desktop sizing unless <paramref name="sizing"/> says otherwise).</summary>
+    public static MaterialTheme CreateLight(MaterialSizing? sizing = null) => new("Material 3 Light", false, MaterialColorScheme.Light(), sizing);
+
+    /// <summary>Creates the MD3 baseline dark theme (desktop sizing unless <paramref name="sizing"/> says otherwise).</summary>
+    public static MaterialTheme CreateDark(MaterialSizing? sizing = null) => new("Material 3 Dark", true, MaterialColorScheme.Dark(), sizing);
 }

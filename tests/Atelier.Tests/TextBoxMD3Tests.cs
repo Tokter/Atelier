@@ -66,7 +66,7 @@ public partial class TextBoxMD3Tests
         tb.LeadingIconKind = MaterialIconKind.Search;
         float startXWithIcon = tb.GetTextContentStartX();
 
-        Assert.Equal(startXWithoutIcon + 32f, startXWithIcon);
+        Assert.Equal(startXWithoutIcon + 36f, startXWithIcon); // MD3: 24 px icon at 12 px, text at 52 px
         Assert.True(tb.HasLeadingIcon);
     }
 

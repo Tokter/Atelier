@@ -82,7 +82,7 @@ public class TextBoxesView : Grid
         );
 
         // Interactive master toggle row
-        var toggleRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 20, VerticalAlignment = VerticalAlignment.Center }
+        var toggleRow = new WrapPanel { HorizontalSpacing = 20, VerticalSpacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Switch("Interactive Controls Enabled")
                     .ShowThumbIcon()

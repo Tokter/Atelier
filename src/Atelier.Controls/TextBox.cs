@@ -71,6 +71,11 @@ public class TextBox : Control
     public static readonly BindableProperty<float> CaretWidthProperty =
         BindableProperty.Register<TextBox, float>(nameof(CaretWidth), 2f, options: PropertyOptions.AffectsRender);
 
+    /// <summary>Identifies the <see cref="FieldHeight"/> property.</summary>
+    public static readonly BindableProperty<float> FieldHeightProperty =
+        BindableProperty.Register<TextBox, float>(nameof(FieldHeight), 56f, options: PropertyOptions.AffectsMeasure,
+            validateValue: static value => float.IsFinite(value) && value >= 0);
+
     /// <summary>Identifies the <see cref="Variant"/> property.</summary>
     public static readonly BindableProperty<TextBoxVariant> VariantProperty =
         BindableProperty.Register<TextBox, TextBoxVariant>(
@@ -169,6 +174,17 @@ public class TextBox : Control
     {
         get => GetValue(IsReadOnlyProperty);
         set => SetValue(IsReadOnlyProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the height of the field container, excluding supporting text. The default is the Material Design 3
+    /// height, 56 px; themes use less for dense (desktop) layouts. The field still grows to fit its text, and a filled
+    /// field with a label is at least 52 px so the floating label and the text don't overlap.
+    /// </summary>
+    public float FieldHeight
+    {
+        get => GetValue(FieldHeightProperty);
+        set => SetValue(FieldHeightProperty, value);
     }
 
     /// <summary>Gets or sets the caret width in pixels (rounded, at least 1). The default is 2.</summary>
@@ -302,7 +318,7 @@ public class TextBox : Control
     public float ScrollOffset { get; private set; } = 0f;
 
     /// <summary>Gets the x coordinate where the text viewport starts: the left padding plus room for a leading icon.</summary>
-    public float GetTextContentStartX() => Padding.Left + (HasLeadingIcon ? 32f : 0f);
+    public float GetTextContentStartX() => Padding.Left + (HasLeadingIcon ? 36f : 0f);
 
     /// <summary>Gets the width of the area the text is shown in (the bounds minus padding and leading icon).</summary>
     public float GetViewportWidth()
@@ -1472,7 +1488,8 @@ public class TextBox : Control
             contentW = Math.Max(contentW, padding.Left + supportSize.Width + padding.Right);
         }
 
-        float containerH = HasLabel ? 56f : Math.Max(48f, textSize.Height + padding.Vertical);
+        float fieldHeight = HasLabel && Variant == TextBoxVariant.Filled ? Math.Max(FieldHeight, 52f) : FieldHeight;
+        float containerH = Math.Max(fieldHeight, textSize.Height + padding.Vertical);
         float totalH = containerH + (hasSupportingText ? 20f : 0f);
 
         return new Size(

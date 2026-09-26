@@ -42,6 +42,12 @@ namespace Atelier.Gallery.ViewModels
             _pages.Add(new TransitionsViewModel());
             _currentPage = initialPage;
 
+            if (ThemeManager.HasTheme && ThemeManager.Current.IsDark)
+            {
+                _currentThemeMode = "Switch to Light Mode";
+                _currentThemeIcon = MaterialIconKind.DarkMode;
+            }
+
             // Start page by index, e.g. for screenshots of a specific page (see also ATELIER_GALLERY_WINDOWS).
             if (int.TryParse(Environment.GetEnvironmentVariable("ATELIER_GALLERY_PAGE"), out int page) && page >= 0 && page < _pages.Count)
             {

@@ -90,8 +90,7 @@ public class TypographyTests
     [Fact]
     public void TextBlock_StyleKey_AppliesTypographyStyleGlobally()
     {
-        // Ensure MaterialTheme registers styles globally
-        _ = MaterialTheme.CreateLight();
+        using var theme = ActiveTheme.Use(MaterialTheme.CreateLight()); // the typography styles exist while a theme is active
 
         var tb = new TextBlock("Heading Sample").Heading1();
         Assert.Equal(MaterialTypography.Heading1Key, tb.StyleKey);
@@ -137,7 +136,7 @@ public class TypographyTests
     [Fact]
     public void TextBlock_LocalProperties_OverrideStyleSetters()
     {
-        _ = MaterialTheme.CreateLight();
+        using var theme = ActiveTheme.Use(MaterialTheme.CreateLight()); // the typography styles exist while a theme is active
 
         // Style sets FontSize 32, Bold true
         var tb = new TextBlock("Overridden Heading").Heading1();
@@ -207,7 +206,7 @@ public class TypographyTests
         Assert.Equal(colors.OnSurfaceVariant, renderer.GetTextColor(mutedTb));
 
         // 3. Styled text block (NormalText has Foreground = colors.OnSurface) + Muted -> OnSurfaceVariant
-        _ = MaterialTheme.CreateLight();
+        using var theme = ActiveTheme.Use(MaterialTheme.CreateLight()); // the typography styles exist while a theme is active
         var styledNormalTb = new TextBlock("Styled Normal").NormalText().Muted();
         Assert.Equal(colors.OnSurfaceVariant, renderer.GetTextColor(styledNormalTb));
 
@@ -252,6 +251,7 @@ public class TypographyTests
     [Fact]
     public void MaterialTextBlockRenderer_DarkMode_ResolvesBrightOnSurface()
     {
+        using var theme = ActiveTheme.Use(MaterialTheme.CreateDark());
         var darkColors = MaterialColorScheme.Dark();
         var darkRenderer = new MaterialTextBlockRenderer(darkColors);
 

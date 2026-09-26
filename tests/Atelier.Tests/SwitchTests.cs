@@ -307,7 +307,7 @@ public class SwitchTests
         sw.Padding = new Thickness(5, 8);
 
         sw.Measure(new Size(500, 500));
-        Assert.Equal(50f, sw.DesiredSize.Width);
-        Assert.Equal(38f, sw.DesiredSize.Height);
+        Assert.Equal(62f, sw.DesiredSize.Width);  // 5 + 52 (MD3 track) + 5
+        Assert.Equal(48f, sw.DesiredSize.Height); // 8 + 32 (MD3 track) + 8
     }
 }

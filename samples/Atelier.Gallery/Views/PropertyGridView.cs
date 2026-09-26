@@ -186,7 +186,7 @@ public class PropertyGridView : Grid
             Command = _viewModel.SelectParticleModelCommand
         };
 
-        var modelButtonsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
+        var modelButtonsRow = new WrapPanel { HorizontalSpacing = 8, VerticalSpacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(modelSelectorLabel, _btnGraphicModel, _btnMicroserviceModel, _btnParticleModel);
 
         // Actions & Customization Row
@@ -281,7 +281,7 @@ public class PropertyGridView : Grid
             Command = _viewModel.ResetCurrentModelCommand
         };
 
-        var actionsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
+        var actionsRow = new WrapPanel { HorizontalSpacing = 8, VerticalSpacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 _btnSortMode,
                 btnExpandAll,
