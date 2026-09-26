@@ -426,6 +426,31 @@ public abstract class BindableProperty
     }
 
     /// <summary>
+    /// Registers a new read-only attached property, set through the returned key (see <see cref="RegisterReadOnly{TOwner, T}"/>
+    /// and <see cref="RegisterAttached{TOwner, TTarget, T}"/>).
+    /// </summary>
+    /// <typeparam name="TOwner">The declaring type.</typeparam>
+    /// <typeparam name="TTarget">The type of objects the property can be set on.</typeparam>
+    /// <typeparam name="T">The data type of the property value.</typeparam>
+    /// <param name="name">The name of the attached property.</param>
+    /// <param name="defaultValue">The default value.</param>
+    /// <param name="propertyChanged">An optional callback invoked whenever the effective value changes.</param>
+    /// <param name="options">Layout and rendering side effects applied to the target element when the effective value changes.</param>
+    /// <returns>The key granting write access to the new property.</returns>
+    public static BindablePropertyKey<T> RegisterAttachedReadOnly<TOwner, TTarget, T>(
+        string name,
+        T defaultValue = default!,
+        PropertyChangedCallback<T>? propertyChanged = null,
+        PropertyOptions options = PropertyOptions.None)
+        where TTarget : BindableObject
+    {
+        var property = new BindableProperty<T>(
+            name, typeof(TOwner), typeof(TTarget), defaultValue, propertyChanged, coerceValue: null, validateValue: null,
+            inherits: false, isAttached: true, isReadOnly: true, options);
+        return new BindablePropertyKey<T>(property);
+    }
+
+    /// <summary>
     /// Registers a new strongly-typed attached property: a property declared by <typeparamref name="TOwner"/>
     /// (e.g. a layout panel) that is set on instances of <typeparamref name="TTarget"/> (e.g. the panel's children).
     /// </summary>

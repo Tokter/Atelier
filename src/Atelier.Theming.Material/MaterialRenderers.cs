@@ -423,6 +423,7 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
 
         bool isEnabled = textBox.IsEnabled;
         bool isFocused = textBox.IsFocused;
+        bool hasError = textBox.HasValidationError;
         float progress = textBox.LabelAnimationProgress;
 
         float supportingTextHeight = textBox.HasSupportingText ? 20f : 0f;
@@ -443,12 +444,21 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
             float lineY = containerRect.Bottom - 1f;
             if (isFocused && isEnabled)
             {
-                // Brightens in color when focused (2dp Primary)
+                // Brightens in color when focused (2dp Primary, or Error while invalid)
                 context.DrawLine(
                     new Point(containerRect.Left, lineY),
                     new Point(containerRect.Right, lineY),
-                    colors.Primary,
+                    hasError ? colors.Error : colors.Primary,
                     2f
+                );
+            }
+            else if (hasError && isEnabled)
+            {
+                context.DrawLine(
+                    new Point(containerRect.Left, lineY),
+                    new Point(containerRect.Right, lineY),
+                    colors.Error,
+                    1f
                 );
             }
             else
@@ -474,6 +484,11 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
             if (!isEnabled)
             {
                 outlineColor = colors.OnSurface.WithAlpha(0.12f);
+            }
+            else if (hasError)
+            {
+                outlineColor = colors.Error;
+                strokeWidth = isFocused ? 2f : 1f;
             }
             else if (isFocused)
             {
@@ -539,6 +554,10 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
             if (!isEnabled)
             {
                 labelColor = colors.OnSurface.WithAlpha(0.38f);
+            }
+            else if (hasError)
+            {
+                labelColor = colors.Error;
             }
             else
             {
@@ -629,12 +648,14 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
             }
         }
 
-        // 5. Supporting Text (Optional)
+        // 5. Supporting Text (Optional): the first validation error replaces it, in the error color (MD3 error state)
         if (textBox.HasSupportingText)
         {
-            Color supportColor = isEnabled ? colors.OnSurfaceVariant : colors.OnSurface.WithAlpha(0.38f);
+            Color supportColor = !isEnabled
+                ? colors.OnSurface.WithAlpha(0.38f)
+                : (textBox.HasValidationError ? colors.Error : colors.OnSurfaceVariant);
             float supportY = containerRect.Bottom + 15f;
-            context.DrawText(textBox.SupportingText, new Point(containerRect.Left + 16f, supportY), supportColor, 12f, textBox.FontFamily);
+            context.DrawText(textBox.DisplayedSupportingText, new Point(containerRect.Left + 16f, supportY), supportColor, 12f, textBox.FontFamily);
         }
     }
 }

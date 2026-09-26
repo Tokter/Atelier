@@ -78,6 +78,22 @@ public class BindingSourceFilterTests
     }
 
     [Fact]
+    public void NullForgivingAndNullConditionalGetters_AreStillFiltered()
+    {
+        var vm = new ReadCountingViewModel();
+        var forgiving = new TextBlock();
+        var conditional = new TextBlock();
+        forgiving.SetBinding(TextBlock.TextProperty, vm, x => x.Title!);
+        conditional.SetBinding(TextBlock.TextProperty, vm, x => x.Self?.Title ?? string.Empty);
+        int reads = vm.TitleReads;
+
+        vm.Other = "changed";
+
+        // The forgiving getter is filtered; "?? string.Empty" makes the other one complex, so it updates.
+        Assert.Equal(reads + 1, vm.TitleReads);
+    }
+
+    [Fact]
     public void ComplexGetter_UpdatesOnEveryChange()
     {
         var vm = new ReadCountingViewModel();

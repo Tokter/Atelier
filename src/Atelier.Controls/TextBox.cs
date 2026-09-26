@@ -114,7 +114,26 @@ public class TextBox : Control
 
     public bool HasLabel => !string.IsNullOrEmpty(Label);
     public bool HasLeadingIcon => LeadingIconKind != MaterialIconKind.None;
-    public bool HasSupportingText => !string.IsNullOrEmpty(SupportingText);
+    /// <summary>
+    /// Gets whether a supporting line is shown below the field: the <see cref="SupportingText"/>, or the first validation
+    /// error while a binding reports one (see <see cref="Validation"/>).
+    /// </summary>
+    public bool HasSupportingText => !string.IsNullOrEmpty(SupportingText) || HasValidationError;
+
+    /// <summary>Gets whether a binding of this text box currently reports a validation error.</summary>
+    public bool HasValidationError => Validation.GetHasError(this);
+
+    /// <summary>
+    /// Gets the text shown in the supporting line: the first validation error if there is one, otherwise <see cref="SupportingText"/>.
+    /// </summary>
+    public string DisplayedSupportingText
+    {
+        get
+        {
+            var errors = Validation.GetErrors(this);
+            return errors.Count > 0 ? errors[0].ToString() ?? string.Empty : SupportingText;
+        }
+    }
 
     public float LabelAnimationProgress { get; private set; } = 0f;
 

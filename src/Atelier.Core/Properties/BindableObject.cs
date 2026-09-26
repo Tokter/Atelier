@@ -1038,6 +1038,7 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="getter">A function delegate extracting the target value from the source object.</param>
     /// <param name="setter">An optional action delegate writing the target value back to the source object for two-way binding.</param>
     /// <param name="updateSourceTrigger">Specifies when two-way changes are pushed back to the source object. Defaults to <see cref="UpdateSourceTrigger.PropertyChanged"/>.</param>
+    /// <param name="options">Optional binding mode, <see cref="BindingOptions{T}.FallbackValue"/> and <see cref="BindingOptions{T}.TargetNullValue"/>.</param>
     /// <param name="getterExpression">
     /// Supplied by the compiler: the source text of <paramref name="getter"/>. For a simple getter such as
     /// <c>vm =&gt; vm.Title</c> (or <c>vm =&gt; vm.Order.Total</c>), the binding only updates when the source raises
@@ -1051,6 +1052,7 @@ public class BindableObject : INotifyPropertyChanged
         Func<TSource, TTarget> getter,
         Action<TSource, TTarget>? setter = null,
         UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        BindingOptions<TTarget>? options = null,
         [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TSource : class
     {
@@ -1062,7 +1064,7 @@ public class BindableObject : INotifyPropertyChanged
         }
 
         var binding = new PropertyBinding<TTarget, TSource>(
-            this, property, source, getter, setter, updateSourceTrigger, BindingHelpers.GetSourcePropertyName(getterExpression));
+            this, property, source, getter, setter, updateSourceTrigger, BindingHelpers.GetSourcePropertyName(getterExpression), options);
         _bindings[property.Id] = binding;
     }
 
@@ -1084,6 +1086,7 @@ public class BindableObject : INotifyPropertyChanged
     /// <param name="getter">A function delegate extracting the target value from the data context.</param>
     /// <param name="setter">An optional action delegate writing the target value back to the data context for two-way binding.</param>
     /// <param name="updateSourceTrigger">Specifies when two-way changes are pushed back to the data context. Defaults to <see cref="UpdateSourceTrigger.PropertyChanged"/>.</param>
+    /// <param name="options">Optional binding mode, <see cref="BindingOptions{T}.FallbackValue"/> and <see cref="BindingOptions{T}.TargetNullValue"/>.</param>
     /// <param name="getterExpression">
     /// Supplied by the compiler: the source text of <paramref name="getter"/>. For a simple getter such as
     /// <c>vm =&gt; vm.Title</c> (or <c>vm =&gt; vm.Order.Total</c>), the binding only updates when the source raises
@@ -1096,6 +1099,7 @@ public class BindableObject : INotifyPropertyChanged
         Func<TDataContext, TTarget> getter,
         Action<TDataContext, TTarget>? setter = null,
         UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        BindingOptions<TTarget>? options = null,
         [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where TDataContext : class
     {
@@ -1107,8 +1111,34 @@ public class BindableObject : INotifyPropertyChanged
         }
 
         var binding = new DataContextBinding<TTarget, TDataContext>(
-            this, property, getter, setter, updateSourceTrigger, BindingHelpers.GetSourcePropertyName(getterExpression));
+            this, property, getter, setter, updateSourceTrigger, BindingHelpers.GetSourcePropertyName(getterExpression), options);
         _bindings[property.Id] = binding;
+    }
+
+    /// <summary>
+    /// Binds <paramref name="property"/> one-way to a value computed from several sources, re-evaluated whenever any of them
+    /// raises <see cref="INotifyPropertyChanged.PropertyChanged"/>.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// label.SetMultiBinding(TextBlock.TextProperty, () =&gt; $"{person.Name} ({settings.Unit})", person, settings);
+    /// </code>
+    /// </example>
+    /// <typeparam name="TTarget">The data type of the target property.</typeparam>
+    /// <param name="property">The target property.</param>
+    /// <param name="getter">Computes the value, typically a lambda capturing the sources.</param>
+    /// <param name="sources">The objects whose changes trigger re-evaluation.</param>
+    /// <exception cref="InvalidOperationException">The property is read-only.</exception>
+    public void SetMultiBinding<TTarget>(BindableProperty<TTarget> property, Func<TTarget> getter, params INotifyPropertyChanged[] sources)
+    {
+        property.ThrowIfReadOnly();
+
+        if (_bindings.Remove(property.Id, out var existing))
+        {
+            existing.Dispose();
+        }
+
+        _bindings[property.Id] = new MultiSourceBinding<TTarget>(this, property, getter, sources);
     }
 
     /// <summary>
@@ -1155,642 +1185,5 @@ public class BindableObject : INotifyPropertyChanged
     protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
-}
-
-/// <summary>
-/// Specifies when changes in a two-way bound target property are written back to the source data object.
-/// </summary>
-public enum UpdateSourceTrigger
-{
-    /// <summary>
-    /// Updates the binding source immediately whenever the target bindable property value changes.
-    /// </summary>
-    PropertyChanged = 0,
-
-    /// <summary>
-    /// Updates the binding source whenever the target element loses UI focus. Requires a <see cref="Tree.UIElement"/> target.
-    /// </summary>
-    LostFocus = 1,
-
-    /// <summary>
-    /// Updates the binding source only when <see cref="BindableObject.UpdateBindingSource(BindableProperty)"/> is explicitly invoked.
-    /// </summary>
-    Explicit = 2
-}
-
-/// <summary>
-/// Represents an active data binding subscription connecting a target bindable property on a <see cref="BindableObject"/> to a data source.
-/// </summary>
-public interface IBindingSubscription : IDisposable
-{
-    /// <summary>
-    /// Reads the current value from the source object and applies it to the target bindable property.
-    /// </summary>
-    void UpdateTarget();
-
-    /// <summary>
-    /// Pushes the current value of the target bindable property back into the source object.
-    /// </summary>
-    void UpdateSource();
-
-    /// <summary>
-    /// Notifies the subscription that the target bindable property value has changed.
-    /// </summary>
-    /// <param name="newValue">The new value assigned to the target property.</param>
-    void OnTargetPropertyChanged(object? newValue);
-}
-
-/// <summary>
-/// Implemented by bindings so the property system can report typed target changes without boxing value types.
-/// </summary>
-/// <typeparam name="T">The target property's value type.</typeparam>
-internal interface ITypedBindingSubscription<in T>
-{
-    /// <summary>Typed counterpart of <see cref="IBindingSubscription.OnTargetPropertyChanged(object?)"/>.</summary>
-    void OnTargetPropertyChanged(T newValue);
-}
-
-/// <summary>
-/// Represents a strongly-typed data binding subscription connecting a target <see cref="BindableProperty{TTarget}"/>
-/// on a <see cref="BindableObject"/> to an explicit source object instance of type <typeparamref name="TSource"/>.
-/// </summary>
-/// <remarks>
-/// The target is held weakly; if it is garbage-collected, the binding unsubscribes from the source on the next source notification.
-/// The source is held strongly for the lifetime of the binding.
-/// </remarks>
-/// <typeparam name="TTarget">The data type of the target property.</typeparam>
-/// <typeparam name="TSource">The type of the source object. Must be a reference type.</typeparam>
-public sealed class PropertyBinding<TTarget, TSource> : IBindingSubscription, ITypedBindingSubscription<TTarget>
-    where TSource : class
-{
-    private readonly WeakReference<BindableObject> _targetRef;
-    private readonly BindableProperty<TTarget> _property;
-    private readonly TSource _source;
-    private readonly Func<TSource, TTarget> _getter;
-    private readonly Action<TSource, TTarget>? _setter;
-    private readonly UpdateSourceTrigger _updateSourceTrigger;
-    private INotifyPropertyChanged? _inpc;
-    private object? _pendingValue;
-    private bool _hasPendingValue;
-    private bool _isUpdating;
-    private readonly string? _sourcePropertyName;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="PropertyBinding{TTarget, TSource}"/> class.
-    /// </summary>
-    /// <param name="target">The target <see cref="BindableObject"/> on which the property resides.</param>
-    /// <param name="property">The target <see cref="BindableProperty{TTarget}"/> to bind.</param>
-    /// <param name="source">The source object instance providing data.</param>
-    /// <param name="getter">The getter delegate to extract values from the source object.</param>
-    /// <param name="setter">An optional setter delegate to write values back to the source object for two-way binding.</param>
-    /// <param name="updateSourceTrigger">Specifies when two-way changes are pushed back to the source. Defaults to <see cref="UpdateSourceTrigger.PropertyChanged"/>.</param>
-    /// <param name="sourcePropertyName">
-    /// The source property the getter reads, if known. When set, source notifications for other properties are ignored.
-    /// <c>null</c> updates on every change.
-    /// </param>
-    /// <exception cref="ArgumentException"><paramref name="updateSourceTrigger"/> is <see cref="UpdateSourceTrigger.LostFocus"/> but <paramref name="target"/> is not a <see cref="Tree.UIElement"/>.</exception>
-    public PropertyBinding(
-        BindableObject target,
-        BindableProperty<TTarget> property,
-        TSource source,
-        Func<TSource, TTarget> getter,
-        Action<TSource, TTarget>? setter,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
-        string? sourcePropertyName = null)
-    {
-        BindingHelpers.ValidateTrigger(target, updateSourceTrigger);
-
-        _targetRef = new WeakReference<BindableObject>(target);
-        _property = property;
-        _source = source;
-        _getter = getter;
-        _setter = setter;
-        _updateSourceTrigger = updateSourceTrigger;
-        _sourcePropertyName = sourcePropertyName;
-
-        if (source is INotifyPropertyChanged inpc)
-        {
-            _inpc = inpc;
-            _inpc.PropertyChanged += OnSourcePropertyChanged;
-        }
-
-        if (target is Tree.UIElement uie && _updateSourceTrigger == UpdateSourceTrigger.LostFocus)
-        {
-            uie.LostFocus += OnTargetLostFocus;
-        }
-
-        UpdateTarget();
-    }
-
-    private void OnTargetLostFocus(object? sender, EventArgs e)
-    {
-        if (_hasPendingValue)
-        {
-            UpdateSourceInternal(_pendingValue);
-            _hasPendingValue = false;
-        }
-    }
-
-    private void OnSourcePropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (!_targetRef.TryGetTarget(out _))
-        {
-            Dispose();
-            return;
-        }
-
-        if (!BindingHelpers.Affects(e, _sourcePropertyName))
-        {
-            return;
-        }
-
-        UpdateTarget();
-    }
-
-    /// <summary>
-    /// Reads the current value from the source object via the getter delegate and sets it on the target property.
-    /// </summary>
-    public void UpdateTarget()
-    {
-        if (_isUpdating) return;
-        _isUpdating = true;
-        try
-        {
-            if (_targetRef.TryGetTarget(out var target))
-            {
-                var value = _getter(_source);
-                target.SetValue(_property, value);
-                _hasPendingValue = false;
-
-                // If the target coerced the value, write the coerced value back so source and target agree.
-                if (_setter != null)
-                {
-                    var actual = target.GetValue(_property);
-                    if (!EqualityComparer<TTarget>.Default.Equals(actual, value))
-                    {
-                        _setter(_source, actual);
-                    }
-                }
-            }
-        }
-        finally
-        {
-            _isUpdating = false;
-        }
-    }
-
-    /// <summary>
-    /// Handles changes to the target property, either updating the source immediately or caching the pending value based on <see cref="UpdateSourceTrigger"/>.
-    /// </summary>
-    /// <param name="newValue">The updated target value.</param>
-    public void OnTargetPropertyChanged(object? newValue)
-    {
-        if (_isUpdating || _setter == null) return;
-
-        if (_updateSourceTrigger == UpdateSourceTrigger.PropertyChanged)
-        {
-            UpdateSourceInternal(newValue);
-        }
-        else
-        {
-            _pendingValue = newValue;
-            _hasPendingValue = true;
-        }
-    }
-
-    /// <summary>
-    /// Pushes pending or current target property values back to the source object via the setter delegate.
-    /// </summary>
-    public void UpdateSource()
-    {
-        if (_hasPendingValue)
-        {
-            UpdateSourceInternal(_pendingValue);
-            _hasPendingValue = false;
-        }
-        else if (_targetRef.TryGetTarget(out var target))
-        {
-            var val = target.GetValue(_property);
-            UpdateSourceInternal(val);
-        }
-    }
-
-    private void UpdateSourceInternal(object? value) => UpdateSourceTyped((TTarget)value!);
-
-    private void UpdateSourceTyped(TTarget value)
-    {
-        if (_isUpdating || _setter == null) return;
-        _isUpdating = true;
-        try
-        {
-            _setter(_source, value);
-        }
-        finally
-        {
-            _isUpdating = false;
-        }
-    }
-
-    void ITypedBindingSubscription<TTarget>.OnTargetPropertyChanged(TTarget newValue)
-    {
-        if (_isUpdating || _setter == null) return;
-
-        if (_updateSourceTrigger == UpdateSourceTrigger.PropertyChanged)
-        {
-            UpdateSourceTyped(newValue);
-        }
-        else
-        {
-            _pendingValue = newValue;
-            _hasPendingValue = true;
-        }
-    }
-
-    /// <summary>
-    /// Unsubscribes from all event handlers on the source and target to release references and avoid memory leaks.
-    /// </summary>
-    public void Dispose()
-    {
-        if (_inpc != null)
-        {
-            _inpc.PropertyChanged -= OnSourcePropertyChanged;
-            _inpc = null;
-        }
-
-        if (_targetRef.TryGetTarget(out var target) && target is Tree.UIElement uie)
-        {
-            uie.LostFocus -= OnTargetLostFocus;
-        }
-    }
-}
-
-/// <summary>
-/// Represents a strongly-typed data binding subscription connecting a target <see cref="BindableProperty{TTarget}"/>
-/// on a <see cref="BindableObject"/> to its current <see cref="BindableObject.DataContext"/> of type <typeparamref name="TDataContext"/>.
-/// </summary>
-/// <remarks>
-/// This binding dynamically observes the <see cref="BindableObject.DataContext"/> of the target element.
-/// If the data context instance changes or if the active data context raises <see cref="INotifyPropertyChanged.PropertyChanged"/>,
-/// the target property is updated. When the data context becomes <c>null</c> or is not a <typeparamref name="TDataContext"/>,
-/// the value previously written by this binding is cleared. For two-way bindings (when a setter is provided), changes to the
-/// target property are pushed back to the data context according to <see cref="UpdateSourceTrigger"/>.
-/// </remarks>
-/// <typeparam name="TTarget">The data type of the target property.</typeparam>
-/// <typeparam name="TDataContext">The expected type of the data context. Must be a reference type.</typeparam>
-public sealed class DataContextBinding<TTarget, TDataContext> : IBindingSubscription, ITypedBindingSubscription<TTarget>
-    where TDataContext : class
-{
-    private readonly WeakReference<BindableObject> _targetRef;
-    private readonly BindableProperty<TTarget> _property;
-    private readonly Func<TDataContext, TTarget> _getter;
-    private readonly Action<TDataContext, TTarget>? _setter;
-    private readonly UpdateSourceTrigger _updateSourceTrigger;
-    private readonly IDisposable _dataContextSubscription;
-    private INotifyPropertyChanged? _currentInpc;
-    private object? _pendingValue;
-    private bool _hasPendingValue;
-    private bool _isUpdating;
-    private readonly string? _sourcePropertyName;
-    private bool _hasAppliedValue;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="DataContextBinding{TTarget, TDataContext}"/> class.
-    /// </summary>
-    /// <param name="target">The target <see cref="BindableObject"/> on which the property resides.</param>
-    /// <param name="property">The target <see cref="BindableProperty{TTarget}"/> to bind.</param>
-    /// <param name="getter">The getter delegate to extract values from the data context.</param>
-    /// <param name="setter">An optional setter delegate to write values back to the data context for two-way binding.</param>
-    /// <param name="updateSourceTrigger">Specifies when two-way changes are pushed back to the data context. Defaults to <see cref="UpdateSourceTrigger.PropertyChanged"/>.</param>
-    /// <param name="sourcePropertyName">
-    /// The source property the getter reads, if known. When set, source notifications for other properties are ignored.
-    /// <c>null</c> updates on every change.
-    /// </param>
-    /// <exception cref="ArgumentException"><paramref name="updateSourceTrigger"/> is <see cref="UpdateSourceTrigger.LostFocus"/> but <paramref name="target"/> is not a <see cref="Tree.UIElement"/>.</exception>
-    public DataContextBinding(
-        BindableObject target,
-        BindableProperty<TTarget> property,
-        Func<TDataContext, TTarget> getter,
-        Action<TDataContext, TTarget>? setter,
-        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
-        string? sourcePropertyName = null)
-    {
-        BindingHelpers.ValidateTrigger(target, updateSourceTrigger);
-
-        _targetRef = new WeakReference<BindableObject>(target);
-        _property = property;
-        _getter = getter;
-        _setter = setter;
-        _updateSourceTrigger = updateSourceTrigger;
-        _sourcePropertyName = sourcePropertyName;
-
-        _dataContextSubscription = target.Subscribe(BindableObject.DataContextProperty, OnTargetDataContextChanged);
-        if (target is Tree.UIElement uie && _updateSourceTrigger == UpdateSourceTrigger.LostFocus)
-        {
-            uie.LostFocus += OnTargetLostFocus;
-        }
-
-        HookDataContext(target.DataContext);
-        UpdateTarget();
-    }
-
-    private void OnTargetLostFocus(object? sender, EventArgs e)
-    {
-        if (_hasPendingValue)
-        {
-            UpdateSourceInternal(_pendingValue);
-            _hasPendingValue = false;
-        }
-    }
-
-    private void OnTargetDataContextChanged(BindableObject sender, object? oldValue, object? newValue)
-    {
-        HookDataContext(newValue);
-        UpdateTarget();
-    }
-
-    private void HookDataContext(object? dataContext)
-    {
-        if (_currentInpc != null)
-        {
-            _currentInpc.PropertyChanged -= OnSourcePropertyChanged;
-            _currentInpc = null;
-        }
-
-        if (dataContext is INotifyPropertyChanged inpc && dataContext is TDataContext)
-        {
-            _currentInpc = inpc;
-            _currentInpc.PropertyChanged += OnSourcePropertyChanged;
-        }
-    }
-
-    private void OnSourcePropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (!_targetRef.TryGetTarget(out _))
-        {
-            Dispose();
-            return;
-        }
-
-        if (!BindingHelpers.Affects(e, _sourcePropertyName))
-        {
-            return;
-        }
-
-        UpdateTarget();
-    }
-
-    /// <summary>
-    /// Reads the current value from the active data context via the getter delegate and sets it on the target property.
-    /// </summary>
-    public void UpdateTarget()
-    {
-        if (_isUpdating) return;
-        _isUpdating = true;
-        try
-        {
-            if (!_targetRef.TryGetTarget(out var target))
-            {
-                return;
-            }
-
-            if (target.DataContext is TDataContext dc)
-            {
-                var value = _getter(dc);
-                target.SetValue(_property, value);
-                _hasAppliedValue = true;
-                _hasPendingValue = false;
-
-                // If the target coerced the value, write the coerced value back so source and target agree.
-                if (_setter != null)
-                {
-                    var actual = target.GetValue(_property);
-                    if (!EqualityComparer<TTarget>.Default.Equals(actual, value))
-                    {
-                        _setter(dc, actual);
-                    }
-                }
-            }
-            else if (_hasAppliedValue)
-            {
-                // No usable data context: drop the stale value from the previous one.
-                target.ClearValue(_property);
-                _hasAppliedValue = false;
-                _hasPendingValue = false;
-            }
-        }
-        finally
-        {
-            _isUpdating = false;
-        }
-    }
-
-    /// <summary>
-    /// Handles changes to the target property, either updating the data context immediately or caching the pending value based on <see cref="UpdateSourceTrigger"/>.
-    /// </summary>
-    /// <param name="newValue">The updated target value.</param>
-    public void OnTargetPropertyChanged(object? newValue)
-    {
-        if (_isUpdating || _setter == null) return;
-
-        if (_updateSourceTrigger == UpdateSourceTrigger.PropertyChanged)
-        {
-            UpdateSourceInternal(newValue);
-        }
-        else
-        {
-            _pendingValue = newValue;
-            _hasPendingValue = true;
-        }
-    }
-
-    /// <summary>
-    /// Pushes pending or current target property values back to the active data context via the setter delegate.
-    /// </summary>
-    public void UpdateSource()
-    {
-        if (_hasPendingValue)
-        {
-            UpdateSourceInternal(_pendingValue);
-            _hasPendingValue = false;
-        }
-        else if (_targetRef.TryGetTarget(out var target))
-        {
-            var val = target.GetValue(_property);
-            UpdateSourceInternal(val);
-        }
-    }
-
-    private void UpdateSourceInternal(object? value) => UpdateSourceTyped((TTarget)value!);
-
-    private void UpdateSourceTyped(TTarget value)
-    {
-        if (_isUpdating || _setter == null) return;
-        _isUpdating = true;
-        try
-        {
-            if (_targetRef.TryGetTarget(out var target) && target.DataContext is TDataContext dc)
-            {
-                _setter(dc, value);
-            }
-        }
-        finally
-        {
-            _isUpdating = false;
-        }
-    }
-
-    void ITypedBindingSubscription<TTarget>.OnTargetPropertyChanged(TTarget newValue)
-    {
-        if (_isUpdating || _setter == null) return;
-
-        if (_updateSourceTrigger == UpdateSourceTrigger.PropertyChanged)
-        {
-            UpdateSourceTyped(newValue);
-        }
-        else
-        {
-            _pendingValue = newValue;
-            _hasPendingValue = true;
-        }
-    }
-
-    /// <summary>
-    /// Unsubscribes from all event handlers on the data context and target to release references and avoid memory leaks.
-    /// </summary>
-    public void Dispose()
-    {
-        _dataContextSubscription.Dispose();
-
-        if (_targetRef.TryGetTarget(out var target))
-        {
-            if (target is Tree.UIElement uie)
-            {
-                uie.LostFocus -= OnTargetLostFocus;
-            }
-        }
-
-        if (_currentInpc != null)
-        {
-            _currentInpc.PropertyChanged -= OnSourcePropertyChanged;
-            _currentInpc = null;
-        }
-    }
-}
-
-internal static class BindingHelpers
-{
-    /// <summary>
-    /// Determines whether a source <see cref="INotifyPropertyChanged.PropertyChanged"/> notification can affect a binding
-    /// that reads <paramref name="sourcePropertyName"/>. A <c>null</c> or empty property name in the notification means
-    /// "everything changed"; a binding without a known source property is always affected.
-    /// </summary>
-    public static bool Affects(PropertyChangedEventArgs e, string? sourcePropertyName) =>
-        sourcePropertyName == null
-        || string.IsNullOrEmpty(e.PropertyName)
-        || string.Equals(e.PropertyName, sourcePropertyName, StringComparison.Ordinal);
-
-    /// <summary>
-    /// Extracts the source property a getter reads from its source text (supplied through
-    /// <see cref="CallerArgumentExpressionAttribute"/>), for the simple forms <c>x =&gt; x.Name</c> and
-    /// <c>x =&gt; x.Name.Inner</c> (the first member is returned). Anything else (method calls, operators, several
-    /// members, a delegate variable) returns <c>null</c>, meaning the binding updates on every source change.
-    /// </summary>
-    public static string? GetSourcePropertyName(string? getterExpression)
-    {
-        if (string.IsNullOrWhiteSpace(getterExpression))
-        {
-            return null;
-        }
-
-        ReadOnlySpan<char> text = getterExpression.AsSpan().Trim();
-        if (text.StartsWith("static ", StringComparison.Ordinal))
-        {
-            text = text[7..].TrimStart();
-        }
-
-        int arrow = text.IndexOf("=>", StringComparison.Ordinal);
-        if (arrow <= 0)
-        {
-            return null;
-        }
-
-        // Parameter: "x", "(x)" or "(SomeType x)".
-        ReadOnlySpan<char> parameter = text[..arrow].Trim();
-        if (parameter.Length >= 2 && parameter[0] == '(' && parameter[^1] == ')')
-        {
-            parameter = parameter[1..^1].Trim();
-            int space = parameter.LastIndexOf(' ');
-            if (space >= 0)
-            {
-                parameter = parameter[(space + 1)..];
-            }
-        }
-
-        if (ReadIdentifier(parameter) != parameter.Length)
-        {
-            return null;
-        }
-
-        // Body: the parameter, then one or more ".Member" segments and nothing else.
-        ReadOnlySpan<char> body = text[(arrow + 2)..].Trim();
-        if (!body.StartsWith(parameter, StringComparison.Ordinal) || body.Length <= parameter.Length || body[parameter.Length] != '.')
-        {
-            return null;
-        }
-
-        ReadOnlySpan<char> rest = body[(parameter.Length + 1)..];
-        int nameLength = ReadIdentifier(rest);
-        if (nameLength == 0)
-        {
-            return null;
-        }
-
-        ReadOnlySpan<char> name = rest[..nameLength];
-        ReadOnlySpan<char> tail = rest[nameLength..];
-        while (tail.Length > 0)
-        {
-            if (tail[0] != '.')
-            {
-                return null;
-            }
-
-            tail = tail[1..];
-            int segment = ReadIdentifier(tail);
-            if (segment == 0)
-            {
-                return null;
-            }
-            tail = tail[segment..];
-        }
-
-        return name.ToString();
-    }
-
-    // Length of the C# identifier at the start of text (0 if there is none).
-    private static int ReadIdentifier(ReadOnlySpan<char> text)
-    {
-        if (text.Length == 0 || !(char.IsLetter(text[0]) || text[0] == '_'))
-        {
-            return 0;
-        }
-
-        int length = 1;
-        while (length < text.Length && (char.IsLetterOrDigit(text[length]) || text[length] == '_'))
-        {
-            length++;
-        }
-        return length;
-    }
-
-    public static void ValidateTrigger(BindableObject target, UpdateSourceTrigger trigger)
-    {
-        if (trigger == UpdateSourceTrigger.LostFocus && target is not Tree.UIElement)
-        {
-            throw new ArgumentException(
-                $"{nameof(UpdateSourceTrigger)}.{nameof(UpdateSourceTrigger.LostFocus)} requires a {nameof(Tree.UIElement)} target, " +
-                $"but the target is '{target.GetType().Name}'. Use {nameof(UpdateSourceTrigger.Explicit)} instead.",
-                nameof(trigger));
-        }
     }
 }
