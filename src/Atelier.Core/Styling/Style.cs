@@ -141,7 +141,8 @@ public class Style : IEnumerable<Setter>
 /// An ordered collection of <see cref="Style"/>s that reports changes through <see cref="StylesChanged"/>.
 /// </summary>
 /// <remarks>
-/// When styles are resolved, the first matching style in the collection wins.
+/// When styles are resolved, the first style with a matching key wins; for implicit styles the one with the most specific
+/// target type wins (see <see cref="StyleManager.FindImplicitStyle"/>).
 /// </remarks>
 public class StyleCollection : Collection<Style>
 {
@@ -214,6 +215,31 @@ public class StyleCollection : Collection<Style>
             StylesChanged?.Invoke();
         }
     }
+
+    /// <summary>
+    /// Replaces the contents with <paramref name="styles"/> and raises <see cref="StylesChanged"/> once.
+    /// </summary>
+    /// <param name="styles">The new styles, in order.</param>
+    public void ReplaceAll(IEnumerable<Style> styles)
+    {
+        ArgumentNullException.ThrowIfNull(styles);
+
+        _suppressChanged = true;
+        try
+        {
+            Items.Clear();
+            foreach (var s in styles)
+            {
+                Add(s);
+            }
+        }
+        finally
+        {
+            _suppressChanged = false;
+        }
+
+        StylesChanged?.Invoke();
+    }
 }
 
 /// <summary>
@@ -230,4 +256,72 @@ public static class StyleManager
     /// <see cref="Tree.UIElement.ApplyStylesToTree"/>.
     /// </remarks>
     public static StyleCollection GlobalStyles { get; } = new();
+
+    /// <summary>
+    /// Gets the default styles of the active theme, which the theme fills when it is activated.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An implicit theme style (no <see cref="Style.Key"/>) is the lowest style layer of the elements of its target type:
+    /// its setters apply to every property the element's own style (explicit, keyed or implicit, from
+    /// <see cref="Tree.UIElement.Styles"/> or <see cref="GlobalStyles"/>) doesn't set, like WPF's theme styles. So an app
+    /// style only needs to set what it changes. Keyed theme styles (e.g. typography) are found by
+    /// <see cref="Tree.UIElement.StyleKey"/> after <see cref="GlobalStyles"/>.
+    /// </para>
+    /// <para>
+    /// Implicit styles are matched by the most specific target type: a style for <c>RepeatButton</c> wins over one for
+    /// <c>Button</c>. Windows re-apply styles when this collection changes, like for <see cref="GlobalStyles"/>.
+    /// </para>
+    /// </remarks>
+    public static StyleCollection ThemeStyles { get; } = new();
+
+    /// <summary>
+    /// Finds the implicit style (one without a key) in <paramref name="styles"/> whose target type is closest to
+    /// <paramref name="type"/>: its own type first, then each base type. Among styles for the same type the first wins.
+    /// </summary>
+    /// <param name="styles">The styles to search, or <c>null</c>.</param>
+    /// <param name="type">The element type.</param>
+    /// <returns>The most specific implicit style, or <c>null</c>.</returns>
+    public static Style? FindImplicitStyle(StyleCollection? styles, Type type)
+    {
+        if (styles == null || styles.Count == 0)
+        {
+            return null;
+        }
+
+        for (Type? current = type; current != null && current != typeof(object); current = current.BaseType)
+        {
+            for (int i = 0; i < styles.Count; i++)
+            {
+                var style = styles[i];
+                if (style.TargetType == current && string.IsNullOrEmpty(style.Key))
+                {
+                    return style;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Finds the first style in <paramref name="styles"/> with <paramref name="key"/> that applies to
+    /// <paramref name="element"/> (no target type, or one the element is an instance of).
+    /// </summary>
+    /// <param name="styles">The styles to search, or <c>null</c>.</param>
+    /// <param name="key">The style key.</param>
+    /// <param name="element">The element to style.</param>
+    /// <returns>The matching style, or <c>null</c>.</returns>
+    public static Style? FindKeyedStyle(StyleCollection? styles, string key, object element)
+    {
+        for (int i = 0; styles != null && i < styles.Count; i++)
+        {
+            var style = styles[i];
+            if (style.Key == key && (style.TargetType == null || style.TargetType.IsInstanceOfType(element)))
+            {
+                return style;
+            }
+        }
+        return null;
+    }
 }

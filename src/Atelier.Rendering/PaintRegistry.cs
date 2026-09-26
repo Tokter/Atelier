@@ -27,6 +27,13 @@ public interface IPaintRegistry
 
     /// <summary>Returns the cached typeface for a family and style; a <c>null</c> or unknown family gives the default typeface.</summary>
     SKTypeface GetTypeface(string? familyName, bool bold = false, bool italic = false);
+
+    /// <summary>
+    /// Returns the cached typeface for a family, weight and slant (the closest weight the family has). The default
+    /// implementation maps weights of 600 and above to bold.
+    /// </summary>
+    SKTypeface GetTypeface(string? familyName, FontWeight weight, bool italic = false) =>
+        GetTypeface(familyName, weight.Value >= 600, italic);
 }
 
 /// <summary>
@@ -56,6 +63,10 @@ public sealed class PaintRegistry : IPaintRegistry, IDisposable
     /// <inheritdoc/>
     public SKTypeface GetTypeface(string? familyName, bool bold = false, bool italic = false) =>
         FontCache.GetTypeface(familyName, bold, italic);
+
+    /// <inheritdoc/>
+    public SKTypeface GetTypeface(string? familyName, FontWeight weight, bool italic = false) =>
+        FontCache.GetTypeface(familyName, weight.Value, italic);
 
     /// <inheritdoc/>
     public SKFont GetFont(float fontSize, SKTypeface? typeface = null) =>

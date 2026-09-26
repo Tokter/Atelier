@@ -27,7 +27,7 @@ internal static class FontCache
     public const int MaxFonts = 128;
 
     private static readonly object s_lock = new();
-    private static readonly Dictionary<(string? Family, bool Bold, bool Italic), SKTypeface> s_typefaces = new();
+    private static readonly Dictionary<(string? Family, int Weight, bool Italic), SKTypeface> s_typefaces = new();
     private static readonly Dictionary<FontKey, LinkedListNode<FontEntry>> s_fonts = new();
     private static readonly LinkedList<FontEntry> s_lru = new();
 
@@ -44,18 +44,40 @@ internal static class FontCache
     }
 
     /// <summary>Returns the cached typeface for a family and style, falling back to the default typeface.</summary>
-    public static SKTypeface GetTypeface(string? family, bool bold, bool italic)
+    public static SKTypeface GetTypeface(string? family, bool bold, bool italic) =>
+        GetTypeface(family, bold ? 700 : 400, italic);
+
+    /// <summary>
+    /// Returns the cached typeface for a family, OpenType weight (1..1000) and slant; the font manager picks the closest
+    /// weight the family has. Falls back to the default typeface.
+    /// </summary>
+    public static SKTypeface GetTypeface(string? family, int weight, bool italic)
     {
         lock (s_lock)
         {
-            var key = (family, bold, italic);
+            var key = (family, weight, italic);
             if (!s_typefaces.TryGetValue(key, out var typeface))
             {
                 var style = new SKFontStyle(
-                    bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,
-                    SKFontStyleWidth.Normal,
+                    weight,
+                    (int)SKFontStyleWidth.Normal,
                     italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright);
-                typeface = SKTypeface.FromFamilyName(family, style) ?? SKTypeface.Default;
+                // Without a family name Skia returns the default typeface regardless of the style, so match the style
+                // within the default family instead (otherwise weights and italics of default-font text are ignored).
+                string familyName = family ?? SKTypeface.Default.FamilyName;
+                typeface = SKTypeface.FromFamilyName(familyName, style) ?? SKTypeface.Default;
+
+                // CSS font matching: for a missing weight between 400 and 500, prefer a lighter face (e.g. Segoe UI has
+                // no 500, and its 600 would make "medium" text look bold). Skia picks the heavier one.
+                if (weight is > 400 and <= 500 && typeface.FontWeight >= 600)
+                {
+                    var lighter = SKTypeface.FromFamilyName(familyName, new SKFontStyle(400, (int)SKFontStyleWidth.Normal,
+                        italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright));
+                    if (lighter != null && lighter.FontWeight <= weight)
+                    {
+                        typeface = lighter;
+                    }
+                }
                 s_typefaces[key] = typeface;
             }
             return typeface;

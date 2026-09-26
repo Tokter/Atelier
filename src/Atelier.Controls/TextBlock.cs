@@ -81,6 +81,9 @@ public class TextBlock : UIElement
     /// <summary>Identifies the <see cref="FontFamily"/> property; shared with <see cref="Control.FontFamilyProperty"/>.</summary>
     public static readonly BindableProperty<string?> FontFamilyProperty = Control.FontFamilyProperty.AddOwner<TextBlock>();
 
+    /// <summary>Identifies the <see cref="FontWeight"/> property; shared with <see cref="Control.FontWeightProperty"/>.</summary>
+    public static readonly BindableProperty<FontWeight> FontWeightProperty = Control.FontWeightProperty.AddOwner<TextBlock>();
+
     /// <summary>Identifies the <see cref="TextAlignment"/> property.</summary>
     public static readonly BindableProperty<TextAlignment> TextAlignmentProperty =
         BindableProperty.Register<TextBlock, TextAlignment>(
@@ -186,8 +189,30 @@ public class TextBlock : UIElement
     /// </summary>
     public float LineHeight { get => GetValue(LineHeightProperty); set => SetValue(LineHeightProperty, value); }
 
-    /// <summary>Gets or sets whether the text uses the bold weight. The default is <c>false</c>.</summary>
+    /// <summary>
+    /// Gets or sets whether the text uses the bold weight: a shortcut that makes the effective weight at least
+    /// <see cref="Core.Primitives.FontWeight.Bold"/> (see <see cref="EffectiveFontWeight"/>). The default is <c>false</c>.
+    /// </summary>
     public bool Bold { get => GetValue(BoldProperty); set => SetValue(BoldProperty, value); }
+
+    /// <summary>
+    /// Gets or sets the font weight. Inherited (for example from a button, so its label uses the button's weight); the
+    /// default is <see cref="Core.Primitives.FontWeight.Normal"/>.
+    /// </summary>
+    public FontWeight FontWeight { get => GetValue(FontWeightProperty); set => SetValue(FontWeightProperty, value); }
+
+    /// <summary>
+    /// Gets the weight the text is measured and drawn with: <see cref="FontWeight"/>, raised to at least bold when
+    /// <see cref="Bold"/> is set.
+    /// </summary>
+    public FontWeight EffectiveFontWeight
+    {
+        get
+        {
+            var weight = FontWeight;
+            return Bold ? FontWeight.Max(weight, Core.Primitives.FontWeight.Bold) : weight;
+        }
+    }
 
     /// <summary>Gets or sets whether the text uses the italic slant. The default is <c>false</c>.</summary>
     public bool Italic { get => GetValue(ItalicProperty); set => SetValue(ItalicProperty, value); }
@@ -307,7 +332,7 @@ public class TextBlock : UIElement
         var trimming = TextTrimming;
         bool widthDependent = wrapping == TextWrapping.Wrap || trimming != TextTrimming.None;
         float widthKey = widthDependent && maxWidth > 0 && float.IsFinite(maxWidth) ? maxWidth : float.PositiveInfinity;
-        return new LayoutKey(Text, FontSize, FontFamily, Bold, Italic, wrapping, trimming, MaxLines, LineHeight, widthKey);
+        return new LayoutKey(Text, FontSize, FontFamily, EffectiveFontWeight, Italic, wrapping, trimming, MaxLines, LineHeight, widthKey);
     }
 
     private void EnsureLayout(float maxWidth)
@@ -332,7 +357,7 @@ public class TextBlock : UIElement
             return;
         }
 
-        var font = TextMeasurer.GetFont(key.FontSize, key.FontFamily, key.Bold, key.Italic);
+        var font = TextMeasurer.GetFont(key.FontSize, key.FontFamily, key.Weight, key.Italic);
         TextMeasurer.LayoutLines(text, key.MaxWidth, key.Wrapping == TextWrapping.Wrap, font, _lines);
 
         bool cutOff = false;
@@ -377,7 +402,7 @@ public class TextBlock : UIElement
         string? Text,
         float FontSize,
         string? FontFamily,
-        bool Bold,
+        FontWeight Weight,
         bool Italic,
         TextWrapping Wrapping,
         TextTrimming Trimming,

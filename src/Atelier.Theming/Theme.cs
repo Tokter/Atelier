@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using Atelier.Core.Primitives;
+using Atelier.Core.Properties;
+using Atelier.Core.Styling;
 using Atelier.Core.Tree;
 using Atelier.Rendering;
 
@@ -105,31 +108,144 @@ public class RendererRegistry
     }
 }
 
-public abstract class Theme
+/// <summary>
+/// Implemented by renderers of containers that define the color of their content, like a filled button whose label is
+/// drawn in the theme's "on primary" color. Text and icons without a foreground of their own use the color of their
+/// nearest such ancestor (see <see cref="ContentColor"/>).
+/// </summary>
+public interface IContentColorProvider
 {
-    public abstract string Name { get; }
-    public abstract bool IsDark { get; }
-    public RendererRegistry Renderers { get; } = new();
+    /// <summary>
+    /// Gets the color content of <paramref name="element"/> is drawn in, for its current state (variant, hover, pressed,
+    /// selected, ...). Disabled elements should report their enabled color: text and icons apply the disabled opacity.
+    /// </summary>
+    /// <param name="element">An element of the renderer's type.</param>
+    /// <param name="color">The content color.</param>
+    /// <returns><c>false</c> if the element doesn't define a content color in its current state.</returns>
+    bool TryGetContentColor(UIElement element, out Color color);
 }
 
+/// <summary>
+/// Resolves the color of text and icons that don't set a foreground themselves.
+/// </summary>
+public static class ContentColor
+{
+    /// <summary>
+    /// Resolves the foreground of <paramref name="element"/> (a text block, icon, ...) the way content colors inherit:
+    /// a foreground set on the element itself wins; otherwise the nearest ancestor that either sets a foreground itself
+    /// (locally, by a style or an animation) or whose renderer provides a content color (<see cref="IContentColorProvider"/>)
+    /// decides; otherwise <paramref name="fallback"/> (the theme's default text color).
+    /// </summary>
+    /// <remarks>Walks the ancestors; no allocations.</remarks>
+    /// <param name="element">The element whose content color is needed.</param>
+    /// <param name="foregroundProperty">The inheritable foreground property (e.g. <c>Control.ForegroundProperty</c>).</param>
+    /// <param name="renderers">The renderers to ask, or <c>null</c> to only honor set foregrounds.</param>
+    /// <param name="fallback">The color used when nothing defines one.</param>
+    /// <param name="isExplicit">Whether the color came from a set foreground (not from a provider or the fallback).</param>
+    public static Color Resolve(
+        UIElement element,
+        BindableProperty<Color> foregroundProperty,
+        RendererRegistry? renderers,
+        Color fallback,
+        out bool isExplicit)
+    {
+        isExplicit = true;
+        if (IsSetOn(element, foregroundProperty))
+        {
+            return element.GetValue(foregroundProperty);
+        }
+
+        for (var node = element.Parent; node != null; node = node.Parent)
+        {
+            if (node is not UIElement ancestor)
+            {
+                continue;
+            }
+
+            if (IsSetOn(ancestor, foregroundProperty))
+            {
+                return ancestor.GetValue(foregroundProperty);
+            }
+
+            if (renderers?.GetRenderer(ancestor.GetType()) is IContentColorProvider provider &&
+                provider.TryGetContentColor(ancestor, out var color))
+            {
+                isExplicit = false;
+                return color;
+            }
+        }
+
+        isExplicit = false;
+        return fallback;
+    }
+
+    // Set on the element itself (locally, by a style, coercion or an animation), not inherited or default.
+    private static bool IsSetOn(UIElement element, BindableProperty<Color> property) =>
+        element.GetValueSource(property) > ValueSource.Inherited;
+}
+
+/// <summary>
+/// A visual theme: the renderers that draw each control type and the default styles for them.
+/// </summary>
+public abstract class Theme
+{
+    /// <summary>Gets the display name of the theme.</summary>
+    public abstract string Name { get; }
+
+    /// <summary>Gets whether the theme uses light content on a dark background.</summary>
+    public abstract bool IsDark { get; }
+
+    /// <summary>Gets the renderers of this theme.</summary>
+    public RendererRegistry Renderers { get; } = new();
+
+    /// <summary>
+    /// Gets the theme's styles: implicit default styles per control type (sizes, shapes, alignment, typography) and
+    /// keyed styles such as typography. They are copied to <see cref="StyleManager.ThemeStyles"/> when the theme becomes
+    /// <see cref="ThemeManager.Current"/>, so creating a theme has no global side effects.
+    /// </summary>
+    public StyleCollection Styles { get; } = new();
+}
+
+/// <summary>
+/// Holds the active <see cref="Theme"/>.
+/// </summary>
 public static class ThemeManager
 {
     private static Theme? _currentTheme;
 
+    /// <summary>Occurs after <see cref="Current"/> changed.</summary>
     public static event Action<Theme>? ThemeChanged;
 
+    /// <summary>
+    /// Gets or sets the active theme. Setting it installs the theme's <see cref="Theme.Styles"/> as
+    /// <see cref="StyleManager.ThemeStyles"/> (windows then restyle their trees) and raises <see cref="ThemeChanged"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Reading it before a theme was set.</exception>
     public static Theme Current
     {
         get => _currentTheme ?? throw new InvalidOperationException("No theme has been initialized. Please set ThemeManager.Current.");
         set
         {
+            ArgumentNullException.ThrowIfNull(value);
             if (_currentTheme != value)
             {
                 _currentTheme = value;
+                StyleManager.ThemeStyles.ReplaceAll(value.Styles);
                 ThemeChanged?.Invoke(value);
             }
         }
     }
 
+    /// <summary>Gets whether a theme has been set.</summary>
     public static bool HasTheme => _currentTheme != null;
+
+    /// <summary>
+    /// Removes the active theme and its styles, returning to the unthemed state (for example between tests).
+    /// <see cref="ThemeChanged"/> is not raised.
+    /// </summary>
+    public static void Reset()
+    {
+        _currentTheme = null;
+        StyleManager.ThemeStyles.Clear();
+    }
 }

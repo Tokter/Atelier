@@ -676,15 +676,19 @@ public class BindableObject : INotifyPropertyChanged
     /// default value; notifications are raised only for properties whose effective value changed.
     /// </summary>
     /// <param name="style">The resolved style, or <c>null</c> to clear all styled values.</param>
+    /// <param name="themeStyle">
+    /// An optional theme default style whose setters apply underneath <paramref name="style"/>: they are used for every
+    /// property <paramref name="style"/> (and its <see cref="Style.BasedOn"/> chain) doesn't set.
+    /// </param>
     /// <exception cref="InvalidOperationException">The <see cref="Style.BasedOn"/> chain is circular.</exception>
-    internal void SetStyleValues(Style? style)
+    internal void SetStyleValues(Style? style, Style? themeStyle = null)
     {
         if (!Threading.Dispatcher.HasUIAccess)
         {
             Threading.Dispatcher.ReportWrongThread($"{GetType().Name}.Style");
         }
 
-        if (style == null && _styleValues.Count == 0)
+        if (style == null && themeStyle == null && _styleValues.Count == 0)
         {
             return;
         }
@@ -693,11 +697,18 @@ public class BindableObject : INotifyPropertyChanged
         List<int>? removed = null;
         try
         {
-            if (style != null)
+            if (style != null || themeStyle != null)
             {
                 next = t_styleSetterScratch ?? new Dictionary<int, Setter>();
                 t_styleSetterScratch = null;
-                CollectSetters(style, next, depth: 0);
+                if (themeStyle != null && themeStyle != style)
+                {
+                    CollectSetters(themeStyle, next, depth: 0);
+                }
+                if (style != null)
+                {
+                    CollectSetters(style, next, depth: 0);
+                }
             }
 
             if (_styleValues.Count > 0)

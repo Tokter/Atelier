@@ -252,7 +252,7 @@ public abstract class UIElement : VisualNode
     /// </summary>
     public void ApplyStyles()
     {
-        SetStyleValues(ResolveStyle());
+        SetStyleValues(ResolveStyle(), StyleManager.FindImplicitStyle(StyleManager.ThemeStyles, GetType()));
     }
 
     /// <summary>
@@ -272,9 +272,15 @@ public abstract class UIElement : VisualNode
 
     /// <summary>
     /// Finds the style that applies to this element: the explicit <see cref="Style"/> if set; otherwise the nearest style
-    /// matching <see cref="StyleKey"/> (or, without a key, the nearest implicit style for this element's type) in this
-    /// element's or an ancestor's <see cref="Styles"/>, falling back to <see cref="StyleManager.GlobalStyles"/>.
+    /// matching <see cref="StyleKey"/> in this element's or an ancestor's <see cref="Styles"/>, then
+    /// <see cref="StyleManager.GlobalStyles"/>, then <see cref="StyleManager.ThemeStyles"/>; or, without a key, the nearest
+    /// implicit style for this element's type (the most specific target type within each collection) in the same scopes,
+    /// excluding the theme styles.
     /// </summary>
+    /// <remarks>
+    /// The theme's implicit style is not returned here: <see cref="ApplyStyles"/> always applies it underneath the
+    /// resolved style.
+    /// </remarks>
     /// <returns>The resolved style, or <c>null</c> if none applies.</returns>
     protected virtual Style? ResolveStyle()
     {
@@ -283,60 +289,25 @@ public abstract class UIElement : VisualNode
         string? key = StyleKey;
         if (!string.IsNullOrEmpty(key))
         {
-            UIElement? current = this;
-            while (current != null)
+            // Read the field, not the property, so walking ancestors doesn't create their style collections.
+            for (UIElement? current = this; current != null; current = current.Parent as UIElement)
             {
-                // Read the field, not the property, so walking ancestors doesn't create their style collections.
-                var styles = current._styles;
-                for (int i = 0; styles != null && i < styles.Count; i++)
-                {
-                    var s = styles[i];
-                    if (s.Key == key && (s.TargetType == null || s.TargetType.IsInstanceOfType(this)))
-                    {
-                        return s;
-                    }
-                }
-                current = current.Parent as UIElement;
+                var found = StyleManager.FindKeyedStyle(current._styles, key, this);
+                if (found != null) return found;
             }
 
-            for (int i = 0; i < StyleManager.GlobalStyles.Count; i++)
-            {
-                var s = StyleManager.GlobalStyles[i];
-                if (s.Key == key && (s.TargetType == null || s.TargetType.IsInstanceOfType(this)))
-                {
-                    return s;
-                }
-            }
-
-            return null;
+            return StyleManager.FindKeyedStyle(StyleManager.GlobalStyles, key, this)
+                ?? StyleManager.FindKeyedStyle(StyleManager.ThemeStyles, key, this);
         }
 
         Type controlType = GetType();
-        UIElement? curr = this;
-        while (curr != null)
+        for (UIElement? current = this; current != null; current = current.Parent as UIElement)
         {
-            var styles = curr._styles;
-            for (int i = 0; styles != null && i < styles.Count; i++)
-            {
-                var s = styles[i];
-                if (string.IsNullOrEmpty(s.Key) && s.TargetType != null && s.TargetType.IsAssignableFrom(controlType))
-                {
-                    return s;
-                }
-            }
-            curr = curr.Parent as UIElement;
+            var found = StyleManager.FindImplicitStyle(current._styles, controlType);
+            if (found != null) return found;
         }
 
-        for (int i = 0; i < StyleManager.GlobalStyles.Count; i++)
-        {
-            var s = StyleManager.GlobalStyles[i];
-            if (string.IsNullOrEmpty(s.Key) && s.TargetType != null && s.TargetType.IsAssignableFrom(controlType))
-            {
-                return s;
-            }
-        }
-
-        return null;
+        return StyleManager.FindImplicitStyle(StyleManager.GlobalStyles, controlType);
     }
 
     /// <inheritdoc/>
@@ -465,6 +436,13 @@ public abstract class UIElement : VisualNode
     /// <see cref="OnLostFocus"/>.
     /// </summary>
     public bool IsFocused { get => GetValue(IsFocusedProperty); internal set => SetValue(IsFocusedPropertyKey, value); }
+
+    /// <summary>
+    /// Gets whether this element has focus and focus indicators should be shown for it: the user is navigating with the
+    /// keyboard (see <see cref="FocusManager.IsFocusVisible"/>). Themes draw focus rings based on this instead of
+    /// <see cref="IsFocused"/>, so a focus ring appears when tabbing to a button but not after clicking it.
+    /// </summary>
+    public bool IsFocusVisible => IsFocused && FocusManager.IsFocusVisible;
     /// <summary>Identifies the <see cref="IsFocusable"/> bindable property.</summary>
     public static readonly BindableProperty<bool> IsFocusableProperty =
         BindableProperty.Register<UIElement, bool>(nameof(IsFocusable), false);

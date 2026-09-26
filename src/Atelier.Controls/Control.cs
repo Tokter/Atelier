@@ -23,6 +23,10 @@ public class Control : UIElement
     public static readonly BindableProperty<Color> ForegroundProperty =
         BindableProperty.Register<Control, Color>(nameof(Foreground), Color.Black, options: PropertyOptions.AffectsRender, inherits: true);
 
+    /// <summary>Identifies the <see cref="FontWeight"/> property.</summary>
+    public static readonly BindableProperty<FontWeight> FontWeightProperty =
+        BindableProperty.Register<Control, FontWeight>(nameof(FontWeight), FontWeight.Normal, options: PropertyOptions.AffectsMeasure, inherits: true);
+
     /// <summary>Identifies the <see cref="Padding"/> property.</summary>
     public static readonly BindableProperty<Thickness> PaddingProperty =
         BindableProperty.Register<Control, Thickness>(nameof(Padding), Thickness.Zero, options: PropertyOptions.AffectsMeasure);
@@ -58,4 +62,10 @@ public class Control : UIElement
 
     /// <summary>Gets or sets the font family name, or <c>null</c> for the default font. Inherited.</summary>
     public string? FontFamily { get => GetValue(FontFamilyProperty); set => SetValue(FontFamilyProperty, value); }
+
+    /// <summary>
+    /// Gets or sets the font weight of text in this control. Inherited (by nested text blocks too); the default is
+    /// <see cref="Core.Primitives.FontWeight.Normal"/>.
+    /// </summary>
+    public FontWeight FontWeight { get => GetValue(FontWeightProperty); set => SetValue(FontWeightProperty, value); }
 }

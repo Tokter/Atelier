@@ -54,6 +54,26 @@ public static class TextMeasurer
         FontCache.GetFont(FontCache.GetTypeface(fontFamily, bold, italic), fontSize);
 
     /// <summary>
+    /// Returns the cached typeface for a family, weight and slant (the closest weight the family has).
+    /// </summary>
+    /// <param name="fontFamily">The family name, or <c>null</c> for the default.</param>
+    /// <param name="weight">The font weight.</param>
+    /// <param name="italic">Whether to use the italic slant.</param>
+    public static SKTypeface GetTypeface(string? fontFamily, FontWeight weight, bool italic = false) =>
+        FontCache.GetTypeface(fontFamily, weight.Value, italic);
+
+    /// <summary>
+    /// Returns the cached font for a family, weight, slant and size; see <see cref="GetFont(float, string?, bool, bool)"/>
+    /// for ownership rules.
+    /// </summary>
+    /// <param name="fontSize">The font size in pixels.</param>
+    /// <param name="fontFamily">The family name, or <c>null</c> for the default.</param>
+    /// <param name="weight">The font weight.</param>
+    /// <param name="italic">Whether to use the italic slant.</param>
+    public static SKFont GetFont(float fontSize, string? fontFamily, FontWeight weight, bool italic = false) =>
+        FontCache.GetFont(FontCache.GetTypeface(fontFamily, weight.Value, italic), fontSize);
+
+    /// <summary>
     /// Returns the cached font for <paramref name="typeface"/> at <paramref name="fontSize"/>; see
     /// <see cref="GetFont(float, string?, bool, bool)"/> for ownership rules.
     /// </summary>

@@ -172,7 +172,7 @@ public class SilkWindow : IDisposable, IHostWindow
 
     private void OnThemeChanged(Theme theme) => InvalidateRender();
 
-    // Global style changes are coalesced: a theme may add many styles, but the tree is restyled once per frame.
+    // Global and theme style changes are coalesced: a theme may add many styles, but the tree is restyled once per frame.
     private volatile bool _globalStylesChanged;
 
     private void OnGlobalStylesChanged()
@@ -692,6 +692,7 @@ public class SilkWindow : IDisposable, IHostWindow
 
         ThemeManager.ThemeChanged += OnThemeChanged;
         StyleManager.GlobalStyles.StylesChanged += OnGlobalStylesChanged;
+        StyleManager.ThemeStyles.StylesChanged += OnGlobalStylesChanged;
         PopupManager.PopupOpened += OnPopupChanged;
         PopupManager.PopupClosed += OnPopupChanged;
 
@@ -1055,6 +1056,7 @@ public class SilkWindow : IDisposable, IHostWindow
     private void OnMouseDown(IMouse mouse, MouseButton button)
     {
         _needsRender = true; // discrete input usually changes something on screen
+        FocusManager.NotifyPointerInteraction(); // hide focus rings until the keyboard is used again
         if (_rootElement == null) return;
 
         var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
@@ -1760,6 +1762,7 @@ public class SilkWindow : IDisposable, IHostWindow
         HotReloadManager.HotReloadTriggered -= OnHotReloadTriggered;
         ThemeManager.ThemeChanged -= OnThemeChanged;
         StyleManager.GlobalStyles.StylesChanged -= OnGlobalStylesChanged;
+        StyleManager.ThemeStyles.StylesChanged -= OnGlobalStylesChanged;
         PopupManager.PopupOpened -= OnPopupChanged;
         PopupManager.PopupClosed -= OnPopupChanged;
 

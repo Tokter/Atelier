@@ -226,12 +226,52 @@ public static class FocusManager
     }
 
     /// <summary>
+    /// Gets whether focus indicators should be shown: <c>true</c> after keyboard interaction, <c>false</c> after a pointer
+    /// press (like the CSS <c>:focus-visible</c> heuristic). Themes draw focus rings only for
+    /// <see cref="UIElement.IsFocusVisible"/> elements, so clicking a button doesn't leave a ring around it while tabbing
+    /// to it does. Initially <c>false</c>.
+    /// </summary>
+    public static bool IsFocusVisible { get; private set; }
+
+    /// <summary>
+    /// Records keyboard interaction (called for every non-modifier key press): focus indicators become visible.
+    /// </summary>
+    public static void NotifyKeyboardInteraction() => SetFocusVisible(true);
+
+    /// <summary>
+    /// Records pointer interaction (platforms call this on every pointer press): focus indicators are hidden until the
+    /// next keyboard interaction.
+    /// </summary>
+    public static void NotifyPointerInteraction() => SetFocusVisible(false);
+
+    private static void SetFocusVisible(bool visible)
+    {
+        if (IsFocusVisible == visible)
+        {
+            return;
+        }
+
+        IsFocusVisible = visible;
+        CurrentFocused?.InvalidateVisual();
+    }
+
+    private static bool IsModifierKey(Key key) =>
+        key is Key.LeftShift or Key.RightShift or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+            or Key.LeftWindows or Key.RightWindows or Key.CapsLock;
+
+    /// <summary>
     /// Dispatches a key down event to the focused element of the tree containing <paramref name="fallbackRoot"/> (or of
     /// the active tree), tunneling from the root and then bubbling back up.
     /// </summary>
+    /// <remarks>Non-modifier keys also make focus indicators visible (see <see cref="IsFocusVisible"/>).</remarks>
     /// <returns><c>true</c> if a handler marked the event as handled.</returns>
     public static bool DispatchKeyDown(KeyEventArgs e, UIElement? fallbackRoot = null)
     {
+        if (!IsModifierKey(e.Key))
+        {
+            NotifyKeyboardInteraction();
+        }
+
         var target = GetEffectiveKeyTarget(fallbackRoot);
         if (target != null)
         {
@@ -345,14 +385,16 @@ public static class FocusManager
     }
 
     /// <summary>
-    /// Moves focus to the next focusable element in tree order (wrapping around), within the tree's modal scope if any.
+    /// Moves focus to the next focusable element in tree order (wrapping around), within the tree's modal scope if any,
+    /// and makes focus indicators visible (see <see cref="IsFocusVisible"/>).
     /// </summary>
     /// <param name="root">The root of the tree to search when no modal scope applies.</param>
     /// <returns><c>true</c> if there was an element to focus.</returns>
     public static bool FocusNext(UIElement root) => MoveFocus(root, forward: true);
 
     /// <summary>
-    /// Moves focus to the previous focusable element in tree order (wrapping around), within the tree's modal scope if any.
+    /// Moves focus to the previous focusable element in tree order (wrapping around), within the tree's modal scope if
+    /// any, and makes focus indicators visible (see <see cref="IsFocusVisible"/>).
     /// </summary>
     /// <param name="root">The root of the tree to search when no modal scope applies.</param>
     /// <returns><c>true</c> if there was an element to focus.</returns>
@@ -361,6 +403,10 @@ public static class FocusManager
     private static bool MoveFocus(UIElement root, bool forward)
     {
         Dispatcher.VerifyAccess(forward ? "FocusManager.FocusNext" : "FocusManager.FocusPrevious");
+
+        // Tab navigation is keyboard interaction even when the platform handles the key itself (without dispatching it),
+        // so the newly focused element shows its focus indicator.
+        NotifyKeyboardInteraction();
         var scope = GetScopeOrNull(root);
         var effectiveRoot = scope?.CurrentModal ?? root;
 

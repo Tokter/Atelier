@@ -42,9 +42,7 @@ public static class VisualTreeRenderer
         int opacitySave = -1;
         if (element.Opacity < 1.0f && element.Opacity > 0f)
         {
-            byte alpha = (byte)Math.Clamp((int)MathF.Round(element.Opacity * 255f), 0, 255);
-            using var alphaPaint = new SKPaint { Color = new SKColor(255, 255, 255, alpha) };
-            opacitySave = context.Canvas.SaveLayer(alphaPaint);
+            opacitySave = context.SaveOpacityLayer(element.Opacity);
         }
 
         // Delegate rendering of the element itself (background, border, shadow) to the presenter
@@ -60,27 +58,8 @@ public static class VisualTreeRenderer
                 (border.CornerRadius.TopLeft > 0 || border.CornerRadius.TopRight > 0 ||
                  border.CornerRadius.BottomRight > 0 || border.CornerRadius.BottomLeft > 0))
             {
-                var cr = border.CornerRadius;
-                if (cr.IsUniform)
-                {
-                    context.Canvas.ClipRoundRect(
-                        new SKRoundRect(new SKRect(0, 0, element.Bounds.Width, element.Bounds.Height), cr.TopLeft, cr.TopLeft),
-                        SKClipOperation.Intersect,
-                        antialias: true);
-                }
-                else
-                {
-                    var rrect = new SKRoundRect();
-                    rrect.SetRectRadii(
-                        new SKRect(0, 0, element.Bounds.Width, element.Bounds.Height),
-                        [
-                            new SKPoint(cr.TopLeft, cr.TopLeft),
-                            new SKPoint(cr.TopRight, cr.TopRight),
-                            new SKPoint(cr.BottomRight, cr.BottomRight),
-                            new SKPoint(cr.BottomLeft, cr.BottomLeft)
-                        ]);
-                    context.Canvas.ClipRoundRect(rrect, SKClipOperation.Intersect, antialias: true);
-                }
+                // Children of a rounded border are clipped to its rounded shape (reusing a cached round rect).
+                context.ClipRoundedRect(new Rect(0, 0, element.Bounds.Width, element.Bounds.Height), border.CornerRadius);
             }
             else
             {

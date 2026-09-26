@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using SkiaSharp;
 using Atelier.Core.Primitives;
@@ -60,17 +61,82 @@ public readonly ref struct DrawingContext
     public Scope PushRoundedClip(in Rect rect, in CornerRadius radius)
     {
         var scope = new Scope(Canvas);
-        var rrect = new SKRoundRect();
-        rrect.SetRectRadii(
-            new SKRect(rect.Left, rect.Top, rect.Right, rect.Bottom),
-            [
-                new SKPoint(radius.TopLeft, radius.TopLeft),
-                new SKPoint(radius.TopRight, radius.TopRight),
-                new SKPoint(radius.BottomRight, radius.BottomRight),
-                new SKPoint(radius.BottomLeft, radius.BottomLeft)
-            ]);
-        Canvas.ClipRoundRect(rrect, SKClipOperation.Intersect, antialias: true);
+        Canvas.ClipRoundRect(GetRoundRect(rect, radius, 0f), SKClipOperation.Intersect, antialias: true);
         return scope;
+    }
+
+    /// <summary>
+    /// Intersects the current clip with the rounded rectangle (without saving the canvas; the caller restores it).
+    /// </summary>
+    public void ClipRoundedRect(in Rect rect, in CornerRadius radius)
+    {
+        Canvas.ClipRoundRect(GetRoundRect(rect, radius, 0f), SKClipOperation.Intersect, antialias: true);
+    }
+
+    /// <summary>
+    /// Saves the canvas into an offscreen layer that is composited at <paramref name="opacity"/> when restored, and
+    /// returns the save count to restore to. Reuses one paint, so it doesn't allocate.
+    /// </summary>
+    public int SaveOpacityLayer(float opacity)
+    {
+        var paint = t_layerPaint ??= new SKPaint();
+        paint.Color = new SKColor(255, 255, 255, (byte)Math.Clamp((int)MathF.Round(opacity * 255f), 0, 255));
+        return Canvas.SaveLayer(paint);
+    }
+
+    [ThreadStatic] private static SKPaint? t_layerPaint;
+
+    // Rendering happens on the UI thread; these scratch objects are reused per thread so drawing rounded shapes with
+    // per-corner radii, shadows and translucent images doesn't allocate managed or native objects per call.
+    [ThreadStatic] private static SKRoundRect? t_roundRect;
+    [ThreadStatic] private static SKPoint[]? t_radii;
+    [ThreadStatic] private static SKPaint? t_shadowPaint;
+    [ThreadStatic] private static SKPaint? t_imagePaint;
+    [ThreadStatic] private static Dictionary<int, SKMaskFilter>? t_blurFilters;
+
+    // Blur sigmas are quantized to this step, so animated elevations reuse a handful of mask filters.
+    private const float BlurStep = 0.25f;
+    private const int MaxBlurFilters = 64;
+
+    /// <summary>
+    /// Returns the thread's reusable round rect set to <paramref name="rect"/> with each corner's radius reduced by
+    /// <paramref name="inset"/>. The result is only valid until the next call.
+    /// </summary>
+    private static SKRoundRect GetRoundRect(in Rect rect, in CornerRadius radius, float inset)
+    {
+        var rrect = t_roundRect ??= new SKRoundRect();
+        var radii = t_radii ??= new SKPoint[4];
+        radii[0] = Corner(radius.TopLeft, inset);
+        radii[1] = Corner(radius.TopRight, inset);
+        radii[2] = Corner(radius.BottomRight, inset);
+        radii[3] = Corner(radius.BottomLeft, inset);
+        rrect.SetRectRadii(new SKRect(rect.Left, rect.Top, rect.Right, rect.Bottom), radii);
+        return rrect;
+
+        static SKPoint Corner(float r, float inset)
+        {
+            float v = Math.Max(0, r - inset);
+            return new SKPoint(v, v);
+        }
+    }
+
+    private static SKMaskFilter GetBlurFilter(float sigma)
+    {
+        int key = (int)MathF.Round(sigma / BlurStep);
+        var filters = t_blurFilters ??= new Dictionary<int, SKMaskFilter>();
+        if (!filters.TryGetValue(key, out var filter))
+        {
+            if (filters.Count >= MaxBlurFilters)
+            {
+                // Unbounded elevations shouldn't grow native memory without limit; the cache refills quickly.
+                foreach (var f in filters.Values) f.Dispose();
+                filters.Clear();
+            }
+
+            filter = SKMaskFilter.CreateBlur(SKBlurStyle.Normal, Math.Max(BlurStep, key * BlurStep));
+            filters[key] = filter;
+        }
+        return filter;
     }
 
     public void DrawRect(in Rect rect, in Color color)
@@ -102,16 +168,7 @@ public readonly ref struct DrawingContext
         }
         else
         {
-            var rrect = new SKRoundRect();
-            rrect.SetRectRadii(
-                new SKRect(rect.Left, rect.Top, rect.Right, rect.Bottom),
-                [
-                    new SKPoint(radius.TopLeft, radius.TopLeft),
-                    new SKPoint(radius.TopRight, radius.TopRight),
-                    new SKPoint(radius.BottomRight, radius.BottomRight),
-                    new SKPoint(radius.BottomLeft, radius.BottomLeft)
-                ]);
-            Canvas.DrawRoundRect(rrect, paint);
+            Canvas.DrawRoundRect(GetRoundRect(rect, radius, 0f), paint);
         }
     }
 
@@ -130,16 +187,45 @@ public readonly ref struct DrawingContext
         }
         else
         {
-            var rrect = new SKRoundRect();
-            rrect.SetRectRadii(
-                new SKRect(adjustedRect.Left, adjustedRect.Top, adjustedRect.Right, adjustedRect.Bottom),
-                [
-                    new SKPoint(Math.Max(0, radius.TopLeft - inset), Math.Max(0, radius.TopLeft - inset)),
-                    new SKPoint(Math.Max(0, radius.TopRight - inset), Math.Max(0, radius.TopRight - inset)),
-                    new SKPoint(Math.Max(0, radius.BottomRight - inset), Math.Max(0, radius.BottomRight - inset)),
-                    new SKPoint(Math.Max(0, radius.BottomLeft - inset), Math.Max(0, radius.BottomLeft - inset))
-                ]);
-            Canvas.DrawRoundRect(rrect, paint);
+            Canvas.DrawRoundRect(GetRoundRect(adjustedRect, radius, inset), paint);
+        }
+    }
+
+    [ThreadStatic] private static SKRoundRect? t_innerRoundRect;
+
+    /// <summary>
+    /// Fills a border of per-side <paramref name="thickness"/> just inside <paramref name="rect"/>, following
+    /// <paramref name="radius"/> on the outside (the inner corners are reduced by the adjacent thicknesses). Unlike a
+    /// stroked outline, this supports different thicknesses per side.
+    /// </summary>
+    public void DrawBorder(in Rect rect, in CornerRadius radius, in Thickness thickness, in Color color)
+    {
+        if (color.A == 0 || rect.Width <= 0 || rect.Height <= 0) return;
+        if (thickness.Left <= 0 && thickness.Top <= 0 && thickness.Right <= 0 && thickness.Bottom <= 0) return;
+
+        var paint = PaintRegistry.GetFillPaint(ApplyOpacity(color));
+        var outer = GetRoundRect(rect, radius, 0f);
+
+        var innerRect = new SKRect(
+            rect.Left + thickness.Left,
+            rect.Top + thickness.Top,
+            Math.Max(rect.Left + thickness.Left, rect.Right - thickness.Right),
+            Math.Max(rect.Top + thickness.Top, rect.Bottom - thickness.Bottom));
+        var radii = t_radii ??= new SKPoint[4];
+        radii[0] = new SKPoint(Math.Max(0, radius.TopLeft - thickness.Left), Math.Max(0, radius.TopLeft - thickness.Top));
+        radii[1] = new SKPoint(Math.Max(0, radius.TopRight - thickness.Right), Math.Max(0, radius.TopRight - thickness.Top));
+        radii[2] = new SKPoint(Math.Max(0, radius.BottomRight - thickness.Right), Math.Max(0, radius.BottomRight - thickness.Bottom));
+        radii[3] = new SKPoint(Math.Max(0, radius.BottomLeft - thickness.Left), Math.Max(0, radius.BottomLeft - thickness.Bottom));
+        var inner = t_innerRoundRect ??= new SKRoundRect();
+        inner.SetRectRadii(innerRect, radii);
+
+        if (inner.Rect.Width <= 0 || inner.Rect.Height <= 0)
+        {
+            Canvas.DrawRoundRect(outer, paint); // the border fills the whole shape
+        }
+        else
+        {
+            Canvas.DrawRoundRectDifference(outer, inner, paint);
         }
     }
 
@@ -177,7 +263,43 @@ public readonly ref struct DrawingContext
         var tf = PaintRegistry.GetTypeface(fontFamily, bold, italic);
         var font = PaintRegistry.GetFont(fontSize, tf);
         var paint = PaintRegistry.GetFillPaint(ApplyOpacity(color));
-        Canvas.DrawText(text, position.X, position.Y, SKTextAlign.Left, font, paint);
+        DrawTextBlob(text, position.X, position.Y, font, paint);
+    }
+
+    /// <summary>Draws single-line text with its baseline at <paramref name="position"/> in the given weight.</summary>
+    public void DrawText(string text, in Point position, in Color color, float fontSize, string? fontFamily, FontWeight weight, bool italic = false)
+    {
+        if (string.IsNullOrEmpty(text) || color.A == 0 || fontSize <= 0) return;
+        var font = PaintRegistry.GetFont(fontSize, PaintRegistry.GetTypeface(fontFamily, weight, italic));
+        DrawTextBlob(text, position.X, position.Y, font, PaintRegistry.GetFillPaint(ApplyOpacity(color)));
+    }
+
+    /// <summary>
+    /// Draws single-line text in <paramref name="font"/> (for example an icon font) with its baseline at
+    /// (<paramref name="x"/>, <paramref name="y"/>). Unchanged text is shaped once and cached, so it doesn't allocate.
+    /// </summary>
+    public void DrawText(string text, float x, float y, SKFont font, in Color color)
+    {
+        if (string.IsNullOrEmpty(text) || color.A == 0) return;
+        DrawTextBlob(text, x, y, font, PaintRegistry.GetFillPaint(ApplyOpacity(color)));
+    }
+
+    // SKCanvas.DrawText(string) shapes the text into a new native blob per call; the cache shapes each text once.
+    private void DrawTextBlob(string text, float x, float y, SKFont font, SKPaint paint)
+    {
+        var blob = TextBlobCache.Get(text, font);
+        if (blob != null)
+        {
+            Canvas.DrawText(blob, x, y, paint);
+        }
+    }
+
+    /// <summary>Measures single-line text in the given weight: its width and the font's line spacing.</summary>
+    public Size MeasureText(string text, float fontSize, string? fontFamily, FontWeight weight, bool italic = false)
+    {
+        if (string.IsNullOrEmpty(text) || fontSize <= 0) return Size.Zero;
+        var font = PaintRegistry.GetFont(fontSize, PaintRegistry.GetTypeface(fontFamily, weight, italic));
+        return new Size(font.MeasureText(text, out _), font.Spacing);
     }
 
     public Size MeasureText(string text, float fontSize, string? fontFamily = null, bool bold = false, bool italic = false)
@@ -205,36 +327,25 @@ public readonly ref struct DrawingContext
         DrawShadowLayer(rect, radius, keyBlur, 0, keyOffsetY, shadowColor.WithAlpha(keyAlpha));
     }
 
+    // A blurred copy of the shape, offset by (dx, dy). Uses a cached blur mask filter and a reused paint, which is much
+    // cheaper than an image filter (no offscreen layer) and allocates nothing per frame.
     private void DrawShadowLayer(in Rect rect, in CornerRadius radius, float blur, float dx, float dy, in Color color)
     {
         var finalColor = ApplyOpacity(color);
         if (finalColor.A == 0) return;
 
-        var skColor = new SKColor(finalColor.R, finalColor.G, finalColor.B, finalColor.A);
-        using var filter = SKImageFilter.CreateDropShadowOnly(dx, dy, blur, blur, skColor);
-        using var shadowPaint = new SKPaint
-        {
-            IsAntialias = true,
-            ImageFilter = filter,
-            Color = SKColors.Black
-        };
+        var paint = t_shadowPaint ??= new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
+        paint.Color = new SKColor(finalColor.R, finalColor.G, finalColor.B, finalColor.A);
+        paint.MaskFilter = GetBlurFilter(blur);
 
+        var shadowRect = new Rect(rect.X + dx, rect.Y + dy, rect.Width, rect.Height);
         if (radius.IsUniform)
         {
-            Canvas.DrawRoundRect(rect.Left, rect.Top, rect.Width, rect.Height, radius.TopLeft, radius.TopLeft, shadowPaint);
+            Canvas.DrawRoundRect(shadowRect.Left, shadowRect.Top, shadowRect.Width, shadowRect.Height, radius.TopLeft, radius.TopLeft, paint);
         }
         else
         {
-            var rrect = new SKRoundRect();
-            rrect.SetRectRadii(
-                new SKRect(rect.Left, rect.Top, rect.Right, rect.Bottom),
-                [
-                    new SKPoint(radius.TopLeft, radius.TopLeft),
-                    new SKPoint(radius.TopRight, radius.TopRight),
-                    new SKPoint(radius.BottomRight, radius.BottomRight),
-                    new SKPoint(radius.BottomLeft, radius.BottomLeft)
-                ]);
-            Canvas.DrawRoundRect(rrect, shadowPaint);
+            Canvas.DrawRoundRect(GetRoundRect(shadowRect, radius, 0f), paint);
         }
     }
 
@@ -264,7 +375,8 @@ public readonly ref struct DrawingContext
         }
         else
         {
-            using var paint = new SKPaint { Color = new SKColor(255, 255, 255, (byte)(effOpacity * 255)) };
+            var paint = t_imagePaint ??= new SKPaint();
+            paint.Color = new SKColor(255, 255, 255, (byte)(Math.Clamp(effOpacity, 0f, 1f) * 255));
             Canvas.DrawImage(image, skDest, sampling, paint);
         }
     }
