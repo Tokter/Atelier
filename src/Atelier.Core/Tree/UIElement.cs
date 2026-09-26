@@ -145,8 +145,35 @@ public abstract class UIElement : VisualNode
     /// This property is inherited: unless set locally, a descendant takes the value of its nearest ancestor. Disabled
     /// elements are skipped by keyboard focus navigation (<see cref="FocusManager.FocusNext"/>); input is still delivered
     /// to them, and controls check this property themselves before reacting.
+    /// <para>
+    /// An element can additionally disable itself through <see cref="IsEnabledCore"/> (for example a button whose command
+    /// cannot execute); the effective value is then <c>false</c> regardless of the value set here, which comes back once
+    /// <see cref="IsEnabledCore"/> returns <c>true</c> again.
+    /// </para>
     /// </remarks>
     public bool IsEnabled { get => GetValue(IsEnabledProperty); set => SetValue(IsEnabledProperty, value); }
+
+    /// <summary>
+    /// Gets a value indicating whether the element itself allows being enabled. When <c>false</c>, <see cref="IsEnabled"/>
+    /// is forced to <c>false</c> for this element and its descendants. The base implementation returns <c>true</c>.
+    /// </summary>
+    /// <remarks>Call <see cref="UpdateIsEnabledCore"/> whenever the value this returns may have changed.</remarks>
+    protected virtual bool IsEnabledCore => true;
+
+    /// <summary>
+    /// Re-evaluates <see cref="IsEnabledCore"/> and forces or releases <see cref="IsEnabled"/> accordingly.
+    /// </summary>
+    protected void UpdateIsEnabledCore()
+    {
+        if (IsEnabledCore)
+        {
+            ClearCoercedValue(IsEnabledProperty);
+        }
+        else
+        {
+            SetCoercedValue(IsEnabledProperty, false);
+        }
+    }
     /// <summary>
     /// Gets or sets whether the rendering of the element's children is clipped to its bounds (the element's own
     /// background and shadow are not clipped). The default is <c>false</c>. Changing it invalidates rendering.

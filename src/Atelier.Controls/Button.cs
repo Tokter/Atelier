@@ -4,6 +4,7 @@ using Atelier.Core.Animation;
 using Atelier.Core.Events;
 using Atelier.Core.Primitives;
 using Atelier.Core.Properties;
+using Atelier.Core.Threading;
 
 namespace Atelier.Controls;
 
@@ -19,10 +20,10 @@ public enum ButtonVariant
 public class Button : ContentControl
 {
     public static readonly BindableProperty<ICommand?> CommandProperty =
-        BindableProperty.Register<Button, ICommand?>(nameof(Command), null);
+        BindableProperty.Register<Button, ICommand?>(nameof(Command), null, (s, o, n) => ((Button)s).OnCommandChanged(o, n));
 
     public static readonly BindableProperty<object?> CommandParameterProperty =
-        BindableProperty.Register<Button, object?>(nameof(CommandParameter), null);
+        BindableProperty.Register<Button, object?>(nameof(CommandParameter), null, (s, o, n) => ((Button)s).UpdateIsEnabledCore());
 
     public static readonly BindableProperty<ButtonVariant> VariantProperty =
         BindableProperty.Register<Button, ButtonVariant>(
@@ -122,6 +123,76 @@ public class Button : ContentControl
 
         StartAnimation(fadeAnim);
     }
+
+    #region Command state
+
+    // The command the button currently listens to. Only set while the button is displayed, so a long-lived command
+    // never keeps a removed button alive through its CanExecuteChanged event.
+    private ICommand? _observedCommand;
+
+    /// <summary>
+    /// The button is disabled while its <see cref="Command"/> cannot execute with the current <see cref="CommandParameter"/>.
+    /// </summary>
+    protected override bool IsEnabledCore => Command is not { } command || command.CanExecute(CommandParameter);
+
+    private void OnCommandChanged(ICommand? oldCommand, ICommand? newCommand)
+    {
+        if (IsAttachedToVisualTree)
+        {
+            ObserveCommand(newCommand);
+        }
+        UpdateIsEnabledCore();
+    }
+
+    /// <inheritdoc/>
+    protected override void OnAttachedToVisualTree()
+    {
+        ObserveCommand(Command);
+        UpdateIsEnabledCore(); // CanExecute may have changed while the button was not displayed
+        base.OnAttachedToVisualTree();
+    }
+
+    /// <inheritdoc/>
+    protected override void OnDetachedFromVisualTree()
+    {
+        ObserveCommand(null);
+        base.OnDetachedFromVisualTree();
+    }
+
+    private void ObserveCommand(ICommand? command)
+    {
+        if (_observedCommand == command)
+        {
+            return;
+        }
+
+        if (_observedCommand != null)
+        {
+            _observedCommand.CanExecuteChanged -= OnCanExecuteChanged;
+        }
+
+        _observedCommand = command;
+
+        if (_observedCommand != null)
+        {
+            _observedCommand.CanExecuteChanged += OnCanExecuteChanged;
+        }
+    }
+
+    private void OnCanExecuteChanged(object? sender, EventArgs e)
+    {
+        // Commands may raise this from a background thread; property changes must happen on the UI thread.
+        if (Dispatcher.CheckAccess())
+        {
+            UpdateIsEnabledCore();
+        }
+        else
+        {
+            Dispatcher.Post(UpdateIsEnabledCore);
+        }
+    }
+
+    #endregion
 
     public override void OnKeyDown(KeyEventArgs e)
     {

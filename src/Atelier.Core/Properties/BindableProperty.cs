@@ -70,6 +70,12 @@ public enum ValueSource
 
     /// <summary>A value supplied by a running animation or transition.</summary>
     Animation = 4,
+
+    /// <summary>
+    /// A value forced by the object itself, overriding local and styled values (for example a button that is disabled
+    /// because its command cannot execute). The underlying value returns when the object stops forcing it.
+    /// </summary>
+    Coerced = 5,
 }
 
 /// <summary>

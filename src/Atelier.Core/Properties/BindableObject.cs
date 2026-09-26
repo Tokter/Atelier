@@ -45,6 +45,7 @@ public class BindableObject : INotifyPropertyChanged
 
     // Allocated on first use: most objects are never animated or observed per property.
     private Dictionary<int, object?>? _animatedValues;
+    private Dictionary<int, object?>? _coercedValues;
     private Dictionary<int, PropertySubscription[]>? _subscriptions;
 
     // Uncoerced values, kept only for entries where coercion changed the value, so CoerceValue() can re-evaluate them.
@@ -156,6 +157,7 @@ public class BindableObject : INotifyPropertyChanged
     public ValueSource GetValueSource(BindableProperty property)
     {
         if (_animatedValues != null && _animatedValues.ContainsKey(property.Id)) return ValueSource.Animation;
+        if (_coercedValues != null && _coercedValues.ContainsKey(property.Id)) return ValueSource.Coerced;
         if (_localValues.ContainsKey(property.Id)) return ValueSource.Local;
         if (_styleValues.ContainsKey(property.Id)) return ValueSource.Style;
         if (property.Inherits && TryGetInheritedStored(property, out _)) return ValueSource.Inherited;
@@ -514,6 +516,57 @@ public class BindableObject : INotifyPropertyChanged
 
         var change = BeginChange(property, captureDescendants: true);
         _animatedValues.Remove(property.Id);
+        EndChange(property, change);
+    }
+
+    /// <summary>
+    /// Forces the effective value of <paramref name="property"/> on this object, overriding local and styled values
+    /// (animations still take precedence) without replacing them. Descendants inherit the forced value.
+    /// </summary>
+    /// <remarks>
+    /// Use this for state the object itself imposes, such as a button disabling itself while its command cannot execute.
+    /// Call <see cref="ClearCoercedValue(BindableProperty)"/> to restore the underlying value.
+    /// <see cref="GetValueSource(BindableProperty)"/> reports <see cref="ValueSource.Coerced"/> while it is set.
+    /// </remarks>
+    /// <typeparam name="T">The type of the property value.</typeparam>
+    /// <param name="property">The property to force.</param>
+    /// <param name="value">The forced value.</param>
+    protected void SetCoercedValue<T>(BindableProperty<T> property, T value)
+    {
+        property.ValidateTyped(value);
+
+        if (HasEqualValue(_coercedValues, property.Id, value))
+        {
+            return;
+        }
+
+        if (CanUseTypedPath(property))
+        {
+            T oldValue = GetValue(property);
+            StoreTyped(_coercedValues ??= new(), property.Id, value);
+            RaiseIfChanged(property, oldValue);
+            return;
+        }
+
+        var change = BeginChange(property, captureDescendants: true);
+        (_coercedValues ??= new())[property.Id] = value;
+        EndChange(property, change);
+    }
+
+    /// <summary>
+    /// Stops forcing the value of <paramref name="property"/> (see <see cref="SetCoercedValue{T}"/>), so the effective
+    /// value falls back to the local, styled, inherited or default value.
+    /// </summary>
+    /// <param name="property">The property to release.</param>
+    protected void ClearCoercedValue(BindableProperty property)
+    {
+        if (_coercedValues == null || !_coercedValues.ContainsKey(property.Id))
+        {
+            return;
+        }
+
+        var change = BeginChange(property, captureDescendants: true);
+        _coercedValues.Remove(property.Id);
         EndChange(property, change);
     }
 
@@ -915,12 +968,15 @@ public class BindableObject : INotifyPropertyChanged
     private bool TryGetOwnStored(int id, out object? value)
     {
         return (_animatedValues != null && _animatedValues.TryGetValue(id, out value))
+            || (_coercedValues != null && _coercedValues.TryGetValue(id, out value))
             || _localValues.TryGetValue(id, out value)
             || _styleValues.TryGetValue(id, out value);
     }
 
     private bool HasOwnValue(int id) =>
-        (_animatedValues != null && _animatedValues.ContainsKey(id)) || _localValues.ContainsKey(id) || _styleValues.ContainsKey(id);
+        (_animatedValues != null && _animatedValues.ContainsKey(id))
+        || (_coercedValues != null && _coercedValues.ContainsKey(id))
+        || _localValues.ContainsKey(id) || _styleValues.ContainsKey(id);
 
     private bool HasOwnValueForAny(BindableProperty[] properties)
     {
