@@ -456,15 +456,24 @@ public abstract class UIElement : VisualNode
     /// <see cref="OnLostFocus"/>.
     /// </summary>
     public bool IsFocused { get => GetValue(IsFocusedProperty); internal set => SetValue(IsFocusedPropertyKey, value); }
+    /// <summary>Identifies the <see cref="IsFocusable"/> bindable property.</summary>
+    public static readonly BindableProperty<bool> IsFocusableProperty =
+        BindableProperty.Register<UIElement, bool>(nameof(IsFocusable), false);
+
+    /// <summary>Identifies the <see cref="IsHitTestVisible"/> bindable property.</summary>
+    public static readonly BindableProperty<bool> IsHitTestVisibleProperty =
+        BindableProperty.Register<UIElement, bool>(nameof(IsHitTestVisible), true);
+
     /// <summary>
     /// Gets or sets whether the element can receive keyboard focus. The default is <c>false</c>; focusing a
     /// non-focusable element moves focus to its nearest focusable ancestor.
     /// </summary>
-    public bool IsFocusable { get; set; } = false;
+    public bool IsFocusable { get => GetValue(IsFocusableProperty); set => SetValue(IsFocusableProperty, value); }
+
     /// <summary>
     /// Gets or sets whether <see cref="HitTest"/> can return this element or any of its descendants. The default is <c>true</c>.
     /// </summary>
-    public bool IsHitTestVisible { get; set; } = true;
+    public bool IsHitTestVisible { get => GetValue(IsHitTestVisibleProperty); set => SetValue(IsHitTestVisibleProperty, value); }
     /// <summary>
     /// Gets a value indicating whether this element is an overlay (such as a popup) that is positioned in window
     /// coordinates at <see cref="OverlayOrigin"/> rather than within its parent.
@@ -556,7 +565,8 @@ public abstract class UIElement : VisualNode
     /// <remarks>This implementation also invalidates measure.</remarks>
     protected override void OnTransformChanged(Matrix3x2 oldValue, Matrix3x2 newValue)
     {
-        base.OnTransformChanged(oldValue, newValue);
+        // Not calling base: InvalidateMeasure already notifies layout, so base's InvalidateLayout would walk the tree twice.
+        InvalidateVisual();
         InvalidateMeasure();
     }
 
@@ -564,7 +574,8 @@ public abstract class UIElement : VisualNode
     /// <remarks>This implementation also invalidates measure.</remarks>
     protected override void OnTransformOriginChanged(Point oldValue, Point newValue)
     {
-        base.OnTransformOriginChanged(oldValue, newValue);
+        // Not calling base: see OnTransformChanged.
+        InvalidateVisual();
         InvalidateMeasure();
     }
 

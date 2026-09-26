@@ -15,7 +15,8 @@ public sealed class PropertyKeybindingCommand<TTarget> : ICommand where TTarget 
 
     /// <inheritdoc/>
     /// <remarks>
-    /// Raised only by <see cref="RaiseCanExecuteChanged"/>; changes reported by the target's own command are not forwarded.
+    /// Raised only by <see cref="RaiseCanExecuteChanged"/>; changes reported by the target's own command are not forwarded,
+    /// because the inner command depends on the target passed at execution time, so there is no single command to observe.
     /// </remarks>
     public event EventHandler? CanExecuteChanged;
 

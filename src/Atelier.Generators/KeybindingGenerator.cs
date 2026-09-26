@@ -10,6 +10,10 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace Atelier.Generators;
 
+/// <summary>
+/// Discovers <c>[Keybinding]</c> command classes and <c>[KeybindingProperty]</c> command properties at compile time and
+/// generates keybinding name constants and a <c>RegisterKeybindings()</c> method, without runtime reflection.
+/// </summary>
 [Generator(LanguageNames.CSharp)]
 public class KeybindingGenerator : IIncrementalGenerator
 {
@@ -39,6 +43,7 @@ public class KeybindingGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var classKeybindings = context.SyntaxProvider.ForAttributeWithMetadataName(

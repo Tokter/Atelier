@@ -65,3 +65,20 @@ public class LayoutRoundingTests
         Assert.True(child.UseLayoutRounding);
     }
 }
+
+public class StyleableInputFlagsTests
+{
+    [Fact]
+    public void IsHitTestVisibleAndIsFocusable_CanBeSetByStyle()
+    {
+        var element = new FractionalElement(10, 10);
+        element.Style = new Atelier.Core.Styling.Style(typeof(FractionalElement))
+            .Set(UIElement.IsHitTestVisibleProperty, false)
+            .Set(UIElement.IsFocusableProperty, true);
+        element.Measure(new Size(10, 10));
+        element.Arrange(new Rect(0, 0, 10, 10));
+
+        Assert.Null(element.HitTest(new Point(5, 5)));
+        Assert.True(element.IsFocusable);
+    }
+}

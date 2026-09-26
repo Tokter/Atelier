@@ -10,6 +10,10 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace Atelier.Generators;
 
+/// <summary>
+/// Generates reflection-free property descriptors (<c>IInspectableObject.GetProperties</c>) for types marked with
+/// <c>[Inspectable]</c>, for use by the PropertyGrid and other inspector tools.
+/// </summary>
 [Generator(LanguageNames.CSharp)]
 public class InspectableGenerator : IIncrementalGenerator
 {
@@ -25,6 +29,7 @@ public class InspectableGenerator : IIncrementalGenerator
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var inspectableTypes = context.SyntaxProvider.ForAttributeWithMetadataName(
