@@ -9,8 +9,12 @@ namespace Atelier.Controls;
 /// A top app bar / toolbar container control adhering to Material Design specifications.
 /// Supports native elevation drop shadows, customizable backgrounds, borders, and content hosting.
 /// </summary>
+/// <remarks>
+/// The content is placed inside <see cref="BorderThickness"/> plus <see cref="Control.Padding"/> (default 10×8).
+/// </remarks>
 public class Toolbar : ContentControl
 {
+    /// <summary>Identifies the <see cref="Elevation"/> property.</summary>
     public static readonly BindableProperty<float> ElevationProperty =
         BindableProperty.Register<Toolbar, float>(
             nameof(Elevation),
@@ -18,6 +22,7 @@ public class Toolbar : ContentControl
             options: PropertyOptions.AffectsRender
         );
 
+    /// <summary>Identifies the <see cref="BorderBrush"/> property.</summary>
     public static readonly BindableProperty<Color> BorderBrushProperty =
         BindableProperty.Register<Toolbar, Color>(
             nameof(BorderBrush),
@@ -25,6 +30,7 @@ public class Toolbar : ContentControl
             options: PropertyOptions.AffectsRender
         );
 
+    /// <summary>Identifies the <see cref="BorderThickness"/> property.</summary>
     public static readonly BindableProperty<Thickness> BorderThicknessProperty =
         BindableProperty.Register<Toolbar, Thickness>(
             nameof(BorderThickness),
@@ -33,7 +39,7 @@ public class Toolbar : ContentControl
         );
 
     /// <summary>
-    /// Gets or sets the Material Design elevation level (casting ambient and key drop shadows).
+    /// Gets or sets the Material Design elevation level (casting ambient and key drop shadows). The default is 2.
     /// </summary>
     public float Elevation
     {
@@ -42,7 +48,7 @@ public class Toolbar : ContentControl
     }
 
     /// <summary>
-    /// Gets or sets the border brush for the toolbar outline or bottom divider.
+    /// Gets or sets the border brush for the toolbar outline or bottom divider. The default is transparent.
     /// </summary>
     public Color BorderBrush
     {
@@ -51,7 +57,7 @@ public class Toolbar : ContentControl
     }
 
     /// <summary>
-    /// Gets or sets the border thickness for the toolbar outline or bottom divider.
+    /// Gets or sets the border thickness for the toolbar outline or bottom divider. The default is 0.
     /// </summary>
     public Thickness BorderThickness
     {
@@ -64,61 +70,48 @@ public class Toolbar : ContentControl
         PaddingProperty.OverrideDefaultValue<Toolbar>(new Thickness(10, 8));
     }
 
+    /// <summary>Initializes a new, empty toolbar.</summary>
     public Toolbar()
     {
     }
 
+    /// <summary>Initializes a new toolbar displaying <paramref name="content"/>.</summary>
     public Toolbar(object? content) : this()
     {
         Content = content;
     }
 
-    protected override Size MeasureOverride(Size availableSize)
+    // The border and the padding together.
+    private Thickness GetContentInset()
     {
-        var totalPadding = new Thickness(
-            BorderThickness.Left + Padding.Left,
-            BorderThickness.Top + Padding.Top,
-            BorderThickness.Right + Padding.Right,
-            BorderThickness.Bottom + Padding.Bottom
-        );
-
-        if (CurrentView != null)
-        {
-            if (CurrentView.Visibility == Visibility.Collapsed)
-            {
-                CurrentView.Measure(availableSize.Deflate(totalPadding));
-            }
-            else
-            {
-                CurrentView.Measure(availableSize.Deflate(totalPadding));
-                return CurrentView.DesiredSize.Inflate(totalPadding.Horizontal, totalPadding.Vertical);
-            }
-        }
-
-        return new Size(totalPadding.Horizontal, totalPadding.Vertical);
+        var border = BorderThickness;
+        var padding = Padding;
+        return new Thickness(
+            border.Left + padding.Left,
+            border.Top + padding.Top,
+            border.Right + padding.Right,
+            border.Bottom + padding.Bottom);
     }
 
-    protected override Size ArrangeOverride(Size finalSize)
+    /// <inheritdoc/>
+    protected override Size MeasureOverride(Size availableSize)
     {
-        var totalPadding = new Thickness(
-            BorderThickness.Left + Padding.Left,
-            BorderThickness.Top + Padding.Top,
-            BorderThickness.Right + Padding.Right,
-            BorderThickness.Bottom + Padding.Bottom
-        );
+        var inset = GetContentInset();
 
-        if (CurrentView != null)
+        // A collapsed view measures to zero, so it needs no special case.
+        if (CurrentView is { } view)
         {
-            if (CurrentView.Visibility == Visibility.Collapsed)
-            {
-                CurrentView.Arrange(Rect.Zero);
-            }
-            else
-            {
-                CurrentView.Arrange(new Rect(Point.Zero, finalSize).Deflate(totalPadding));
-            }
+            view.Measure(availableSize.Deflate(inset));
+            return view.DesiredSize.Inflate(inset.Horizontal, inset.Vertical);
         }
 
+        return new Size(inset.Horizontal, inset.Vertical);
+    }
+
+    /// <inheritdoc/>
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        CurrentView?.Arrange(new Rect(Point.Zero, finalSize).Deflate(GetContentInset()));
         return finalSize;
     }
 }

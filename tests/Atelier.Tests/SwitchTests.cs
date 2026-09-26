@@ -99,11 +99,15 @@ public class SwitchTests
     {
         var sw = new Switch();
 
-        // Space
+        // Space toggles on release, like WPF
         var spaceArgs = new KeyEventArgs(Key.Space, 0, ModifierKeys.None, true);
         sw.OnKeyDown(spaceArgs);
-        Assert.True(sw.IsChecked);
+        Assert.False(sw.IsChecked);
         Assert.True(spaceArgs.Handled);
+        var spaceUpArgs = new KeyEventArgs(Key.Space, 0, ModifierKeys.None, false);
+        sw.OnKeyUp(spaceUpArgs);
+        Assert.True(sw.IsChecked);
+        Assert.True(spaceUpArgs.Handled);
 
         // Enter
         var enterArgs = new KeyEventArgs(Key.Enter, 0, ModifierKeys.None, true);

@@ -13,6 +13,17 @@ public interface IHostWindow
     /// <summary>Gets whether the window is maximized.</summary>
     bool IsMaximized { get; }
 
+    /// <summary>
+    /// Occurs on the UI thread after the window is maximized, minimized or restored, however that happened (title bar
+    /// buttons, keyboard shortcuts, snapping).
+    /// </summary>
+    /// <remarks>The default implementation never raises the event; windows that can change state should implement it.</remarks>
+    event EventHandler? WindowStateChanged
+    {
+        add { }
+        remove { }
+    }
+
     /// <summary>Minimizes the window.</summary>
     void Minimize();
 

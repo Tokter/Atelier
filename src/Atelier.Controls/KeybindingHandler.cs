@@ -51,9 +51,12 @@ public class KeybindingHandler : ContentControl
 
     /// <summary>
     /// Gets the strokes of a chord that has been started but not completed (e.g. <c>"Ctrl+K"</c>), or <c>null</c>.
-    /// Useful for showing a "waiting for second key" hint.
+    /// Useful for showing a "waiting for second key" hint. Becomes <c>null</c> once <see cref="ChordTimeout"/> has passed.
     /// </summary>
-    public string? PendingChord => _pendingStrokes.Count == 0 ? null : KeybindingGesture.FormatSequence(_pendingStrokes);
+    public string? PendingChord =>
+        _pendingStrokes.Count == 0 || IsChordExpired(Environment.TickCount64) ? null : KeybindingGesture.FormatSequence(_pendingStrokes);
+
+    private bool IsChordExpired(long nowMs) => nowMs - _pendingSinceMs > (long)ChordTimeout.TotalMilliseconds;
 
     /// <summary>Initializes a new handler without a group.</summary>
     public KeybindingHandler()
@@ -79,7 +82,7 @@ public class KeybindingHandler : ContentControl
             return;
 
         long now = Environment.TickCount64;
-        if (_pendingStrokes.Count > 0 && now - _pendingSinceMs > (long)ChordTimeout.TotalMilliseconds)
+        if (_pendingStrokes.Count > 0 && IsChordExpired(now))
         {
             _pendingStrokes.Clear();
         }
