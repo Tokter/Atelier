@@ -711,6 +711,150 @@ public abstract class UIElement : VisualNode
         }
     }
 
+    #region Tunneling + bubbling dispatch
+
+    // The elements on an event's route and their local pointer positions, bottom-up. Reused per thread; a dispatch that
+    // starts while another is running (a handler raising an event) gets its own buffer.
+    private sealed class EventRoute
+    {
+        public readonly List<UIElement> Elements = new();
+        public readonly List<Point> Positions = new();
+
+        public int Count => Elements.Count;
+
+        public void Add(UIElement element, Point position)
+        {
+            Elements.Add(element);
+            Positions.Add(position);
+        }
+
+        public void Clear()
+        {
+            Elements.Clear();
+            Positions.Clear();
+        }
+    }
+
+    [ThreadStatic] private static EventRoute? t_eventRoute;
+
+    private static EventRoute RentRoute()
+    {
+        var route = t_eventRoute ?? new EventRoute();
+        t_eventRoute = null;
+        return route;
+    }
+
+    private static void ReturnRoute(EventRoute route)
+    {
+        route.Clear();
+        t_eventRoute = route;
+    }
+
+    /// <summary>
+    /// Raises a pointer event in two phases: first the preview (tunneling) phase from the outermost element down to this one,
+    /// then the bubbling phase from this element up. The route ends at the root or at an overlay element (such as a popup).
+    /// </summary>
+    /// <remarks>
+    /// Setting <see cref="RoutedEventArgs.Handled"/> in either phase stops the event, so a parent's preview handler can
+    /// intercept input before its children see it. As with <see cref="DispatchBubblePointerEvent{T}"/>, the same
+    /// <paramref name="e"/> instance is passed to every handler with <see cref="PointerEventArgs.Position"/> set to the
+    /// receiving element's local coordinates. The route is computed once and dispatch does not allocate.
+    /// </remarks>
+    /// <typeparam name="T">The pointer event args type.</typeparam>
+    /// <param name="e">The event args, with <see cref="PointerEventArgs.ScreenPosition"/> in window coordinates.</param>
+    /// <param name="preview">Invokes the preview handler, e.g. <c>(el, args) =&gt; el.OnPreviewPointerPressed(args)</c>.</param>
+    /// <param name="bubble">Invokes the bubbling handler, e.g. <c>(el, args) =&gt; el.OnPointerPressed(args)</c>.</param>
+    public void DispatchPointerEvent<T>(T e, Action<UIElement, T> preview, Action<UIElement, T> bubble) where T : PointerEventArgs
+    {
+        e.Source ??= this;
+        e.OriginalSource ??= this;
+
+        var route = RentRoute();
+        try
+        {
+            Point localPos = PointToClient(e.ScreenPosition);
+            UIElement current = this;
+            while (true)
+            {
+                route.Add(current, localPos);
+                if (current.IsOverlayElement || current.Parent is not UIElement parent)
+                {
+                    break;
+                }
+
+                var v = Vector2.Transform(new Vector2(localPos.X, localPos.Y), current.GetLocalTransform());
+                localPos = new Point(v.X, v.Y);
+                current = parent;
+            }
+
+            for (int i = route.Count - 1; i >= 0; i--)
+            {
+                e.Position = route.Positions[i];
+                preview(route.Elements[i], e);
+                if (e.Handled) return;
+            }
+
+            for (int i = 0; i < route.Count; i++)
+            {
+                e.Position = route.Positions[i];
+                bubble(route.Elements[i], e);
+                if (e.Handled) return;
+            }
+        }
+        finally
+        {
+            ReturnRoute(route);
+        }
+    }
+
+    /// <summary>
+    /// Raises a keyboard or text event in two phases: the preview (tunneling) phase from the outermost element down to this
+    /// one, then the bubbling phase back up. The route ends at the root, the active modal scope, or an overlay element.
+    /// </summary>
+    /// <remarks>Setting <see cref="RoutedEventArgs.Handled"/> in either phase stops the event. Dispatch does not allocate.</remarks>
+    /// <typeparam name="T">The event args type.</typeparam>
+    /// <param name="e">The event args.</param>
+    /// <param name="preview">Invokes the preview handler, e.g. <c>(el, args) =&gt; el.OnPreviewKeyDown(args)</c>.</param>
+    /// <param name="bubble">Invokes the bubbling handler, e.g. <c>(el, args) =&gt; el.OnKeyDown(args)</c>.</param>
+    public void DispatchKeyEvent<T>(T e, Action<UIElement, T> preview, Action<UIElement, T> bubble) where T : RoutedEventArgs
+    {
+        e.Source ??= this;
+        e.OriginalSource ??= this;
+
+        var route = RentRoute();
+        try
+        {
+            UIElement? current = this;
+            while (current != null)
+            {
+                route.Add(current, Point.Zero);
+                if (current == FocusManager.CurrentModal || current.IsOverlayElement)
+                {
+                    break;
+                }
+                current = current.Parent as UIElement;
+            }
+
+            for (int i = route.Count - 1; i >= 0; i--)
+            {
+                preview(route.Elements[i], e);
+                if (e.Handled) return;
+            }
+
+            for (int i = 0; i < route.Count; i++)
+            {
+                bubble(route.Elements[i], e);
+                if (e.Handled) return;
+            }
+        }
+        finally
+        {
+            ReturnRoute(route);
+        }
+    }
+
+    #endregion
+
     private Size _previousAvailableSize = Size.Zero;
     private Rect _previousFinalRect = Rect.Zero;
     private Size _untransformedDesiredSize = Size.Zero;
@@ -1130,6 +1274,39 @@ public abstract class UIElement : VisualNode
     }
 
     #region Input Event Handlers (Virtual Hooks)
+
+    // Preview (tunneling) events run from the outermost element down to the target before the bubbling events run back up;
+    // see DispatchPointerEvent and DispatchKeyEvent. Marking one handled stops the event before children see it.
+
+    /// <summary>Occurs, outermost element first, before <see cref="PointerPressed"/> bubbles.</summary>
+    public event EventHandler<PointerEventArgs>? PreviewPointerPressed;
+    /// <summary>Occurs, outermost element first, before <see cref="PointerReleased"/> bubbles.</summary>
+    public event EventHandler<PointerEventArgs>? PreviewPointerReleased;
+    /// <summary>Occurs, outermost element first, before <see cref="PointerMoved"/> bubbles.</summary>
+    public event EventHandler<PointerEventArgs>? PreviewPointerMoved;
+    /// <summary>Occurs, outermost element first, before <see cref="PointerWheel"/> bubbles.</summary>
+    public event EventHandler<PointerWheelEventArgs>? PreviewPointerWheel;
+    /// <summary>Occurs, outermost element first, before <see cref="KeyDown"/> bubbles.</summary>
+    public event EventHandler<KeyEventArgs>? PreviewKeyDown;
+    /// <summary>Occurs, outermost element first, before <see cref="KeyUp"/> bubbles.</summary>
+    public event EventHandler<KeyEventArgs>? PreviewKeyUp;
+    /// <summary>Occurs, outermost element first, before <see cref="TextInput"/> bubbles.</summary>
+    public event EventHandler<TextInputEventArgs>? PreviewTextInput;
+
+    /// <summary>Handles the preview (tunneling) phase of a pointer press. The base implementation raises <see cref="PreviewPointerPressed"/>.</summary>
+    public virtual void OnPreviewPointerPressed(PointerEventArgs e) => PreviewPointerPressed?.Invoke(this, e);
+    /// <summary>Handles the preview (tunneling) phase of a pointer release. The base implementation raises <see cref="PreviewPointerReleased"/>.</summary>
+    public virtual void OnPreviewPointerReleased(PointerEventArgs e) => PreviewPointerReleased?.Invoke(this, e);
+    /// <summary>Handles the preview (tunneling) phase of a pointer move. The base implementation raises <see cref="PreviewPointerMoved"/>.</summary>
+    public virtual void OnPreviewPointerMoved(PointerEventArgs e) => PreviewPointerMoved?.Invoke(this, e);
+    /// <summary>Handles the preview (tunneling) phase of a wheel event. The base implementation raises <see cref="PreviewPointerWheel"/>.</summary>
+    public virtual void OnPreviewPointerWheel(PointerWheelEventArgs e) => PreviewPointerWheel?.Invoke(this, e);
+    /// <summary>Handles the preview (tunneling) phase of a key press. The base implementation raises <see cref="PreviewKeyDown"/>.</summary>
+    public virtual void OnPreviewKeyDown(KeyEventArgs e) => PreviewKeyDown?.Invoke(this, e);
+    /// <summary>Handles the preview (tunneling) phase of a key release. The base implementation raises <see cref="PreviewKeyUp"/>.</summary>
+    public virtual void OnPreviewKeyUp(KeyEventArgs e) => PreviewKeyUp?.Invoke(this, e);
+    /// <summary>Handles the preview (tunneling) phase of text input. The base implementation raises <see cref="PreviewTextInput"/>.</summary>
+    public virtual void OnPreviewTextInput(TextInputEventArgs e) => PreviewTextInput?.Invoke(this, e);
 
     /// <summary>Occurs when the pointer enters the element; raised by <see cref="OnPointerEntered"/>.</summary>
     public event EventHandler<PointerEventArgs>? PointerEntered;

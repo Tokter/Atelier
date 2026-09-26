@@ -78,7 +78,7 @@ public static class PopupManager
         if (hit != null)
         {
             var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64, modifiers, clickCount);
-            hit.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerPressed(localE));
+            hit.DispatchPointerEvent(e, static (el, a) => el.OnPreviewPointerPressed(a), static (el, a) => el.OnPointerPressed(a));
             return true;
         }
 
@@ -129,7 +129,7 @@ public static class PopupManager
             {
                 var captured = UIElement.CapturedElement;
                 var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64, modifiers, clickCount);
-                captured.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerReleased(localE));
+                captured.DispatchPointerEvent(e, static (el, a) => el.OnPreviewPointerReleased(a), static (el, a) => el.OnPointerReleased(a));
                 captured.ReleasePointerCapture();
                 return true;
             }
@@ -141,7 +141,7 @@ public static class PopupManager
         if (hit != null)
         {
             var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64, modifiers, clickCount);
-            hit.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerReleased(localE));
+            hit.DispatchPointerEvent(e, static (el, a) => el.OnPreviewPointerReleased(a), static (el, a) => el.OnPointerReleased(a));
             return true;
         }
 
@@ -176,7 +176,7 @@ public static class PopupManager
         if (hit != null)
         {
             var moveE = new PointerEventArgs(screenPoint, screenPoint, modifiers: modifiers);
-            hit.DispatchBubblePointerEvent(moveE, (el, localE) => el.OnPointerMoved(localE));
+            hit.DispatchPointerEvent(moveE, static (el, a) => el.OnPreviewPointerMoved(a), static (el, a) => el.OnPointerMoved(a));
             return true;
         }
 
@@ -194,7 +194,7 @@ public static class PopupManager
         if (hit != null)
         {
             var wheelE = new PointerWheelEventArgs(screenPoint, screenPoint, scrollX, scrollY, (ulong)Environment.TickCount64, modifiers);
-            hit.DispatchBubblePointerEvent(wheelE, (el, localE) => el.OnPointerWheel(localE));
+            hit.DispatchPointerEvent(wheelE, static (el, a) => el.OnPreviewPointerWheel(a), static (el, a) => el.OnPointerWheel(a));
             return true;
         }
 

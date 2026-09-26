@@ -7,9 +7,10 @@ namespace Atelier.Core.Events;
 /// Describes how a <see cref="RoutedEvent"/> travels through the element tree.
 /// </summary>
 /// <remarks>
-/// This value is descriptive metadata only. The current dispatch code
-/// (<see cref="Tree.UIElement.DispatchBubblePointerEvent{T}(T, Action{Tree.UIElement, T})"/> and
-/// <see cref="Tree.UIElement.DispatchBubbleKeyEvent{T}(T, Action{Tree.UIElement, T})"/>) always bubbles and does not read it.
+/// This value is descriptive metadata; the dispatch code does not read it. Built-in input follows fixed routes:
+/// pointer enter/exit are direct, and press, release, move, wheel, key and text events tunnel through the <c>Preview*</c>
+/// handlers and then bubble (see <see cref="Tree.UIElement.DispatchPointerEvent{T}(T, Action{Tree.UIElement, T}, Action{Tree.UIElement, T})"/>
+/// and <see cref="Tree.UIElement.DispatchKeyEvent{T}(T, Action{Tree.UIElement, T}, Action{Tree.UIElement, T})"/>).
 /// </remarks>
 public enum RoutingStrategy
 {
@@ -17,7 +18,7 @@ public enum RoutingStrategy
     Direct,
     /// <summary>The event is raised on the source element and then on each ancestor.</summary>
     Bubble,
-    /// <summary>The event is raised from the root down to the source element. Not implemented by the dispatch code yet.</summary>
+    /// <summary>The event is raised from the root down to the source element.</summary>
     Tunnel
 }
 
@@ -25,8 +26,7 @@ public enum RoutingStrategy
 /// Identifies a routed event by name, handler type and <see cref="RoutingStrategy"/>.
 /// </summary>
 /// <remarks>
-/// Not used by the dispatch code yet; events are dispatched by bubbling regardless of any <see cref="RoutedEvent"/>
-/// attached to the event args.
+/// Descriptive metadata for custom events; the built-in dispatch methods do not read it (see <see cref="RoutingStrategy"/>).
 /// </remarks>
 /// <param name="name">The event name.</param>
 /// <param name="handlerType">The delegate type of the event handlers.</param>

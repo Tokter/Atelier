@@ -166,7 +166,7 @@ public static class FocusManager
         var target = GetEffectiveKeyTarget(fallbackRoot);
         if (target != null)
         {
-            target.DispatchBubbleKeyEvent(e, static (el, args) => el.OnKeyDown(args));
+            target.DispatchKeyEvent(e, static (el, args) => el.OnPreviewKeyDown(args), static (el, args) => el.OnKeyDown(args));
             return e.Handled;
         }
         return false;
@@ -182,7 +182,7 @@ public static class FocusManager
         var target = GetEffectiveKeyTarget(fallbackRoot);
         if (target != null)
         {
-            target.DispatchBubbleKeyEvent(e, static (el, args) => el.OnKeyUp(args));
+            target.DispatchKeyEvent(e, static (el, args) => el.OnPreviewKeyUp(args), static (el, args) => el.OnKeyUp(args));
             return e.Handled;
         }
         return false;
@@ -198,7 +198,7 @@ public static class FocusManager
         var target = GetEffectiveKeyTarget(fallbackRoot);
         if (target != null)
         {
-            target.DispatchBubbleKeyEvent(e, static (el, args) => el.OnTextInput(args));
+            target.DispatchKeyEvent(e, static (el, args) => el.OnPreviewTextInput(args), static (el, args) => el.OnTextInput(args));
             return e.Handled;
         }
         return false;

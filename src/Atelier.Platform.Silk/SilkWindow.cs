@@ -962,7 +962,7 @@ public class SilkWindow : IDisposable
             hit.Focus();
 
             var e = new PointerEventArgs(screenPos, screenPos, btn, (ulong)Environment.TickCount64, modifiers, clickCount);
-            hit.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerPressed(localE));
+            hit.DispatchPointerEvent(e, static (el, a) => el.OnPreviewPointerPressed(a), static (el, a) => el.OnPointerPressed(a));
             _pressedElement = hit;
         }
         else
@@ -1000,7 +1000,7 @@ public class SilkWindow : IDisposable
         if (target != null)
         {
             var e = new PointerEventArgs(screenPos, screenPos, btn, (ulong)Environment.TickCount64, modifiers, clickCount);
-            target.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerReleased(localE));
+            target.DispatchPointerEvent(e, static (el, a) => el.OnPreviewPointerReleased(a), static (el, a) => el.OnPointerReleased(a));
         }
 
         if (button == MouseButton.Left && UIElement.CapturedElement != null)
@@ -1038,7 +1038,7 @@ public class SilkWindow : IDisposable
         if (UIElement.CapturedElement != null)
         {
             var moveE = new PointerEventArgs(screenPos, screenPos, modifiers: modifiers);
-            UIElement.CapturedElement.DispatchBubblePointerEvent(moveE, (el, localE) => el.OnPointerMoved(localE));
+            UIElement.CapturedElement.DispatchPointerEvent(moveE, static (el, a) => el.OnPreviewPointerMoved(a), static (el, a) => el.OnPointerMoved(a));
             return;
         }
 
@@ -1081,7 +1081,7 @@ public class SilkWindow : IDisposable
         if (hit != null)
         {
             var moveE = new PointerEventArgs(screenPos, screenPos, modifiers: modifiers);
-            hit.DispatchBubblePointerEvent(moveE, (el, localE) => el.OnPointerMoved(localE));
+            hit.DispatchPointerEvent(moveE, static (el, a) => el.OnPreviewPointerMoved(a), static (el, a) => el.OnPointerMoved(a));
         }
     }
 
@@ -1102,7 +1102,7 @@ public class SilkWindow : IDisposable
         if (target != null)
         {
             var wheelE = new PointerWheelEventArgs(screenPos, screenPos, scroll.X, scroll.Y, (ulong)Environment.TickCount64, scrollModifiers);
-            target.DispatchBubblePointerEvent(wheelE, (el, localE) => el.OnPointerWheel(localE));
+            target.DispatchPointerEvent(wheelE, static (el, a) => el.OnPreviewPointerWheel(a), static (el, a) => el.OnPointerWheel(a));
         }
     }
 
