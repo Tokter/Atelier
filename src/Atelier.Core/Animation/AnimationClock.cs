@@ -138,6 +138,19 @@ public class FloatAnimation : IAnimation
         _onCompleted = onCompleted;
     }
 
+    /// <summary>
+    /// Stops the animation where it is, without calling the update or completion callbacks again. The clock drops it
+    /// on its next update.
+    /// </summary>
+    /// <remarks>
+    /// Use this when a newer animation takes over the same value (for example a control toggled again before its
+    /// previous animation finished), so the two don't alternately write it.
+    /// </remarks>
+    public void Stop()
+    {
+        IsRunning = false;
+    }
+
     /// <inheritdoc/>
     /// <remarks>
     /// Calls the update callback with the eased value. On the update that reaches the duration, the animation stops,

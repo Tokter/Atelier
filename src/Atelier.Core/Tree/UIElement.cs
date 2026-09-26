@@ -538,11 +538,7 @@ public abstract class UIElement : VisualNode
     /// <returns>Always <c>true</c>.</returns>
     public bool CapturePointer()
     {
-        if (CapturedElement != this)
-        {
-            CapturedElement = this;
-            PointerCaptureChanged?.Invoke(this);
-        }
+        SetCapturedElement(this);
         return true;
     }
 
@@ -553,21 +549,42 @@ public abstract class UIElement : VisualNode
     {
         if (CapturedElement == this)
         {
-            CapturedElement = null;
-            PointerCaptureChanged?.Invoke(null);
+            SetCapturedElement(null);
         }
     }
 
     /// <summary>
     /// Releases pointer capture held by any element, raising <see cref="PointerCaptureChanged"/> if there was one.
     /// </summary>
-    public static void ReleaseCurrentPointerCapture()
+    public static void ReleaseCurrentPointerCapture() => SetCapturedElement(null);
+
+    /// <summary>
+    /// Occurs on this element when it loses pointer capture: it released it, another element captured the pointer, or
+    /// it was removed from the tree while capturing.
+    /// </summary>
+    /// <remarks>Unlike the static <see cref="PointerCaptureChanged"/>, subscribing doesn't keep the element alive.</remarks>
+    public event EventHandler? LostPointerCapture;
+
+    /// <summary>
+    /// Called when this element loses pointer capture (see <see cref="LostPointerCapture"/>). Override to end drags that
+    /// rely on capture; the base implementation raises <see cref="LostPointerCapture"/>.
+    /// </summary>
+    protected virtual void OnLostPointerCapture()
     {
-        if (CapturedElement != null)
+        LostPointerCapture?.Invoke(this, EventArgs.Empty);
+    }
+
+    private static void SetCapturedElement(UIElement? element)
+    {
+        var previous = CapturedElement;
+        if (previous == element)
         {
-            CapturedElement = null;
-            PointerCaptureChanged?.Invoke(null);
+            return;
         }
+
+        CapturedElement = element;
+        previous?.OnLostPointerCapture();
+        PointerCaptureChanged?.Invoke(element);
     }
 
     /// <inheritdoc/>
