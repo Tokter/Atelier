@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using Atelier.Core.Events;
 using Atelier.Core.Primitives;
@@ -11,8 +10,31 @@ using Atelier.Layout;
 
 namespace Atelier.Controls;
 
+/// <summary>
+/// Displays hierarchical data as expandable <see cref="TreeViewItem"/> nodes with single selection and keyboard navigation.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Nodes are generated from <see cref="ItemsSource"/> (children via <see cref="ChildrenSelector"/>) or added manually with
+/// <see cref="AddRootItem"/> and <see cref="TreeViewItem.AddChildItem"/>. Child nodes are created lazily, when a node is
+/// first expanded (or its <see cref="TreeViewItem.ChildrenItems"/> are read); <see cref="TreeViewItem.HasChildren"/> is
+/// known before that. Collections implementing <see cref="INotifyCollectionChanged"/> are observed weakly and updated
+/// incrementally, so expansion and selection of unaffected nodes survive changes; a reset reuses the nodes of items that
+/// are still present.
+/// </para>
+/// <para>
+/// Selection: removing the selected node clears the selection, and collapsing an ancestor of the selected node selects that
+/// ancestor. With duplicate items only one node is selected.
+/// </para>
+/// <para>
+/// Keys: Up/Down move through visible nodes, Home/End go to the first/last one, Right expands or moves to the first child,
+/// Left collapses or moves to the parent, Enter/Space toggle, numpad + and - expand and collapse, numpad * expands the
+/// whole subtree of the selected node.
+/// </para>
+/// </remarks>
 public class TreeView : Control
 {
+    /// <summary>Identifies the <see cref="ItemsSource"/> bindable property.</summary>
     public static readonly BindableProperty<IEnumerable?> ItemsSourceProperty =
         BindableProperty.Register<TreeView, IEnumerable?>(
             nameof(ItemsSource),
@@ -20,6 +42,7 @@ public class TreeView : Control
             (s, o, n) => ((TreeView)s).OnItemsSourceChanged(o, n)
         );
 
+    /// <summary>Identifies the <see cref="SelectedItem"/> bindable property.</summary>
     public static readonly BindableProperty<object?> SelectedItemProperty =
         BindableProperty.Register<TreeView, object?>(
             nameof(SelectedItem),
@@ -27,12 +50,53 @@ public class TreeView : Control
             (s, o, n) => ((TreeView)s).OnSelectedItemChanged(o, n)
         );
 
+    /// <summary>Identifies the <see cref="IndentSize"/> bindable property.</summary>
+    public static readonly BindableProperty<float> IndentSizeProperty =
+        BindableProperty.Register<TreeView, float>(
+            nameof(IndentSize),
+            20f,
+            (s, o, n) => ((TreeView)s).RefreshNodeVisuals()
+        );
+
+    /// <summary>Identifies the <see cref="ExpandIcon"/> bindable property.</summary>
+    public static readonly BindableProperty<MaterialIconKind> ExpandIconProperty =
+        BindableProperty.Register<TreeView, MaterialIconKind>(
+            nameof(ExpandIcon),
+            MaterialIconKind.ExpandMore,
+            (s, o, n) => ((TreeView)s).RefreshNodeVisuals()
+        );
+
+    /// <summary>Identifies the <see cref="CollapseIcon"/> bindable property.</summary>
+    public static readonly BindableProperty<MaterialIconKind> CollapseIconProperty =
+        BindableProperty.Register<TreeView, MaterialIconKind>(
+            nameof(CollapseIcon),
+            MaterialIconKind.ChevronRight,
+            (s, o, n) => ((TreeView)s).RefreshNodeVisuals()
+        );
+
+    /// <summary>Identifies the <see cref="IconSize"/> bindable property.</summary>
+    public static readonly BindableProperty<float> IconSizeProperty =
+        BindableProperty.Register<TreeView, float>(
+            nameof(IconSize),
+            18f,
+            (s, o, n) => ((TreeView)s).RefreshNodeVisuals()
+        );
+
+    /// <summary>Gets or sets the root items. Default <c>null</c>. <see cref="TreeViewItem"/> instances are used as nodes directly.</summary>
     public IEnumerable? ItemsSource
     {
         get => GetValue(ItemsSourceProperty);
         set => SetValue(ItemsSourceProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets the selected item: the selected node's <see cref="TreeViewItem.ItemValue"/> (or the node itself when
+    /// it has none), or <c>null</c>. Default <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// Setting it selects the first generated node for an equal item. An item whose node hasn't been generated yet (inside a
+    /// never-expanded branch) stays pending and is selected when its node is created.
+    /// </remarks>
     public object? SelectedItem
     {
         get => GetValue(SelectedItemProperty);
@@ -40,50 +104,92 @@ public class TreeView : Control
     }
 
     private Func<object, IEnumerable?>? _childrenSelector;
+
+    /// <summary>
+    /// Gets or sets the function returning an item's children (or <c>null</c> for none). Default <c>null</c>: no children.
+    /// Changing it regenerates all nodes.
+    /// </summary>
     public Func<object, IEnumerable?>? ChildrenSelector
     {
         get => _childrenSelector;
         set
         {
             _childrenSelector = value;
-            RebuildTree();
+            RegenerateTree();
         }
     }
 
     private Func<object, UIElement>? _itemTemplate;
+
+    /// <summary>
+    /// Gets or sets the factory for a node's header content. Default <c>null</c>: the item's text. Changing it regenerates
+    /// all nodes.
+    /// </summary>
     public Func<object, UIElement>? ItemTemplate
     {
         get => _itemTemplate;
         set
         {
             _itemTemplate = value;
-            RebuildTree();
+            RegenerateTree();
         }
     }
 
-    private float _indentSize = 20f;
+    /// <summary>Gets or sets the horizontal indentation per level, in pixels. Default 20. Applies to existing nodes.</summary>
     public float IndentSize
     {
-        get => _indentSize;
-        set
-        {
-            _indentSize = value;
-            InvalidateMeasure();
-        }
+        get => GetValue(IndentSizeProperty);
+        set => SetValue(IndentSizeProperty, value);
     }
 
-    public MaterialIconKind ExpandIcon { get; set; } = MaterialIconKind.ExpandMore;
-    public MaterialIconKind CollapseIcon { get; set; } = MaterialIconKind.ChevronRight;
-    public float IconSize { get; set; } = 18f;
+    /// <summary>Gets or sets the expander icon of expanded nodes. Default <see cref="MaterialIconKind.ExpandMore"/>.</summary>
+    public MaterialIconKind ExpandIcon
+    {
+        get => GetValue(ExpandIconProperty);
+        set => SetValue(ExpandIconProperty, value);
+    }
 
+    /// <summary>Gets or sets the expander icon of collapsed nodes. Default <see cref="MaterialIconKind.ChevronRight"/>.</summary>
+    public MaterialIconKind CollapseIcon
+    {
+        get => GetValue(CollapseIconProperty);
+        set => SetValue(CollapseIconProperty, value);
+    }
+
+    /// <summary>Gets or sets the expander icon size. Default 18.</summary>
+    public float IconSize
+    {
+        get => GetValue(IconSizeProperty);
+        set => SetValue(IconSizeProperty, value);
+    }
+
+    /// <summary>Gets the scroll viewer hosting the nodes.</summary>
     public ScrollViewer ScrollViewer { get; } = new();
+
+    /// <summary>Gets the root nodes, in display order.</summary>
+    public IReadOnlyList<TreeViewItem> RootItems => _rootItems;
+
+    /// <summary>Gets the selected node, or <c>null</c>.</summary>
+    public TreeViewItem? SelectedNode => _selectedNode;
+
     private readonly StackPanel _rootItemsPanel = new() { Orientation = Orientation.Vertical };
     private readonly List<TreeViewItem> _rootItems = [];
+    private WeakCollectionChangedSubscription<TreeView>? _sourceSubscription;
+    private TreeViewItem? _selectedNode;
+    private TreeViewItem? _pendingScrollTarget;
+    private bool _isSyncingSelection;
+    private bool _isFocusingFromPointer;
 
+    /// <summary>Occurs when the selection changes; the argument is the new <see cref="SelectedItem"/>.</summary>
     public event EventHandler<object?>? SelectionChanged;
+
+    /// <summary>Occurs when a node is expanded.</summary>
     public event EventHandler<TreeViewItem>? ItemExpanded;
+
+    /// <summary>Occurs when a node is collapsed.</summary>
     public event EventHandler<TreeViewItem>? ItemCollapsed;
 
+    /// <summary>Initializes a new, empty <see cref="TreeView"/>.</summary>
     public TreeView()
     {
         IsFocusable = true;
@@ -93,86 +199,206 @@ public class TreeView : Control
         AddChild(ScrollViewer);
     }
 
+    internal bool IsSyncingSelection => _isSyncingSelection;
+
+    #region Node generation
+
     private void OnItemsSourceChanged(IEnumerable? oldSource, IEnumerable? newSource)
     {
-        if (oldSource is INotifyCollectionChanged oldIncc)
-        {
-            oldIncc.CollectionChanged -= OnItemsSourceCollectionChanged;
-        }
+        _sourceSubscription?.Dispose();
+        _sourceSubscription = null;
 
-        RebuildTree();
+        ResetNodes(newSource, _rootItems, _rootItemsPanel, null, 0, reuse: true);
+        InvalidateMeasure();
 
-        if (newSource is INotifyCollectionChanged newIncc)
+        if (newSource is INotifyCollectionChanged incc)
         {
-            newIncc.CollectionChanged += OnItemsSourceCollectionChanged;
+            _sourceSubscription = new WeakCollectionChangedSubscription<TreeView>(
+                incc, this, static (tree, e) => tree.OnItemsSourceCollectionChanged(e));
         }
     }
 
-    private void OnItemsSourceCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    private void OnItemsSourceCollectionChanged(NotifyCollectionChangedEventArgs e)
     {
         Atelier.Core.Threading.Dispatcher.VerifyAccess("TreeView.ItemsSource collection change");
-        RebuildTree();
+        ApplyCollectionChange(ItemsSource, e, _rootItems, _rootItemsPanel, null, 0);
     }
 
+    /// <summary>
+    /// Re-reads the root items from <see cref="ItemsSource"/>, keeping the nodes (with their expansion and selection) of
+    /// items that are still present.
+    /// </summary>
     public void RebuildTree()
     {
-        _rootItemsPanel.Clear();
-        _rootItems.Clear();
-
-        if (ItemsSource != null)
-        {
-            foreach (var item in ItemsSource)
-            {
-                var rootNode = CreateTreeViewItem(item, 0, null);
-                _rootItems.Add(rootNode);
-                _rootItemsPanel.Add(rootNode);
-            }
-        }
-
-        UpdateSelectionVisual();
+        ResetNodes(ItemsSource, _rootItems, _rootItemsPanel, null, 0, reuse: true);
         InvalidateMeasure();
     }
 
+    // Template or selector changed: every node's visuals and children must be recreated.
+    private void RegenerateTree()
+    {
+        if (ItemsSource == null) return;
+        ResetNodes(ItemsSource, _rootItems, _rootItemsPanel, null, 0, reuse: false);
+        InvalidateMeasure();
+    }
+
+    /// <summary>Adds a manually created root node (and its existing children) to the tree.</summary>
+    /// <param name="item">The node to add.</param>
     public void AddRootItem(TreeViewItem item)
     {
-        item.ParentTreeView = this;
-        item.ParentTreeViewItem = null;
-        item.Level = 0;
-        item.UpdateIndentation();
-
         _rootItems.Add(item);
         _rootItemsPanel.Add(item);
+        item.AttachToTree(this, null, 0);
         InvalidateMeasure();
     }
 
+    /// <summary>Removes a root node added with <see cref="AddRootItem"/>; clears the selection if it was inside it.</summary>
+    /// <param name="item">The node to remove.</param>
     public void RemoveRootItem(TreeViewItem item)
     {
         if (_rootItems.Remove(item))
         {
             _rootItemsPanel.Remove(item);
-            item.ParentTreeView = null;
+            OnNodeRemoved(item);
+            item.AttachToTree(null, null, 0);
             InvalidateMeasure();
         }
     }
 
+    // Applies one collection notification to a node list and its panel (roots or a node's children).
+    internal void ApplyCollectionChange(
+        IEnumerable? source,
+        NotifyCollectionChangedEventArgs e,
+        List<TreeViewItem> nodes,
+        Panel panel,
+        TreeViewItem? parent,
+        int level)
+    {
+        switch (e.Action)
+        {
+            case NotifyCollectionChangedAction.Add
+                when e.NewItems != null && e.NewStartingIndex >= 0 && e.NewStartingIndex <= nodes.Count:
+                for (int i = 0; i < e.NewItems.Count; i++)
+                {
+                    var node = CreateTreeViewItem(e.NewItems[i]!, level, parent);
+                    nodes.Insert(e.NewStartingIndex + i, node);
+                    panel.InsertChild(e.NewStartingIndex + i, node);
+                }
+                break;
+
+            case NotifyCollectionChangedAction.Remove
+                when e.OldItems != null && e.OldStartingIndex >= 0 && e.OldStartingIndex + e.OldItems.Count <= nodes.Count:
+                for (int i = 0; i < e.OldItems.Count; i++)
+                {
+                    RemoveNodeAt(nodes, panel, e.OldStartingIndex);
+                }
+                break;
+
+            case NotifyCollectionChangedAction.Replace
+                when e.NewItems != null && e.OldItems != null && e.NewItems.Count == e.OldItems.Count
+                     && e.NewStartingIndex >= 0 && e.NewStartingIndex + e.NewItems.Count <= nodes.Count:
+                for (int i = 0; i < e.NewItems.Count; i++)
+                {
+                    int index = e.NewStartingIndex + i;
+                    RemoveNodeAt(nodes, panel, index);
+                    var node = CreateTreeViewItem(e.NewItems[i]!, level, parent);
+                    nodes.Insert(index, node);
+                    panel.InsertChild(index, node);
+                }
+                break;
+
+            case NotifyCollectionChangedAction.Move
+                when e.OldItems is { Count: 1 } && e.OldStartingIndex >= 0 && e.OldStartingIndex < nodes.Count
+                     && e.NewStartingIndex >= 0 && e.NewStartingIndex < nodes.Count:
+            {
+                var node = nodes[e.OldStartingIndex];
+                nodes.RemoveAt(e.OldStartingIndex);
+                nodes.Insert(e.NewStartingIndex, node);
+                panel.InsertChild(e.NewStartingIndex, node);
+                break;
+            }
+
+            default:
+                // Reset, or a notification without usable indices.
+                ResetNodes(source, nodes, panel, parent, level, reuse: true);
+                break;
+        }
+
+        InvalidateMeasure();
+    }
+
+    private void RemoveNodeAt(List<TreeViewItem> nodes, Panel panel, int index)
+    {
+        var node = nodes[index];
+        nodes.RemoveAt(index);
+        panel.Remove(node);
+        DiscardNode(node);
+    }
+
+    // Rebuilds a node list from its source. With reuse, nodes of items that are still present are kept as they are.
+    internal void ResetNodes(
+        IEnumerable? source,
+        List<TreeViewItem> nodes,
+        Panel panel,
+        TreeViewItem? parent,
+        int level,
+        bool reuse)
+    {
+        TreeViewItem[] oldNodes = nodes.Count > 0 ? nodes.ToArray() : [];
+        Dictionary<object, TreeViewItem>? reusable = null;
+        foreach (var node in oldNodes)
+        {
+            node.ResetMark = false;
+            if (reuse && node.ItemValue != null)
+            {
+                reusable ??= new Dictionary<object, TreeViewItem>();
+                reusable.TryAdd(node.ItemValue, node);
+            }
+        }
+
+        nodes.Clear();
+        panel.Clear();
+
+        if (source != null)
+        {
+            foreach (var item in source)
+            {
+                TreeViewItem node;
+                if (item is not TreeViewItem && item != null && reusable != null && reusable.Remove(item, out var existing))
+                {
+                    node = existing;
+                    node.AttachToTree(this, parent, level);
+                }
+                else
+                {
+                    node = CreateTreeViewItem(item!, level, parent);
+                }
+
+                node.ResetMark = true;
+                nodes.Add(node);
+                panel.Add(node);
+            }
+        }
+
+        foreach (var node in oldNodes)
+        {
+            if (!node.ResetMark)
+            {
+                DiscardNode(node);
+            }
+        }
+    }
+
+    /// <summary>Creates the node for <paramref name="item"/> (or attaches it, if it is a <see cref="TreeViewItem"/>).</summary>
     internal TreeViewItem CreateTreeViewItem(object item, int level, TreeViewItem? parentItem)
     {
         if (item is TreeViewItem directItem)
         {
-            directItem.ParentTreeView = this;
-            directItem.ParentTreeViewItem = parentItem;
-            directItem.Level = level;
-            directItem.UpdateIndentation();
+            directItem.AttachToTree(this, parentItem, level);
             return directItem;
         }
 
-        var node = new TreeViewItem
-        {
-            ParentTreeView = this,
-            ParentTreeViewItem = parentItem,
-            Level = level,
-            ItemValue = item
-        };
+        var node = new TreeViewItem { ItemValue = item };
 
         // Render content using ItemTemplate or default TextBlock
         UIElement contentVisual;
@@ -194,85 +420,321 @@ public class TreeView : Control
             };
         }
         node.SetContentVisual(contentVisual);
+        node.AttachToTree(this, parentItem, level);
 
-        // Bind children if selector provided
         if (ChildrenSelector != null && item != null)
         {
-            var children = ChildrenSelector(item);
-            node.SetChildrenSource(children);
+            node.SetChildrenSource(ChildrenSelector(item));
+        }
+
+        // A selection requested before this node existed (inside an unexpanded branch) applies now.
+        if (_selectedNode == null && SelectedItem != null && Matches(node, SelectedItem))
+        {
+            SetSelectedNode(node, raiseEvent: false);
         }
 
         return node;
     }
 
+    // A node left the tree for good (its item was removed): drop selection references and model subscriptions.
+    internal void DiscardNode(TreeViewItem node)
+    {
+        OnNodeRemoved(node);
+        node.Release();
+    }
+
+    // A node (and its subtree) is leaving the tree.
+    internal void OnNodeRemoved(TreeViewItem node)
+    {
+        if (_pendingScrollTarget != null && node.IsSelfOrAncestorOf(_pendingScrollTarget))
+        {
+            _pendingScrollTarget = null;
+        }
+
+        if (_selectedNode != null && node.IsSelfOrAncestorOf(_selectedNode))
+        {
+            SetSelectedNode(null, raiseEvent: true);
+        }
+    }
+
+    private void RefreshNodeVisuals()
+    {
+        RefreshNodeVisuals(_rootItems);
+        InvalidateMeasure();
+    }
+
+    private static void RefreshNodeVisuals(List<TreeViewItem> nodes)
+    {
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var node = nodes[i];
+            node.UpdateIndentation();
+            node.UpdateExpanderVisual();
+            RefreshNodeVisuals(node.RealizedChildren);
+        }
+    }
+
+    #endregion
+
+    #region Selection
+
+    private static bool Matches(TreeViewItem node, object value) =>
+        ReferenceEquals(node, value) || Equals(node.ItemValue, value);
+
     private void OnSelectedItemChanged(object? oldItem, object? newItem)
     {
-        UpdateSelectionVisual();
+        if (_isSyncingSelection) return;
+
+        TreeViewItem? node = null;
+        if (newItem != null)
+        {
+            node = _selectedNode != null && Matches(_selectedNode, newItem) ? _selectedNode : FindNode(_rootItems, newItem);
+        }
+
+        ApplySelectedNode(node);
         SelectionChanged?.Invoke(this, newItem);
     }
 
-    internal void SelectNode(TreeViewItem node)
+    // Selects a node (or none) and updates SelectedItem to match.
+    internal void SetSelectedNode(TreeViewItem? node, bool raiseEvent)
     {
-        SelectedItem = node.ItemValue ?? node;
-        node.EnsureVisible();
-        ScrollIntoView(node);
-    }
+        object? oldItem = SelectedItem;
+        bool nodeChanged = node != _selectedNode;
+        ApplySelectedNode(node);
 
-    private void UpdateSelectionVisual()
-    {
-        var allNodes = GetAllNodes();
-        for (int i = 0; i < allNodes.Count; i++)
+        _isSyncingSelection = true;
+        try
         {
-            var node = allNodes[i];
-            node.IsSelected = Equals(node.ItemValue, SelectedItem) || Equals(node, SelectedItem);
+            SelectedItem = node == null ? null : node.ItemValue ?? node;
         }
-        InvalidateVisual();
-    }
-
-    public List<TreeViewItem> GetAllNodes()
-    {
-        var list = new List<TreeViewItem>();
-        for (int i = 0; i < _rootItems.Count; i++)
+        finally
         {
-            CollectAllNodes(_rootItems[i], list);
+            _isSyncingSelection = false;
         }
-        return list;
-    }
 
-    private static void CollectAllNodes(TreeViewItem node, List<TreeViewItem> list)
-    {
-        list.Add(node);
-        for (int i = 0; i < node.ChildrenItems.Count; i++)
+        if (raiseEvent && (nodeChanged || !Equals(oldItem, SelectedItem)))
         {
-            CollectAllNodes(node.ChildrenItems[i], list);
+            SelectionChanged?.Invoke(this, SelectedItem);
         }
     }
 
-    public List<TreeViewItem> GetVisibleItems()
+    private void ApplySelectedNode(TreeViewItem? node)
     {
-        var list = new List<TreeViewItem>();
-        for (int i = 0; i < _rootItems.Count; i++)
+        var old = _selectedNode;
+        _selectedNode = node;
+        if (old == node) return;
+
+        _isSyncingSelection = true;
+        try
         {
-            CollectVisibleItems(_rootItems[i], list);
+            if (old != null) old.IsSelected = false;
+            if (node != null) node.IsSelected = true;
         }
-        return list;
+        finally
+        {
+            _isSyncingSelection = false;
+        }
     }
 
-    private static void CollectVisibleItems(TreeViewItem node, List<TreeViewItem> list)
+    // Called when a node's IsSelected is set directly.
+    internal void OnNodeIsSelectedChanged(TreeViewItem node, bool isSelected)
     {
-        if (node.Visibility != Visibility.Visible) return;
-        list.Add(node);
-
-        if (node.IsExpanded)
+        if (isSelected)
         {
-            for (int i = 0; i < node.ChildrenItems.Count; i++)
+            if (_selectedNode != node) SetSelectedNode(node, raiseEvent: true);
+        }
+        else if (_selectedNode == node)
+        {
+            SetSelectedNode(null, raiseEvent: true);
+        }
+    }
+
+    // A node that was already marked selected joined the tree.
+    internal void AdoptSelectedNode(TreeViewItem node)
+    {
+        if (_selectedNode == null)
+        {
+            SetSelectedNode(node, raiseEvent: true);
+        }
+        else if (_selectedNode != node)
+        {
+            _isSyncingSelection = true;
+            try
             {
-                CollectVisibleItems(node.ChildrenItems[i], list);
+                node.IsSelected = false;
+            }
+            finally
+            {
+                _isSyncingSelection = false;
             }
         }
     }
 
+    private static TreeViewItem? FindNode(List<TreeViewItem> nodes, object value)
+    {
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var node = nodes[i];
+            if (Matches(node, value)) return node;
+            var found = FindNode(node.RealizedChildren, value);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    /// <summary>Selects <paramref name="node"/>, expands its ancestors and scrolls it into view.</summary>
+    internal void SelectNode(TreeViewItem node)
+    {
+        SetSelectedNode(node, raiseEvent: true);
+        node.EnsureVisible();
+        ScrollIntoView(node);
+    }
+
+    internal void SelectFromPointer(TreeViewItem node)
+    {
+        _isFocusingFromPointer = true;
+        try
+        {
+            Focus();
+        }
+        finally
+        {
+            _isFocusingFromPointer = false;
+        }
+
+        SelectNode(node);
+    }
+
+    #endregion
+
+    #region Traversal
+
+    /// <summary>
+    /// Returns a new list of all generated nodes in pre-order. Nodes of never-expanded branches are not generated and not
+    /// included. Allocates; intended for inspection and tests.
+    /// </summary>
+    public List<TreeViewItem> GetAllNodes()
+    {
+        var list = new List<TreeViewItem>();
+        CollectAllNodes(_rootItems, list);
+        return list;
+    }
+
+    private static void CollectAllNodes(List<TreeViewItem> nodes, List<TreeViewItem> list)
+    {
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            list.Add(nodes[i]);
+            CollectAllNodes(nodes[i].RealizedChildren, list);
+        }
+    }
+
+    /// <summary>
+    /// Returns a new list of the nodes that are currently shown (visible and not inside a collapsed node), in display
+    /// order. Allocates; intended for inspection and tests.
+    /// </summary>
+    public List<TreeViewItem> GetVisibleItems()
+    {
+        var list = new List<TreeViewItem>();
+        CollectVisibleItems(_rootItems, list);
+        return list;
+    }
+
+    private static void CollectVisibleItems(List<TreeViewItem> nodes, List<TreeViewItem> list)
+    {
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var node = nodes[i];
+            if (node.Visibility != Visibility.Visible) continue;
+            list.Add(node);
+            if (node.IsExpanded)
+            {
+                CollectVisibleItems(node.RealizedChildren, list);
+            }
+        }
+    }
+
+    private List<TreeViewItem> SiblingsOf(TreeViewItem node) => node.ParentTreeViewItem?.RealizedChildren ?? _rootItems;
+
+    private static TreeViewItem? FirstVisibleFrom(List<TreeViewItem> nodes, int start)
+    {
+        for (int i = Math.Max(0, start); i < nodes.Count; i++)
+        {
+            if (nodes[i].Visibility == Visibility.Visible) return nodes[i];
+        }
+        return null;
+    }
+
+    private static TreeViewItem? LastVisibleBefore(List<TreeViewItem> nodes, int end)
+    {
+        for (int i = Math.Min(end, nodes.Count) - 1; i >= 0; i--)
+        {
+            if (nodes[i].Visibility == Visibility.Visible) return nodes[i];
+        }
+        return null;
+    }
+
+    private static TreeViewItem DeepestVisible(TreeViewItem node)
+    {
+        while (node.IsExpanded && LastVisibleBefore(node.RealizedChildren, node.RealizedChildren.Count) is { } child)
+        {
+            node = child;
+        }
+        return node;
+    }
+
+    private TreeViewItem? FirstVisibleNode() => FirstVisibleFrom(_rootItems, 0);
+
+    private TreeViewItem? LastVisibleNode()
+    {
+        var last = LastVisibleBefore(_rootItems, _rootItems.Count);
+        return last == null ? null : DeepestVisible(last);
+    }
+
+    private TreeViewItem? NextVisibleNode(TreeViewItem node)
+    {
+        if (node.IsExpanded && FirstVisibleFrom(node.RealizedChildren, 0) is { } child)
+        {
+            return child;
+        }
+
+        for (var current = node; current != null; current = current.ParentTreeViewItem)
+        {
+            var siblings = SiblingsOf(current);
+            var next = FirstVisibleFrom(siblings, siblings.IndexOf(current) + 1);
+            if (next != null) return next;
+        }
+        return null;
+    }
+
+    private TreeViewItem? PreviousVisibleNode(TreeViewItem node)
+    {
+        var siblings = SiblingsOf(node);
+        var previous = LastVisibleBefore(siblings, siblings.IndexOf(node));
+        return previous != null ? DeepestVisible(previous) : node.ParentTreeViewItem;
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Scrolls so the header of <paramref name="node"/> is visible. If layout is pending (for example right after its
+    /// ancestors were expanded), scrolling happens after the next arrange, when the node's position is known.
+    /// </summary>
+    /// <param name="node">A node of this tree.</param>
     public void ScrollIntoView(TreeViewItem node)
+    {
+        if (node.ParentTreeView != this) return;
+
+        if (!IsArrangeValid || !node.IsArrangeValid)
+        {
+            _pendingScrollTarget = node;
+            return;
+        }
+
+        ScrollIntoViewCore(node);
+    }
+
+    private void ScrollIntoViewCore(TreeViewItem node)
     {
         var screenPt = node.PointToScreen(Point.Zero);
         var svScreenPt = ScrollViewer.PointToScreen(Point.Zero);
@@ -293,27 +755,45 @@ public class TreeView : Control
         }
     }
 
+    /// <summary>Expands every node that has children, generating the whole tree.</summary>
     public void ExpandAll()
     {
-        var nodes = GetAllNodes();
+        for (int i = 0; i < _rootItems.Count; i++)
+        {
+            ExpandSubtree(_rootItems[i]);
+        }
+    }
+
+    /// <summary>Collapses every generated node that has children.</summary>
+    public void CollapseAll()
+    {
+        CollapseAll(_rootItems);
+    }
+
+    private static void CollapseAll(List<TreeViewItem> nodes)
+    {
         for (int i = 0; i < nodes.Count; i++)
         {
-            if (nodes[i].HasChildren)
+            var node = nodes[i];
+            CollapseAll(node.RealizedChildren);
+            if (node.HasChildren)
             {
-                nodes[i].IsExpanded = true;
+                node.IsExpanded = false;
             }
         }
     }
 
-    public void CollapseAll()
+    /// <summary>Expands <paramref name="node"/> and all its descendants that have children.</summary>
+    /// <param name="node">The subtree root.</param>
+    public static void ExpandSubtree(TreeViewItem node)
     {
-        var nodes = GetAllNodes();
-        for (int i = 0; i < nodes.Count; i++)
+        if (!node.HasChildren) return;
+
+        node.IsExpanded = true;
+        var children = node.RealizedChildren;
+        for (int i = 0; i < children.Count; i++)
         {
-            if (nodes[i].HasChildren)
-            {
-                nodes[i].IsExpanded = false;
-            }
+            ExpandSubtree(children[i]);
         }
     }
 
@@ -325,155 +805,130 @@ public class TreeView : Control
     internal void NotifyItemCollapsed(TreeViewItem item)
     {
         ItemCollapsed?.Invoke(this, item);
+
+        // Like WPF: a selection hidden by collapsing moves to the collapsed node.
+        if (_selectedNode != null && _selectedNode != item && item.IsSelfOrAncestorOf(_selectedNode))
+        {
+            SetSelectedNode(item, raiseEvent: true);
+        }
     }
 
+    /// <inheritdoc/>
+    /// <remarks>Gaining focus from the keyboard selects the first node if nothing is selected.</remarks>
     public override void OnGotFocus()
     {
         base.OnGotFocus();
-        if (SelectedItem == null && _rootItems.Count > 0)
+        if (!_isFocusingFromPointer && _selectedNode == null && SelectedItem == null && FirstVisibleNode() is { } first)
         {
-            SelectNode(_rootItems[0]);
+            SelectNode(first);
         }
-        InvalidateAllVisual();
+        _selectedNode?.InvalidateVisual();
     }
 
+    /// <inheritdoc/>
     public override void OnLostFocus()
     {
         base.OnLostFocus();
-        InvalidateAllVisual();
+        _selectedNode?.InvalidateVisual();
     }
 
-    private void InvalidateAllVisual()
-    {
-        var nodes = GetAllNodes();
-        for (int i = 0; i < nodes.Count; i++)
-        {
-            nodes[i].InvalidateVisual();
-        }
-        InvalidateVisual();
-    }
-
+    /// <inheritdoc/>
     public override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
-        if (!IsEnabled) return;
+        if (!IsEnabled || e.Handled) return;
 
-        var visible = GetVisibleItems();
-        if (visible.Count == 0) return;
-
-        int selectedIdx = -1;
-        for (int i = 0; i < visible.Count; i++)
-        {
-            if (Equals(visible[i].ItemValue, SelectedItem) || Equals(visible[i], SelectedItem))
-            {
-                selectedIdx = i;
-                break;
-            }
-        }
+        var current = _selectedNode;
+        TreeViewItem? target = null;
 
         switch (e.Key)
         {
             case Key.Down:
-            {
-                int next = selectedIdx < visible.Count - 1 ? selectedIdx + 1 : (selectedIdx < 0 ? 0 : selectedIdx);
-                if (next >= 0 && next < visible.Count && next != selectedIdx)
-                {
-                    SelectNode(visible[next]);
-                }
-                e.Handled = true;
+                target = current == null ? FirstVisibleNode() : NextVisibleNode(current);
                 break;
-            }
             case Key.Up:
-            {
-                int prev = selectedIdx > 0 ? selectedIdx - 1 : 0;
-                if (prev >= 0 && prev < visible.Count && prev != selectedIdx)
-                {
-                    SelectNode(visible[prev]);
-                }
-                e.Handled = true;
+                target = current == null ? FirstVisibleNode() : PreviousVisibleNode(current);
                 break;
-            }
-            case Key.Right:
-            {
-                if (selectedIdx >= 0 && selectedIdx < visible.Count)
-                {
-                    var node = visible[selectedIdx];
-                    if (node.HasChildren)
-                    {
-                        if (!node.IsExpanded)
-                        {
-                            node.IsExpanded = true;
-                        }
-                        else if (node.ChildrenItems.Count > 0)
-                        {
-                            SelectNode(node.ChildrenItems[0]);
-                        }
-                    }
-                }
-                e.Handled = true;
-                break;
-            }
-            case Key.Left:
-            {
-                if (selectedIdx >= 0 && selectedIdx < visible.Count)
-                {
-                    var node = visible[selectedIdx];
-                    if (node.IsExpanded)
-                    {
-                        node.IsExpanded = false;
-                    }
-                    else if (node.ParentTreeViewItem != null)
-                    {
-                        SelectNode(node.ParentTreeViewItem);
-                    }
-                }
-                e.Handled = true;
-                break;
-            }
             case Key.Home:
-            {
-                if (visible.Count > 0)
-                {
-                    SelectNode(visible[0]);
-                }
-                e.Handled = true;
+                target = FirstVisibleNode();
                 break;
-            }
             case Key.End:
-            {
-                if (visible.Count > 0)
-                {
-                    SelectNode(visible[^1]);
-                }
-                e.Handled = true;
+                target = LastVisibleNode();
                 break;
-            }
+            case Key.Right:
+                if (current != null && current.HasChildren)
+                {
+                    if (!current.IsExpanded)
+                    {
+                        current.IsExpanded = true;
+                    }
+                    else
+                    {
+                        target = FirstVisibleFrom(current.RealizedChildren, 0);
+                    }
+                }
+                break;
+            case Key.Left:
+                if (current != null)
+                {
+                    if (current.IsExpanded)
+                    {
+                        current.IsExpanded = false;
+                    }
+                    else
+                    {
+                        target = current.ParentTreeViewItem;
+                    }
+                }
+                break;
             case Key.Enter:
             case Key.Space:
-            {
-                if (selectedIdx >= 0 && selectedIdx < visible.Count)
+                if (current != null && current.HasChildren)
                 {
-                    var node = visible[selectedIdx];
-                    if (node.HasChildren)
-                    {
-                        node.IsExpanded = !node.IsExpanded;
-                    }
+                    current.IsExpanded = !current.IsExpanded;
                 }
-                e.Handled = true;
                 break;
-            }
+            case Key.NumPadAdd:
+                if (current != null && current.HasChildren) current.IsExpanded = true;
+                break;
+            case Key.NumPadSubtract:
+                if (current != null) current.IsExpanded = false;
+                break;
+            case Key.NumPadMultiply:
+                if (current != null) ExpandSubtree(current);
+                break;
+            default:
+                return;
+        }
+
+        e.Handled = true;
+        if (target != null && target != current)
+        {
+            SelectNode(target);
         }
     }
 
+    /// <inheritdoc/>
     protected override Size MeasureOverride(Size availableSize)
     {
         ScrollViewer.Measure(availableSize);
         return ScrollViewer.DesiredSize;
     }
 
+    /// <inheritdoc/>
     protected override Size ArrangeOverride(Size finalSize)
     {
         ScrollViewer.Arrange(new Rect(Point.Zero, finalSize));
+
+        if (_pendingScrollTarget is { } target)
+        {
+            _pendingScrollTarget = null;
+            if (target.ParentTreeView == this)
+            {
+                ScrollIntoViewCore(target);
+            }
+        }
+
         return finalSize;
     }
 }

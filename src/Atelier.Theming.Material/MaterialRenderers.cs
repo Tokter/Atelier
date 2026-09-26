@@ -1053,7 +1053,7 @@ public class MaterialScrollViewerRenderer(MaterialColorScheme colors) : ControlR
     public override void RenderOverlay(ScrollViewer scrollViewer, ref DrawingContext context)
     {
         // 1. Render Vertical ScrollBar
-        if (scrollViewer.CanScrollVertically)
+        if (scrollViewer.IsVerticalScrollBarVisible)
         {
             var vTrack = scrollViewer.GetVerticalTrackRect();
             var vThumb = scrollViewer.GetVerticalThumbRect();
@@ -1083,7 +1083,7 @@ public class MaterialScrollViewerRenderer(MaterialColorScheme colors) : ControlR
         }
 
         // 2. Render Horizontal ScrollBar
-        if (scrollViewer.CanScrollHorizontally)
+        if (scrollViewer.IsHorizontalScrollBarVisible)
         {
             var hTrack = scrollViewer.GetHorizontalTrackRect();
             var hThumb = scrollViewer.GetHorizontalThumbRect();
@@ -1136,6 +1136,9 @@ public class MaterialTitleBarRenderer(MaterialColorScheme colors) : ControlRende
 
 public class MaterialComboBoxRenderer(MaterialColorScheme colors) : ControlRenderer<ComboBox>
 {
+    // Space kept free for the chevron on the right; matches the ComboBox layout.
+    private const float ChevronAreaWidth = 28f;
+
     public override void Render(ComboBox comboBox, ref DrawingContext context)
     {
         var bounds = new Rect(Point.Zero, comboBox.Bounds.Size);
@@ -1155,18 +1158,24 @@ public class MaterialComboBoxRenderer(MaterialColorScheme colors) : ControlRende
             context.DrawRoundedRectOutline(bounds, comboBox.CornerRadius, colors.OutlineVariant, 1f);
         }
 
-        // Draw selection text if no custom template element is active
+        // Draw selection text if no custom template element is active, clipped so long text stops before the chevron
         if (comboBox.SelectionDisplayElement == null)
         {
+            var padding = comboBox.Padding;
             float textY = (bounds.Height + comboBox.FontSize) * 0.5f - 2f;
-            var textPos = new Point(comboBox.Padding.Left, textY);
+            var textPos = new Point(padding.Left, textY);
+            var textClip = new Rect(padding.Left, 0, Math.Max(0, bounds.Width - padding.Left - ChevronAreaWidth), bounds.Height);
 
-            if (comboBox.SelectedItem != null)
+            // Cached by the ComboBox when the selection changes, so rendering doesn't call ToString() per frame.
+            string? selectedText = comboBox.SelectedItem != null ? comboBox.SelectionBoxText : null;
+            if (selectedText != null)
             {
-                context.DrawText(comboBox.SelectedItem.ToString() ?? string.Empty, textPos, colors.OnSurface, comboBox.FontSize, comboBox.FontFamily);
+                using var clip = context.PushClip(textClip);
+                context.DrawText(selectedText, textPos, colors.OnSurface, comboBox.FontSize, comboBox.FontFamily);
             }
-            else if (!string.IsNullOrEmpty(comboBox.Placeholder))
+            else if (comboBox.SelectedItem == null && !string.IsNullOrEmpty(comboBox.Placeholder))
             {
+                using var clip = context.PushClip(textClip);
                 context.DrawText(comboBox.Placeholder, textPos, colors.OnSurfaceVariant.WithAlpha(0.6f), comboBox.FontSize, comboBox.FontFamily);
             }
         }
