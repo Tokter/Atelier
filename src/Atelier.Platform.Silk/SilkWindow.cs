@@ -946,7 +946,10 @@ public class SilkWindow : IDisposable
             _ => PointerButtons.None
         };
 
-        if (PopupManager.HandleMouseDown(screenPos, btn))
+        int clickCount = RegisterClick(mouse, btn, screenPos);
+        var modifiers = CurrentModifiers();
+
+        if (PopupManager.HandleMouseDown(screenPos, btn, modifiers, clickCount))
         {
             _pressedElement = null;
             return;
@@ -958,7 +961,7 @@ public class SilkWindow : IDisposable
         {
             hit.Focus();
 
-            var e = new PointerEventArgs(screenPos, screenPos, btn, (ulong)Environment.TickCount64);
+            var e = new PointerEventArgs(screenPos, screenPos, btn, (ulong)Environment.TickCount64, modifiers, clickCount);
             hit.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerPressed(localE));
             _pressedElement = hit;
         }
@@ -982,7 +985,11 @@ public class SilkWindow : IDisposable
             _ => PointerButtons.None
         };
 
-        if (PopupManager.HandleMouseUp(screenPos, btn))
+        // A release reports the click count of the press it ends.
+        int clickCount = _clickCounter.GetReleaseCount(btn);
+        var modifiers = CurrentModifiers();
+
+        if (PopupManager.HandleMouseUp(screenPos, btn, modifiers, clickCount))
         {
             _pressedElement = null;
             return;
@@ -992,7 +999,7 @@ public class SilkWindow : IDisposable
 
         if (target != null)
         {
-            var e = new PointerEventArgs(screenPos, screenPos, btn, (ulong)Environment.TickCount64);
+            var e = new PointerEventArgs(screenPos, screenPos, btn, (ulong)Environment.TickCount64, modifiers, clickCount);
             target.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerReleased(localE));
         }
 
@@ -1025,20 +1032,21 @@ public class SilkWindow : IDisposable
         if (_rootElement == null) return;
 
         var screenPos = new Point(position.X, position.Y);
+        var modifiers = CurrentModifiers();
 
         // If pointer is captured by an element, deliver move directly to it
         if (UIElement.CapturedElement != null)
         {
-            var moveE = new PointerEventArgs(screenPos, screenPos);
+            var moveE = new PointerEventArgs(screenPos, screenPos, modifiers: modifiers);
             UIElement.CapturedElement.DispatchBubblePointerEvent(moveE, (el, localE) => el.OnPointerMoved(localE));
             return;
         }
 
-        if (PopupManager.HandleMouseMove(screenPos, ref _hoveredPopupElement))
+        if (PopupManager.HandleMouseMove(screenPos, ref _hoveredPopupElement, modifiers))
         {
             if (_hoveredElement != null)
             {
-                var exitE = new PointerEventArgs(screenPos, screenPos);
+                var exitE = new PointerEventArgs(screenPos, screenPos, modifiers: modifiers);
                 _hoveredElement.DispatchBubblePointerEvent(exitE, (el, localE) => el.OnPointerExited(localE));
                 _hoveredElement = null;
             }
@@ -1046,7 +1054,7 @@ public class SilkWindow : IDisposable
         }
         else if (_hoveredPopupElement != null)
         {
-            var exitE = new PointerEventArgs(screenPos, screenPos);
+            var exitE = new PointerEventArgs(screenPos, screenPos, modifiers: modifiers);
             _hoveredPopupElement.DispatchBubblePointerEvent(exitE, (el, localE) => el.OnPointerExited(localE));
             _hoveredPopupElement = null;
         }
@@ -1057,7 +1065,7 @@ public class SilkWindow : IDisposable
         {
             if (_hoveredElement != null)
             {
-                var exitE = new PointerEventArgs(screenPos, screenPos);
+                var exitE = new PointerEventArgs(screenPos, screenPos, modifiers: modifiers);
                 _hoveredElement.DispatchBubblePointerEvent(exitE, (el, localE) => el.OnPointerExited(localE));
             }
 
@@ -1065,14 +1073,14 @@ public class SilkWindow : IDisposable
 
             if (_hoveredElement != null)
             {
-                var enterE = new PointerEventArgs(screenPos, screenPos);
+                var enterE = new PointerEventArgs(screenPos, screenPos, modifiers: modifiers);
                 _hoveredElement.DispatchBubblePointerEvent(enterE, (el, localE) => el.OnPointerEntered(localE));
             }
         }
 
         if (hit != null)
         {
-            var moveE = new PointerEventArgs(screenPos, screenPos);
+            var moveE = new PointerEventArgs(screenPos, screenPos, modifiers: modifiers);
             hit.DispatchBubblePointerEvent(moveE, (el, localE) => el.OnPointerMoved(localE));
         }
     }
@@ -1083,7 +1091,8 @@ public class SilkWindow : IDisposable
         if (_rootElement == null) return;
 
         var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
-        if (PopupManager.HandleMouseScroll(screenPos, scroll.X, scroll.Y))
+        var scrollModifiers = CurrentModifiers();
+        if (PopupManager.HandleMouseScroll(screenPos, scroll.X, scroll.Y, scrollModifiers))
         {
             return;
         }
@@ -1092,7 +1101,7 @@ public class SilkWindow : IDisposable
 
         if (target != null)
         {
-            var wheelE = new PointerWheelEventArgs(screenPos, screenPos, scroll.X, scroll.Y);
+            var wheelE = new PointerWheelEventArgs(screenPos, screenPos, scroll.X, scroll.Y, (ulong)Environment.TickCount64, scrollModifiers);
             target.DispatchBubblePointerEvent(wheelE, (el, localE) => el.OnPointerWheel(localE));
         }
     }
@@ -1139,7 +1148,7 @@ public class SilkWindow : IDisposable
             var atelierKey = MapKey(_repeatingKey);
             if (atelierKey != Core.Events.Key.None)
             {
-                var keyEventArgs = new KeyEventArgs(atelierKey, _repeatingKeyCode, GetModifiers(_repeatingKeyboard), true);
+                var keyEventArgs = new KeyEventArgs(atelierKey, _repeatingKeyCode, GetModifiers(_repeatingKeyboard), isDown: true, isRepeat: true);
                 if (!PopupManager.HandleKeyDown(keyEventArgs))
                 {
                     FocusManager.DispatchKeyDown(keyEventArgs, _rootElement);
@@ -1205,6 +1214,18 @@ public class SilkWindow : IDisposable
         var atelierKey = MapKey(key);
         var keyEventArgs = new KeyEventArgs(atelierKey, keyCode, GetModifiers(keyboard), false);
         FocusManager.DispatchKeyUp(keyEventArgs, _rootElement);
+    }
+
+    // Double/triple click detection, using the platform's double-click time and distance.
+    private readonly ClickCounter _clickCounter = new();
+
+    private int RegisterClick(IMouse mouse, PointerButtons button, Point position) =>
+        _clickCounter.RegisterPress(button, position, Environment.TickCount64, mouse.DoubleClickTime, Math.Max(1, mouse.DoubleClickRange));
+
+    private ModifierKeys CurrentModifiers()
+    {
+        var keyboards = _inputContext?.Keyboards;
+        return keyboards != null && keyboards.Count > 0 ? GetModifiers(keyboards[0]) : ModifierKeys.None;
     }
 
     private static ModifierKeys GetModifiers(IKeyboard keyboard)
@@ -1281,16 +1302,6 @@ public class SilkWindow : IDisposable
         SilkKey.Number7 => Core.Events.Key.D7,
         SilkKey.Number8 => Core.Events.Key.D8,
         SilkKey.Number9 => Core.Events.Key.D9,
-        SilkKey.Keypad0 => Core.Events.Key.D0,
-        SilkKey.Keypad1 => Core.Events.Key.D1,
-        SilkKey.Keypad2 => Core.Events.Key.D2,
-        SilkKey.Keypad3 => Core.Events.Key.D3,
-        SilkKey.Keypad4 => Core.Events.Key.D4,
-        SilkKey.Keypad5 => Core.Events.Key.D5,
-        SilkKey.Keypad6 => Core.Events.Key.D6,
-        SilkKey.Keypad7 => Core.Events.Key.D7,
-        SilkKey.Keypad8 => Core.Events.Key.D8,
-        SilkKey.Keypad9 => Core.Events.Key.D9,
         SilkKey.F1 => Core.Events.Key.F1,
         SilkKey.F2 => Core.Events.Key.F2,
         SilkKey.F3 => Core.Events.Key.F3,
@@ -1303,6 +1314,60 @@ public class SilkWindow : IDisposable
         SilkKey.F10 => Core.Events.Key.F10,
         SilkKey.F11 => Core.Events.Key.F11,
         SilkKey.F12 => Core.Events.Key.F12,
+        SilkKey.Keypad0 => Core.Events.Key.NumPad0,
+        SilkKey.Keypad1 => Core.Events.Key.NumPad1,
+        SilkKey.Keypad2 => Core.Events.Key.NumPad2,
+        SilkKey.Keypad3 => Core.Events.Key.NumPad3,
+        SilkKey.Keypad4 => Core.Events.Key.NumPad4,
+        SilkKey.Keypad5 => Core.Events.Key.NumPad5,
+        SilkKey.Keypad6 => Core.Events.Key.NumPad6,
+        SilkKey.Keypad7 => Core.Events.Key.NumPad7,
+        SilkKey.Keypad8 => Core.Events.Key.NumPad8,
+        SilkKey.Keypad9 => Core.Events.Key.NumPad9,
+        SilkKey.KeypadDecimal => Core.Events.Key.NumPadDecimal,
+        SilkKey.KeypadDivide => Core.Events.Key.NumPadDivide,
+        SilkKey.KeypadMultiply => Core.Events.Key.NumPadMultiply,
+        SilkKey.KeypadSubtract => Core.Events.Key.NumPadSubtract,
+        SilkKey.KeypadAdd => Core.Events.Key.NumPadAdd,
+        SilkKey.KeypadEqual => Core.Events.Key.NumPadEqual,
+        SilkKey.Insert => Core.Events.Key.Insert,
+        SilkKey.CapsLock => Core.Events.Key.CapsLock,
+        SilkKey.NumLock => Core.Events.Key.NumLock,
+        SilkKey.ScrollLock => Core.Events.Key.ScrollLock,
+        SilkKey.PrintScreen => Core.Events.Key.PrintScreen,
+        SilkKey.Pause => Core.Events.Key.Pause,
+        SilkKey.Menu => Core.Events.Key.Menu,
+        SilkKey.Minus => Core.Events.Key.Minus,
+        SilkKey.Equal => Core.Events.Key.Equal,
+        SilkKey.Comma => Core.Events.Key.Comma,
+        SilkKey.Period => Core.Events.Key.Period,
+        SilkKey.Slash => Core.Events.Key.Slash,
+        SilkKey.Semicolon => Core.Events.Key.Semicolon,
+        SilkKey.Apostrophe => Core.Events.Key.Apostrophe,
+        SilkKey.LeftBracket => Core.Events.Key.LeftBracket,
+        SilkKey.RightBracket => Core.Events.Key.RightBracket,
+        SilkKey.BackSlash => Core.Events.Key.Backslash,
+        SilkKey.GraveAccent => Core.Events.Key.GraveAccent,
+        SilkKey.F13 => Core.Events.Key.F13,
+        SilkKey.F14 => Core.Events.Key.F14,
+        SilkKey.F15 => Core.Events.Key.F15,
+        SilkKey.F16 => Core.Events.Key.F16,
+        SilkKey.F17 => Core.Events.Key.F17,
+        SilkKey.F18 => Core.Events.Key.F18,
+        SilkKey.F19 => Core.Events.Key.F19,
+        SilkKey.F20 => Core.Events.Key.F20,
+        SilkKey.F21 => Core.Events.Key.F21,
+        SilkKey.F22 => Core.Events.Key.F22,
+        SilkKey.F23 => Core.Events.Key.F23,
+        SilkKey.F24 => Core.Events.Key.F24,
+        SilkKey.ShiftLeft => Core.Events.Key.LeftShift,
+        SilkKey.ShiftRight => Core.Events.Key.RightShift,
+        SilkKey.ControlLeft => Core.Events.Key.LeftCtrl,
+        SilkKey.ControlRight => Core.Events.Key.RightCtrl,
+        SilkKey.AltLeft => Core.Events.Key.LeftAlt,
+        SilkKey.AltRight => Core.Events.Key.RightAlt,
+        SilkKey.SuperLeft => Core.Events.Key.LeftWindows,
+        SilkKey.SuperRight => Core.Events.Key.RightWindows,
         _ => Core.Events.Key.None
     };
 

@@ -70,14 +70,14 @@ public static class PopupManager
     /// If hit is inside an active popup, dispatches to it and returns true.
     /// If hit is outside and topmost popup has StaysOpen=false, dismisses the popup and returns true (consuming the click).
     /// </summary>
-    public static bool HandleMouseDown(Point screenPoint, PointerButtons button)
+    public static bool HandleMouseDown(Point screenPoint, PointerButtons button, ModifierKeys modifiers = ModifierKeys.None, int clickCount = 1)
     {
         if (!HasActivePopups) return false;
 
         var hit = HitTest(screenPoint);
         if (hit != null)
         {
-            var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64);
+            var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64, modifiers, clickCount);
             hit.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerPressed(localE));
             return true;
         }
@@ -111,7 +111,7 @@ public static class PopupManager
     /// <summary>
     /// Intercepts mouse up events.
     /// </summary>
-    public static bool HandleMouseUp(Point screenPoint, PointerButtons button)
+    public static bool HandleMouseUp(Point screenPoint, PointerButtons button, ModifierKeys modifiers = ModifierKeys.None, int clickCount = 1)
     {
         if (UIElement.CapturedElement != null)
         {
@@ -128,7 +128,7 @@ public static class PopupManager
             if (isInsidePopup)
             {
                 var captured = UIElement.CapturedElement;
-                var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64);
+                var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64, modifiers, clickCount);
                 captured.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerReleased(localE));
                 captured.ReleasePointerCapture();
                 return true;
@@ -140,7 +140,7 @@ public static class PopupManager
         var hit = HitTest(screenPoint);
         if (hit != null)
         {
-            var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64);
+            var e = new PointerEventArgs(screenPoint, screenPoint, button, (ulong)Environment.TickCount64, modifiers, clickCount);
             hit.DispatchBubblePointerEvent(e, (el, localE) => el.OnPointerReleased(localE));
             return true;
         }
@@ -151,7 +151,7 @@ public static class PopupManager
     /// <summary>
     /// Intercepts mouse move events.
     /// </summary>
-    public static bool HandleMouseMove(Point screenPoint, ref UIElement? hoveredPopupElement)
+    public static bool HandleMouseMove(Point screenPoint, ref UIElement? hoveredPopupElement, ModifierKeys modifiers = ModifierKeys.None)
     {
         if (!HasActivePopups) return false;
 
@@ -160,7 +160,7 @@ public static class PopupManager
         {
             if (hoveredPopupElement != null)
             {
-                var exitE = new PointerEventArgs(screenPoint, screenPoint);
+                var exitE = new PointerEventArgs(screenPoint, screenPoint, modifiers: modifiers);
                 hoveredPopupElement.DispatchBubblePointerEvent(exitE, (el, localE) => el.OnPointerExited(localE));
             }
 
@@ -168,14 +168,14 @@ public static class PopupManager
 
             if (hoveredPopupElement != null)
             {
-                var enterE = new PointerEventArgs(screenPoint, screenPoint);
+                var enterE = new PointerEventArgs(screenPoint, screenPoint, modifiers: modifiers);
                 hoveredPopupElement.DispatchBubblePointerEvent(enterE, (el, localE) => el.OnPointerEntered(localE));
             }
         }
 
         if (hit != null)
         {
-            var moveE = new PointerEventArgs(screenPoint, screenPoint);
+            var moveE = new PointerEventArgs(screenPoint, screenPoint, modifiers: modifiers);
             hit.DispatchBubblePointerEvent(moveE, (el, localE) => el.OnPointerMoved(localE));
             return true;
         }
@@ -186,14 +186,14 @@ public static class PopupManager
     /// <summary>
     /// Intercepts mouse wheel scroll events.
     /// </summary>
-    public static bool HandleMouseScroll(Point screenPoint, float scrollX, float scrollY)
+    public static bool HandleMouseScroll(Point screenPoint, float scrollX, float scrollY, ModifierKeys modifiers = ModifierKeys.None)
     {
         if (!HasActivePopups) return false;
 
         var hit = HitTest(screenPoint);
         if (hit != null)
         {
-            var wheelE = new PointerWheelEventArgs(screenPoint, screenPoint, scrollX, scrollY);
+            var wheelE = new PointerWheelEventArgs(screenPoint, screenPoint, scrollX, scrollY, (ulong)Environment.TickCount64, modifiers);
             hit.DispatchBubblePointerEvent(wheelE, (el, localE) => el.OnPointerWheel(localE));
             return true;
         }

@@ -137,6 +137,17 @@ public class PointerEventArgs : RoutedEventArgs
     public ulong TimestampMs { get; }
 
     /// <summary>
+    /// Gets the modifier keys that were held when the event occurred.
+    /// </summary>
+    public ModifierKeys Modifiers { get; }
+
+    /// <summary>
+    /// Gets the number of consecutive clicks for press and release events: 1 for a single click, 2 for a double click,
+    /// 3 for a triple click, and so on (using the platform's double-click time and distance). 0 for other events.
+    /// </summary>
+    public int ClickCount { get; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="PointerEventArgs"/> class using the same point as local and screen position.
     /// </summary>
     /// <param name="position">The position, used for both <see cref="Position"/> and <see cref="ScreenPosition"/>.</param>
@@ -154,19 +165,30 @@ public class PointerEventArgs : RoutedEventArgs
     /// <param name="screenPosition">The position relative to the window.</param>
     /// <param name="button">The button associated with the event.</param>
     /// <param name="timestampMs">The event timestamp in milliseconds, or 0 if unknown.</param>
-    public PointerEventArgs(Point localPosition, Point screenPosition, PointerButtons button = PointerButtons.None, ulong timestampMs = 0)
+    /// <param name="modifiers">The modifier keys held during the event.</param>
+    /// <param name="clickCount">The consecutive click count for press and release events; 0 for other events.</param>
+    public PointerEventArgs(
+        Point localPosition,
+        Point screenPosition,
+        PointerButtons button = PointerButtons.None,
+        ulong timestampMs = 0,
+        ModifierKeys modifiers = ModifierKeys.None,
+        int clickCount = 0)
     {
         Position = localPosition;
         ScreenPosition = screenPosition;
         Button = button;
         TimestampMs = timestampMs;
+        Modifiers = modifiers;
+        ClickCount = clickCount;
     }
 
     /// <summary>
     /// Creates a copy of these args with a different local position.
     /// </summary>
     /// <remarks>
-    /// The copy keeps <see cref="ScreenPosition"/>, <see cref="Button"/>, <see cref="TimestampMs"/> and the routed-event
+    /// The copy keeps <see cref="ScreenPosition"/>, <see cref="Button"/>, <see cref="TimestampMs"/>, <see cref="Modifiers"/>,
+    /// <see cref="ClickCount"/> and the routed-event
     /// state (<see cref="RoutedEventArgs.RoutedEvent"/>, <see cref="RoutedEventArgs.Source"/>,
     /// <see cref="RoutedEventArgs.OriginalSource"/>, <see cref="RoutedEventArgs.Handled"/>). Setting
     /// <see cref="RoutedEventArgs.Handled"/> on the copy does not affect the original.
@@ -174,7 +196,7 @@ public class PointerEventArgs : RoutedEventArgs
     /// <param name="localPosition">The new position relative to the receiving element.</param>
     /// <returns>A new args instance of the same type.</returns>
     public virtual PointerEventArgs WithPosition(Point localPosition) =>
-        new(localPosition, ScreenPosition, Button, TimestampMs)
+        new(localPosition, ScreenPosition, Button, TimestampMs, Modifiers, ClickCount)
         {
             RoutedEvent = RoutedEvent,
             Source = Source,
@@ -220,8 +242,15 @@ public class PointerWheelEventArgs : PointerEventArgs
     /// <param name="deltaX">The horizontal scroll amount.</param>
     /// <param name="deltaY">The vertical scroll amount.</param>
     /// <param name="timestampMs">The event timestamp in milliseconds, or 0 if unknown.</param>
-    public PointerWheelEventArgs(Point localPosition, Point screenPosition, float deltaX, float deltaY, ulong timestampMs = 0)
-        : base(localPosition, screenPosition, PointerButtons.Middle, timestampMs)
+    /// <param name="modifiers">The modifier keys held during the event (e.g. Ctrl for zooming).</param>
+    public PointerWheelEventArgs(
+        Point localPosition,
+        Point screenPosition,
+        float deltaX,
+        float deltaY,
+        ulong timestampMs = 0,
+        ModifierKeys modifiers = ModifierKeys.None)
+        : base(localPosition, screenPosition, PointerButtons.Middle, timestampMs, modifiers)
     {
         DeltaX = deltaX;
         DeltaY = deltaY;
@@ -229,7 +258,7 @@ public class PointerWheelEventArgs : PointerEventArgs
 
     /// <inheritdoc/>
     public override PointerEventArgs WithPosition(Point localPosition) =>
-        new PointerWheelEventArgs(localPosition, ScreenPosition, DeltaX, DeltaY, TimestampMs)
+        new PointerWheelEventArgs(localPosition, ScreenPosition, DeltaX, DeltaY, TimestampMs, Modifiers)
         {
             RoutedEvent = RoutedEvent,
             Source = Source,
@@ -391,7 +420,115 @@ public enum Key
     /// <summary>The F11 function key.</summary>
     F11,
     /// <summary>The F12 function key.</summary>
-    F12
+    F12,
+    /// <summary>The Insert key.</summary>
+    Insert,
+    /// <summary>The Caps Lock key.</summary>
+    CapsLock,
+    /// <summary>The Num Lock key.</summary>
+    NumLock,
+    /// <summary>The Scroll Lock key.</summary>
+    ScrollLock,
+    /// <summary>The Print Screen key.</summary>
+    PrintScreen,
+    /// <summary>The Pause key.</summary>
+    Pause,
+    /// <summary>The context menu key.</summary>
+    Menu,
+    /// <summary>The minus / underscore key (<c>-</c>).</summary>
+    Minus,
+    /// <summary>The equals / plus key (<c>=</c>).</summary>
+    Equal,
+    /// <summary>The comma key (<c>,</c>).</summary>
+    Comma,
+    /// <summary>The period key (<c>.</c>).</summary>
+    Period,
+    /// <summary>The slash / question mark key (<c>/</c>).</summary>
+    Slash,
+    /// <summary>The semicolon key (<c>;</c>).</summary>
+    Semicolon,
+    /// <summary>The apostrophe / quote key (<c>'</c>).</summary>
+    Apostrophe,
+    /// <summary>The left bracket key (<c>[</c>).</summary>
+    LeftBracket,
+    /// <summary>The right bracket key (<c>]</c>).</summary>
+    RightBracket,
+    /// <summary>The backslash key (<c>\</c>).</summary>
+    Backslash,
+    /// <summary>The grave accent / tilde key (<c>`</c>).</summary>
+    GraveAccent,
+    /// <summary>The 0 key on the numeric keypad.</summary>
+    NumPad0,
+    /// <summary>The 1 key on the numeric keypad.</summary>
+    NumPad1,
+    /// <summary>The 2 key on the numeric keypad.</summary>
+    NumPad2,
+    /// <summary>The 3 key on the numeric keypad.</summary>
+    NumPad3,
+    /// <summary>The 4 key on the numeric keypad.</summary>
+    NumPad4,
+    /// <summary>The 5 key on the numeric keypad.</summary>
+    NumPad5,
+    /// <summary>The 6 key on the numeric keypad.</summary>
+    NumPad6,
+    /// <summary>The 7 key on the numeric keypad.</summary>
+    NumPad7,
+    /// <summary>The 8 key on the numeric keypad.</summary>
+    NumPad8,
+    /// <summary>The 9 key on the numeric keypad.</summary>
+    NumPad9,
+    /// <summary>The decimal key on the numeric keypad.</summary>
+    NumPadDecimal,
+    /// <summary>The divide key on the numeric keypad.</summary>
+    NumPadDivide,
+    /// <summary>The multiply key on the numeric keypad.</summary>
+    NumPadMultiply,
+    /// <summary>The subtract key on the numeric keypad.</summary>
+    NumPadSubtract,
+    /// <summary>The add key on the numeric keypad.</summary>
+    NumPadAdd,
+    /// <summary>The equals key on the numeric keypad.</summary>
+    NumPadEqual,
+    /// <summary>The F13 function key.</summary>
+    F13,
+    /// <summary>The F14 function key.</summary>
+    F14,
+    /// <summary>The F15 function key.</summary>
+    F15,
+    /// <summary>The F16 function key.</summary>
+    F16,
+    /// <summary>The F17 function key.</summary>
+    F17,
+    /// <summary>The F18 function key.</summary>
+    F18,
+    /// <summary>The F19 function key.</summary>
+    F19,
+    /// <summary>The F20 function key.</summary>
+    F20,
+    /// <summary>The F21 function key.</summary>
+    F21,
+    /// <summary>The F22 function key.</summary>
+    F22,
+    /// <summary>The F23 function key.</summary>
+    F23,
+    /// <summary>The F24 function key.</summary>
+    F24,
+    /// <summary>The left Shift key.</summary>
+    LeftShift,
+    /// <summary>The right Shift key.</summary>
+    RightShift,
+    /// <summary>The left Ctrl key.</summary>
+    LeftCtrl,
+    /// <summary>The right Ctrl key.</summary>
+    RightCtrl,
+    /// <summary>The left Alt key.</summary>
+    LeftAlt,
+    /// <summary>The right Alt key.</summary>
+    RightAlt,
+    /// <summary>The left Windows / Command / Super key.</summary>
+    LeftWindows,
+    /// <summary>The right Windows / Command / Super key.</summary>
+    RightWindows
 }
 
 /// <summary>
@@ -417,18 +554,26 @@ public class KeyEventArgs : RoutedEventArgs
     public bool IsDown { get; }
 
     /// <summary>
+    /// Gets whether this key press was generated by holding the key down (auto-repeat) rather than by pressing it.
+    /// </summary>
+    /// <remarks>Shortcuts that should fire once per press can ignore repeated events.</remarks>
+    public bool IsRepeat { get; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="KeyEventArgs"/> class.
     /// </summary>
     /// <param name="key">The mapped key.</param>
     /// <param name="keyCode">The raw, platform-specific key code, or 0 if unknown.</param>
     /// <param name="modifiers">The modifier keys held.</param>
     /// <param name="isDown"><see langword="true"/> for a key press; <see langword="false"/> for a release.</param>
-    public KeyEventArgs(Key key, int keyCode = 0, ModifierKeys modifiers = ModifierKeys.None, bool isDown = true)
+    /// <param name="isRepeat"><see langword="true"/> if the press was generated by auto-repeat.</param>
+    public KeyEventArgs(Key key, int keyCode = 0, ModifierKeys modifiers = ModifierKeys.None, bool isDown = true, bool isRepeat = false)
     {
         Key = key;
         KeyCode = keyCode;
         Modifiers = modifiers;
         IsDown = isDown;
+        IsRepeat = isRepeat;
     }
 
     /// <summary>
