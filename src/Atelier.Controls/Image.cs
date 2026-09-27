@@ -163,9 +163,10 @@ public class Image : Control
             return SKImage.FromEncodedData(stream);
         }
 
-        // 3. Search up parent directories
-        string? dir = AppDomain.CurrentDomain.BaseDirectory;
-        for (int i = 0; i < 6 && dir != null; i++)
+        // 3. Search the parent directories up to the root, so assets next to a project or repository are found from its
+        //    bin folder. The trailing separator is trimmed first: GetDirectoryName("a/b/") returns "a/b", not "a".
+        string? dir = Path.TrimEndingDirectorySeparator(AppDomain.CurrentDomain.BaseDirectory);
+        while (dir != null)
         {
             string candidate = Path.Combine(dir, pathOrResource);
             if (File.Exists(candidate))

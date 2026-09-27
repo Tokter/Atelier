@@ -26,7 +26,7 @@ public class MainView : KeybindingHandler
         _search = new TextBox()
             .Placeholder("Search pages (Ctrl+F)")
             .LeadingIconKind(MaterialIconKind.Search)
-            .Width(320)
+            .MinWidth(140)
             .FieldHeight(36)
             .BindText(_vm, v => v.SearchText, (v, text) => v.SearchText = text);
 
@@ -64,14 +64,18 @@ public class MainView : KeybindingHandler
     private TitleBar TitleBar() => new TitleBar()
         .Title("Atelier Gallery")
         .Icon(new Image("Assets/Icons/Atelier.png").Size(22, 22))
-        .Content(new StackPanel()
-            .Orientation(Orientation.Horizontal)
-            .Spacing(8)
-            .Center()
+        // The search box takes the space the buttons leave (up to 320 px), so the title bar fits narrow windows too.
+        .Content(new Grid()
+            .Columns(GridLength.Star, GridLength.Auto, GridLength.Auto)
+            .ColumnSpacing(8)
+            .MaxWidth(620)
+            .Margin(16, 0)
+            .VerticalAlignment(VerticalAlignment.Center)
             .Children(
                 _search,
-                Ui.IconButton(MaterialIconKind.OpenInNew, "New window", ButtonVariant.Text).Command(_vm.NewWindowCommand),
+                Ui.IconButton(MaterialIconKind.OpenInNew, "New window", ButtonVariant.Text).Column(1).Command(_vm.NewWindowCommand),
                 new Button()
+                    .Column(2)
                     .Variant(ButtonVariant.Tonal)
                     .Command(_vm.ToggleThemeCommand)
                     .Content(new StackPanel().Orientation(Orientation.Horizontal).Spacing(8).Children(

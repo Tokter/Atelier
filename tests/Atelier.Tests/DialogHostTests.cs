@@ -29,7 +29,9 @@ public class DialogHostTests
         host.Measure(new Size(800, 600));
         host.Arrange(new Rect(0, 0, 800, 600));
 
-        var hit = host.HitTest(new Point(50, 20));
+        // A stretched element with an explicit size is centered in its slot.
+        Assert.Equal(new Rect(350, 280, 100, 40), button.Bounds);
+        var hit = host.HitTest(new Point(400, 300));
         Assert.NotNull(hit);
         Assert.True(hit == button || hit.Parent == button);
     }

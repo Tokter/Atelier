@@ -363,10 +363,10 @@ public static class TreeViewMarkup
     /// <summary>Sets how far each level is indented, in pixels.</summary>
     public static T IndentSize<T>(this T treeView, float indentSize) where T : TreeView => treeView.Set(TreeView.IndentSizeProperty, indentSize);
 
-    /// <summary>Sets the icon of collapsed nodes, clicked to expand them.</summary>
+    /// <summary>Sets the expander icon of expanded nodes (default: a downward chevron), shown while their children are visible.</summary>
     public static T ExpandIcon<T>(this T treeView, MaterialIconKind icon) where T : TreeView => treeView.Set(TreeView.ExpandIconProperty, icon);
 
-    /// <summary>Sets the icon of expanded nodes, clicked to collapse them.</summary>
+    /// <summary>Sets the expander icon of collapsed nodes (default: a right chevron), clicked to show their children.</summary>
     public static T CollapseIcon<T>(this T treeView, MaterialIconKind icon) where T : TreeView => treeView.Set(TreeView.CollapseIconProperty, icon);
 
     /// <summary>Sets the size of the expand and collapse icons in pixels.</summary>

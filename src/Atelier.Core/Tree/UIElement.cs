@@ -1118,12 +1118,17 @@ public abstract class UIElement : VisualNode
 
             Size arrangeSize = new Size(maxArrangeWidth, maxArrangeHeight);
 
-            if (HorizontalAlignment != HorizontalAlignment.Stretch)
+            // Stretch fills the slot only along axes without an explicit size; an explicit Width or Height wins, and
+            // the element is then centered in a larger slot (like WPF).
+            bool fillWidth = HorizontalAlignment == HorizontalAlignment.Stretch && float.IsNaN(Width);
+            bool fillHeight = VerticalAlignment == VerticalAlignment.Stretch && float.IsNaN(Height);
+
+            if (!fillWidth)
             {
                 arrangeSize = new Size(Math.Min(arrangeSize.Width, childWidth), arrangeSize.Height);
             }
 
-            if (VerticalAlignment != VerticalAlignment.Stretch)
+            if (!fillHeight)
             {
                 arrangeSize = new Size(arrangeSize.Width, Math.Min(arrangeSize.Height, childHeight));
             }
@@ -1131,11 +1136,11 @@ public abstract class UIElement : VisualNode
             Size arrangedContentSize = ArrangeOverride(arrangeSize);
 
             // Calculate final positioned rect within innerRect based on alignment and constraints
-            float width = HorizontalAlignment == HorizontalAlignment.Stretch
+            float width = fillWidth
                 ? LayoutMath.ClampMinWins(innerRect.Width, MinWidth, MaxWidth)
                 : LayoutMath.ClampMinWins(arrangedContentSize.Width, MinWidth, MaxWidth);
 
-            float height = VerticalAlignment == VerticalAlignment.Stretch
+            float height = fillHeight
                 ? LayoutMath.ClampMinWins(innerRect.Height, MinHeight, MaxHeight)
                 : LayoutMath.ClampMinWins(arrangedContentSize.Height, MinHeight, MaxHeight);
 
@@ -1145,6 +1150,7 @@ public abstract class UIElement : VisualNode
             switch (HorizontalAlignment)
             {
                 case HorizontalAlignment.Center:
+                case HorizontalAlignment.Stretch when !fillWidth:
                     x += (innerRect.Width - width) * 0.5f;
                     break;
                 case HorizontalAlignment.Right:
@@ -1155,6 +1161,7 @@ public abstract class UIElement : VisualNode
             switch (VerticalAlignment)
             {
                 case VerticalAlignment.Center:
+                case VerticalAlignment.Stretch when !fillHeight:
                     y += (innerRect.Height - height) * 0.5f;
                     break;
                 case VerticalAlignment.Bottom:
