@@ -1282,14 +1282,6 @@ public class SilkWindow : IDisposable, IHostWindow
     private void OnKeyDown(IKeyboard keyboard, SilkKey key, int keyCode)
     {
         _needsRender = true; // discrete input usually changes something on screen
-        // Hot Reload manual trigger: F5 or Ctrl+R
-        if (key == SilkKey.F5 || (key == SilkKey.R && (keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight))))
-        {
-            Console.WriteLine("[HotReload] Manual hot reload key triggered (F5 / Ctrl+R).");
-            ReloadContent();
-            return;
-        }
-
         var atelierKey = MapKey(key);
 
         // Tab focus cycling
@@ -1322,6 +1314,14 @@ public class SilkWindow : IDisposable, IHostWindow
         }
 
         FocusManager.DispatchKeyDown(keyEventArgs, _rootElement);
+
+        // Manual hot reload with F5 or Ctrl+R, unless the app handled the key itself (e.g. its own F5 shortcut).
+        if (!keyEventArgs.Handled &&
+            (key == SilkKey.F5 || (key == SilkKey.R && (keyboard.IsKeyPressed(SilkKey.ControlLeft) || keyboard.IsKeyPressed(SilkKey.ControlRight)))))
+        {
+            Console.WriteLine("[HotReload] Manual hot reload key triggered (F5 / Ctrl+R).");
+            ReloadContent();
+        }
     }
 
     private void OnKeyUp(IKeyboard keyboard, SilkKey key, int keyCode)

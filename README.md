@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="Assets/Logo.png" alt="Atelier Logo" width="160" />
+  <img src="Assets/Logo.png" alt="Atelier logo" width="160" />
 </p>
 
 <h1 align="center">Atelier</h1>
 
 <p align="center">
-  <strong>A modern, high-performance, GPU-accelerated C# UI framework for .NET 9</strong><br>
-  <em>Powered by SkiaSharp, Silk.NET, and Material Design 3</em>
+  <strong>A GPU-accelerated desktop UI framework for .NET 9, written in plain C#</strong><br>
+  <em>SkiaSharp rendering · Silk.NET windowing · Material Design 3</em>
 </p>
 
 <p align="center">
@@ -18,86 +18,47 @@
   <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License" />
 </p>
 
----
-
-## 🎨 Overview
-
-**Atelier** is an open-source, hardware-accelerated UI framework built from the ground up for .NET 9. It replaces heavy, XML/XAML-centric desktop toolkits with a **clean, type-safe, declarative C# fluent API** and a **zero-allocation rendering pipeline** running on top of **SkiaSharp** and **OpenGL** via **Silk.NET**.
-
-Atelier blends modern ergonomics with raw speed:
-- **No XAML, No CSS, No WebViews**: Build your entire interface in pure C# with compile-time type safety, full IDE refactoring, and autocomplete.
-- **Hardware Accelerated**: Every control is drawn directly to an OpenGL framebuffer via SkiaSharp using stack-allocated drawing contexts.
-- **Material Design 3**: Fully realized Google Material 3 theming system with dynamic Light and Dark modes, comprehensive typography scales, and over 2,000+ vector Material Symbols.
-- **Native AOT Compatible**: Designed with reflection-free paths to support Native AOT ahead-of-time compilation.
+<p align="center">
+  <img src="docs/screenshots/selection-controls-light.png" alt="Atelier Gallery, light theme" width="49%" />
+  <img src="docs/screenshots/selection-controls-dark.png" alt="Atelier Gallery, dark theme" width="49%" />
+</p>
 
 ---
 
-## ✨ Key Capabilities & Current Features
+## Overview
 
-### 🖌️ Zero-Allocation GPU Rendering Pipeline
-- **Immediate-Mode Drawing Context**: Stack-allocated `ref DrawingContext` passes drawing instructions directly to SkiaSharp with zero per-frame heap allocations.
-- **Crisp Pixel Snapping**: Dedicated `DrawPixelRect` algorithms align borders, underlines, and carets to exact physical display pixels, completely eliminating fuzzy antialiasing blur on 1px lines.
-- **Layer & Transform Scopes**: Scoped `PushClip`, `PushRoundedClip`, and `PushTransform` (`Matrix3x2`) helpers manage canvas states cleanly and safely via `IDisposable`.
-- **Text Measurement & Caching**: High-performance font caching (`PaintRegistry`) and font metric calculation (`TextMeasurer`).
+Atelier is a retained-mode UI framework for desktop applications. You build the interface in C# with a fluent,
+type-safe markup API instead of XAML, and every control is drawn with SkiaSharp on an OpenGL surface.
 
-### 📱 Material Design 3 Theming System
-- **Dynamic Color Palettes (`MaterialColorScheme`)**: Complete Material 3 token system (`Primary`, `Secondary`, `Tertiary`, `Surface`, `SurfaceContainer`, `Outline`, etc.) with instant Light Mode and Dark Mode switching.
-- **Typography Scale (`MaterialTypography`)**: Full implementation of MD3 typography standards:
-  - `DisplayLarge`, `DisplayMedium`, `DisplaySmall`
-  - `HeadlineLarge`, `HeadlineMedium`, `HeadlineSmall`
-  - `TitleLarge`, `TitleMedium`, `TitleSmall`
-  - `BodyLarge`, `BodyMedium`, `BodySmall`
-  - `LabelLarge`, `LabelMedium`, `LabelSmall`
-- **Material Symbols (`MaterialIcon`)**: Over 2,000+ Google Material Symbols embedded directly via variable font format (`MaterialSymbolsRounded`), supporting font ligatures, arbitrary sizing, and runtime icon search.
-- **Theme Decoupling**: Controls dynamically inherit theme changes across Light and Dark modes without losing local overrides or visual states.
+- **C# only.** No XAML, no CSS, no web view. Views are ordinary C# with IntelliSense, refactoring and hot reload.
+- **Material Design 3 out of the box.** Light and dark color schemes, the MD3 type scale, default styles sized for
+  desktop use, and 2,100+ Material Symbols with all four variable font axes.
+- **A real property system.** Bindable properties with value precedence (default, inherited, style, local, animation,
+  coerced), styles, attached properties, typed data binding and change notifications.
+- **Built for low overhead.** Rendering reuses cached paints, fonts and text blobs, so a steady frame allocates nothing,
+  and windows only redraw when something changed.
+- **Reflection-free tooling.** Keybindings and property-grid metadata come from source generators.
 
-### 🧩 Rich Control Suite
-Atelier currently provides a comprehensive set of ready-to-use desktop controls:
+---
 
-| Control | Capabilities |
+## Screenshots
+
+All screenshots show the included [Gallery](samples/Atelier.Gallery) application.
+
+| | |
 |---|---|
-| **`TextBox`** | Outlined and Filled variants, animated floating label, leading icons, supporting text, selection highlighting, horizontal auto-scrolling with caret tracking, strict text clipping, double-click word selection, `Ctrl` / `Ctrl+Shift` word-by-word navigation, keyboard repeat, and clipboard shortcuts (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+A`). |
-| **`Button`** | Filled, Elevated, Tonal, Outlined, and Text variants with smooth hover, press, focus, and disabled visual states. |
-| **`TextBlock`** | Multi-line text rendering, word wrapping, bold, italic, custom font families, and dynamic theme muted text handling. |
-| **`Card`** | Elevated, Filled, and Outlined cards with configurable corner radii, clipping, and content nesting. |
-| **`Slider`** | Continuous and discrete range selections with tick marks, keyboard arrow adjustment, and live value tooltips. |
-| **`Switch`** | Material 3 toggle switch with animated thumb sliding and color morphing. |
-| **`CheckBox`** | Three-state checkbox (Checked, Unchecked, Indeterminate) with vector checkmark rendering. |
-| **`ComboBox`** | Dropdown selection control with smart-positioning popup list and search support. |
-| **`Popup` & `PopupManager`** | Popover and overlay system with smart anchor placement, light-dismiss, and z-index ordering. |
-| **`Dialog` & `DialogHost`** | Modal dialog system with dimmed backdrop scrim, open/close animations, and action buttons. |
-| **`ScrollViewer`** | Smooth horizontal and vertical scrolling, automatic scrollbar visibility, and mouse-wheel support. |
-| **`TreeView`** | Hierarchical expandable tree view with icons, expand/collapse toggles, and item selection. |
-| **`ListBox` & `ItemsControl`** | Flexible collection presenter with item templates, single/multi selection models, and keyboard navigation. |
-| **`PropertyGrid`** | Native AOT compatible, reflection-free object inspector with categorized and alphabetical sorting, real-time filtering, elevation toolbar, and built-in/custom editors for primitives, enums, and colors. |
-| **`Image`** | SkiaSharp-backed bitmap and vector image rendering with multiple stretch modes (`Uniform`, `UniformToFill`, `Fill`, `None`). |
-| **`Border` & `Panel`** | Versatile container controls for custom chrome, backgrounds, and layout composition. |
-
-### 📐 Flexible Layout System
-- **`Grid`**: Full WPF/CSS-style grid with `Star` (`*`), `Auto`, and fixed `Pixel` sizing, plus `RowSpan` and `ColSpan` support.
-- **`StackPanel`**: Horizontal and Vertical stacked layouts with uniform spacing.
-- **`Canvas`**: Absolute coordinate positioning.
-- **`WrapPanel`**, **`DockPanel`**, and **`UniformGrid`**: Flow layouts, docking edges, and evenly divided grids.
-- Complete support for `Margin`, `Padding`, `HorizontalAlignment`, `VerticalAlignment`, `MinWidth`, `MaxWidth`, `MinHeight`, `MaxHeight`, and geometric affine transforms.
-
-### ⚡ Animation & Physics Engine
-- **Spring Animations**: Physics-based sub-pixel spring models (`SpringAnimation`) for natural, fluid motion.
-- **Tween Animations**: `FloatAnimation` and `ColorAnimation` with Material 3 easing curves (`EmphasizedDecelerate`, `EmphasizedAccelerate`, `Standard`).
-- **High-Precision Clock**: Central `AnimationClock` synced with display refresh rates.
-
-### 🖥️ Native Windowing & Platform Shell (`Atelier.Platform.Silk`)
-- **Borderless Window Shell**: Modern borderless window styling on Windows with native DWM resize handles, drop shadows, and Aero snap.
-- **Transparency & Opacity**: Hardware-accelerated transparent or translucent windows (`IsTransparent`, `WindowOpacity`).
-- **Hot Reload**: Instant live reload (triggerable via F5 or Ctrl+R) that re-executes the UI factory while preserving ViewModel state.
-- **Native Clipboard**: Seamless operating system clipboard integration (`SilkClipboard`).
-- **Smooth Keyboard Repeat**: Native keyboard auto-repeat for navigation and editing keys.
-- **Performance Diagnostics**: Built-in FPS and frame-time diagnostics overlay.
+| ![Buttons](docs/screenshots/buttons.png) | ![Text fields, dark theme](docs/screenshots/text-fields-dark.png) |
+| **Buttons**: variants, commands, repeat and toggle buttons, toolbars | **Text fields**: outlined and filled, labels, validation, binding |
+| ![Cards](docs/screenshots/cards.png) | ![Icons, dark theme](docs/screenshots/icons-dark.png) |
+| **Cards**: variants, elevation, shape, media and clipping | **Icons**: Material Symbols with fill, weight, grade and optical size |
+| ![Typography](docs/screenshots/typography.png) | ![Layout panels, dark theme](docs/screenshots/layout-dark.png) |
+| **Typography**: the MD3 type scale and a live playground | **Layout**: stack, wrap, dock, grid, uniform grid and canvas |
+| ![Popups and dialogs](docs/screenshots/popups-dialogs.png) | ![Property grid](docs/screenshots/property-grid.png) |
+| **Popups & dialogs**: presets, custom content, scoped hosts | **Property grid**: generated metadata, validation, custom editors |
 
 ---
 
-## 🚀 Quick Start
-
-### 1. Simple Application Example
+## Quick start
 
 ```csharp
 using Atelier.Controls;
@@ -107,97 +68,143 @@ using Atelier.Markup;
 using Atelier.Platform.Silk;
 using Atelier.Theming;
 using Atelier.Theming.Material;
+using CommunityToolkit.Mvvm.ComponentModel;
 
-internal static class Program
+ThemeManager.Current = MaterialTheme.CreateLight();
+
+var vm = new GreetingViewModel();
+var window = new SilkWindow(title: "Hello Atelier", width: 640, height: 400);
+
+// A factory lambda enables hot reload: the view is rebuilt from the same view model.
+window.SetContent(() =>
+    new StackPanel()
+        .Spacing(16)
+        .Margin(32)
+        .Children(
+            new TextBlock("Welcome to Atelier").HeadlineMedium(),
+            new TextBox()
+                .Label("Your name")
+                .LeadingIconKind(MaterialIconKind.Person)
+                .MaxWidth(320)
+                .HorizontalAlignment(HorizontalAlignment.Left)
+                .BindText(vm, v => v.Name, (v, name) => v.Name = name),
+            new TextBlock().BodyLarge().BindText(vm, v => $"Hello, {v.Name}!"),
+            new Button("Say hello")
+                .HorizontalAlignment(HorizontalAlignment.Left)
+                .OnClick(() => vm.Name = "World")));
+
+window.Run();
+
+public partial class GreetingViewModel : ObservableObject
 {
-    private static void Main()
-    {
-        // 1. Set default Material theme
-        ThemeManager.Current = MaterialTheme.CreateLight();
-
-        // 2. Configure window
-        var window = new SilkWindow(
-            title: "My Atelier App",
-            width: 800,
-            height: 600,
-            isTitleLess: true
-        );
-
-        // 3. Build UI with fluent declarative markup
-        window.SetContent(() =>
-            new StackPanel { Orientation = Orientation.Vertical, Spacing = 16 }
-                .Padding(32)
-                .Children(
-                    new TextBlock("Welcome to Atelier")
-                        .HeadlineMedium()
-                        .Bold(),
-
-                    new TextBlock("A modern GPU-accelerated UI framework for .NET 9.")
-                        .BodyLarge()
-                        .Muted(),
-
-                    new TextBox
-                    {
-                        Label = "Your Name",
-                        Placeholder = "Enter your name...",
-                        LeadingIconKind = MaterialIconKind.Person,
-                        Width = 320
-                    },
-
-                    new Button("Click Me", ButtonVariant.Filled)
-                        .OnClick(btn => Console.WriteLine("Button clicked!"))
-                )
-        );
-
-        // 4. Run the window loop
-        window.Run();
-    }
+    [ObservableProperty]
+    private string _name = "Atelier";
 }
 ```
 
+Reference `Atelier.Markup` and `Atelier.Platform.Silk`; they bring in the rest of the framework.
+
+### The markup API
+
+Every property has a fluent method with the same name that returns the element, so calls chain and keep their type:
+
+```csharp
+new Button("Save").Variant(ButtonVariant.Tonal).Command(vm.SaveCommand).IsEnabled(false);
+new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cell(0, 1));
+```
+
+- `Bind{Property}(source, s => s.Value)` binds to an object; `Bind{Property}((MyViewModel vm) => vm.Value)` binds to
+  the `DataContext`. An optional setter makes the binding two-way.
+- `On{Event}(...)` attaches handlers; events without data also accept an `Action`.
+- Controls get their size, shape and colors from the theme, so views only set what they change.
+
 ---
 
-## 🏗️ Architecture & Project Structure
+## Features
 
-Atelier is modularized into distinct, decoupled assemblies:
+### Controls
 
-| Project | Description |
+| Control | Highlights |
 |---|---|
-| [`Atelier.Core`](file:///d:/GitHub/Atelier/src/Atelier.Core) | Visual tree, UIElement base, layout contracts, dependency/bindable properties, routed events, animations, and primitives. |
-| [`Atelier.Rendering`](file:///d:/GitHub/Atelier/src/Atelier.Rendering) | SkiaSharp rendering backend, `DrawingContext` ref struct, `PaintRegistry`, and text measurement. |
-| [`Atelier.Layout`](file:///d:/GitHub/Atelier/src/Atelier.Layout) | Layout panels: `Grid`, `StackPanel`, `Canvas`, `WrapPanel`, `DockPanel`, and `UniformGrid`. |
-| [`Atelier.Theming`](file:///d:/GitHub/Atelier/src/Atelier.Theming) | Pluggable theming infrastructure, style managers, and control renderers. |
-| [`Atelier.Theming.Material`](file:///d:/GitHub/Atelier/src/Atelier.Theming.Material) | Material Design 3 color schemes, typography, icon fonts, and Material control renderers. |
-| [`Atelier.Controls`](file:///d:/GitHub/Atelier/src/Atelier.Controls) | Complete suite of desktop UI controls (TextBox, Button, Card, Slider, Switch, Dialog, PropertyGrid, etc.). |
-| [`Atelier.Markup`](file:///d:/GitHub/Atelier/src/Atelier.Markup) | Fluent C# extensions for declarative layout composition, styling, and data binding. |
-| [`Atelier.Platform.Silk`](file:///d:/GitHub/Atelier/src/Atelier.Platform.Silk) | Desktop windowing, OpenGL context creation, input events, and clipboard via Silk.NET. |
-| [`Atelier.Gallery`](file:///d:/GitHub/Atelier/samples/Atelier.Gallery) | Comprehensive showcase application demonstrating all controls, themes, typography, and icons. |
-| [`Atelier.Tests`](file:///d:/GitHub/Atelier/tests/Atelier.Tests) | Full automated unit and layout test suite (300+ tests). |
+| `Button`, `RepeatButton`, `ToggleButton` | Filled, tonal, elevated, outlined and text variants; commands with `CanExecute`; click modes; repeat delay and interval; two- and three-state toggles |
+| `CheckBox`, `RadioButton`, `Switch` | Three states, rich content, named and unnamed radio groups, thumb icons, value-matching radio binding |
+| `TextBox` | Outlined and filled variants, floating label, placeholder, leading icon, supporting text, `INotifyDataErrorInfo` validation, max length, password mode, undo/redo, clipboard and word navigation |
+| `ComboBox` | Items or bound collections, typed item templates, text search, keyboard navigation, max drop-down height |
+| `Slider`, `ProgressBar` | Ranges, small and large steps, tick snapping, formatted value bubble; determinate and indeterminate progress |
+| `ListBox`, `ItemsControl` | Incremental updates from observable collections, typed templates, type-to-search, keyboard navigation |
+| `TreeView` | Data-bound or item-built trees, children selector, typed templates, configurable expander icons |
+| `Card`, `Border` | Outlined, elevated and filled cards; elevation shadows; per-corner radii; clipping |
+| `Popup`, `Dialog`, `DialogHost` | Smart placement with flipping, light dismiss, dialog presets and custom buttons, async results, scoped hosts |
+| `ScrollViewer` | Per-axis scroll bar modes, wheel and keyboard scrolling, scroll events |
+| `TransitioningContentControl` | Fade, slide, zoom, slide-and-fade and composite transitions with configurable duration and easing |
+| `PropertyGrid` | Categories, sorting, filtering, validation, custom editors per type or predicate; metadata generated at compile time |
+| `Icon`, `Image`, `TextBlock` | Material Symbols with variable axes and custom SVG paths; stretch modes; wrapping, trimming, max lines and line height |
+| `TitleBar`, `Toolbar`, `KeybindingHandler` | Custom window chrome, action bars, scoped keyboard shortcuts with chords |
+
+### Layout
+
+`StackPanel`, `WrapPanel`, `DockPanel`, `Grid` (Auto, pixel and star sizes, spans), `UniformGrid` and `Canvas`, plus
+margin, padding, alignment, min/max sizes, visibility, clipping, opacity, layout transforms and render transforms.
+
+### Theming and styling
+
+- `MaterialTheme.CreateLight()` / `CreateDark()`: MD3 color schemes, switchable at runtime in every open window.
+- Theme default styles follow the MD3 specs with a desktop density (32 px buttons, 48 px text fields);
+  `MaterialSizing.Touch` gives the standard MD3 sizes.
+- Styles apply by type or by key (`.StyleKey(...)`, typography shortcuts such as `.TitleLarge()`), with the precedence
+  theme style < app style < local value.
+- Focus rings appear for keyboard navigation only.
+
+### Platform
+
+- Borderless windows with native resizing, snapping and shadows on Windows; multiple windows with per-window focus.
+- Render-on-demand: idle windows don't draw.
+- Hot reload through .NET Hot Reload, or manually with F5 or Ctrl+R when the app doesn't handle those keys itself.
+- System clipboard, key repeat, and an optional frame-rate overlay (`SilkWindow.ShowFpsOverlay`).
 
 ---
 
-## 🏃 Running the Gallery Sample
+## Project structure
 
-To explore all the controls and features interactively, run the built-in Gallery application:
+| Project | Contents |
+|---|---|
+| [`Atelier.Core`](src/Atelier.Core) | Visual tree, bindable properties and bindings, styles, routed input, focus, animation, dispatcher, keybindings |
+| [`Atelier.Rendering`](src/Atelier.Rendering) | SkiaSharp drawing context, paint, font and text caches, text measurement |
+| [`Atelier.Layout`](src/Atelier.Layout) | Layout panels and `Border` |
+| [`Atelier.Controls`](src/Atelier.Controls) | The control library |
+| [`Atelier.Theming`](src/Atelier.Theming) | Theme infrastructure and renderer registry |
+| [`Atelier.Theming.Material`](src/Atelier.Theming.Material) | Material Design 3 renderers, color schemes, typography, sizing and default styles |
+| [`Atelier.Markup`](src/Atelier.Markup) | The fluent markup API |
+| [`Atelier.Generators`](src/Atelier.Generators) | Source generators for keybindings and property-grid metadata |
+| [`Atelier.Platform.Silk`](src/Atelier.Platform.Silk) | Windows, OpenGL context, input and clipboard via Silk.NET |
+| [`Atelier.Gallery`](samples/Atelier.Gallery) | Showcase application for every control |
+| [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (900+) |
+
+---
+
+## Running the Gallery
 
 ```bash
 dotnet run --project samples/Atelier.Gallery
 ```
 
-Features inside the gallery:
-- **Buttons**: Showcase of all Material 3 variants (Filled, Elevated, Tonal, Outlined, Text).
-- **TextBoxes**: Outlined, Filled, animated labels, leading icons, supporting text, and horizontal scrolling.
-- **Typography**: Interactive playground testing font sizes, weights, and live theme color resolution.
-- **Material Symbols**: Interactive search over 2,000+ vector icons with live filtering.
-- **Cards & Layouts**: Elevation layers, clipping, nested grids, and stack layouts.
-- **PropertyGrid**: Live inspector for complex objects with instant property updates.
-- **Theme Switcher**: Instant toggle between Material 3 Light and Dark modes.
+The gallery has a page for every control group. Each page demonstrates the control's properties, events, bindings and
+states, with the code that builds it. Useful shortcuts:
+
+| Shortcut | Action |
+|---|---|
+| Ctrl+F | Search the pages |
+| Ctrl+T | Switch between the light and dark theme |
+| Ctrl+Shift+F | Show the frame-rate overlay |
+| F5 / Ctrl+R | Rebuild the window content (hot reload; F5 resets the demos on the Keybindings page) |
+
+To render pages to PNG files without opening a window, as for the screenshots above, set
+`ATELIER_GALLERY_SNAPSHOT=<output folder>`. Optionally also set `ATELIER_GALLERY_PAGES=0,3,7`,
+`ATELIER_GALLERY_THEME=dark` and `ATELIER_GALLERY_SIZE=1280x800`.
 
 ---
 
-## 🧪 Running Tests
-
-To run the full suite of automated unit tests:
+## Running the tests
 
 ```bash
 dotnet test
@@ -205,7 +212,7 @@ dotnet test
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the [MIT License](LICENSE).
 Copyright (c) 2026 Markus Luedin.
