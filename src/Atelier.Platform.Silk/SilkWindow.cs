@@ -168,7 +168,24 @@ public class SilkWindow : IDisposable, IHostWindow
     // even while the window is idle. During a frame the loop is not event-driven, so this is just a flag write.
     private void OnTreeInvalidated() => InvalidateRender();
 
-    private void OnPopupChanged(Popup popup) => InvalidateRender();
+    private void OnPopupOpened(Popup popup)
+    {
+        // A popup without a parent (such as a tooltip) is its own tree: follow its invalidations while it is open, so
+        // changes inside it (content, a fade-in) are drawn.
+        if (popup.Parent == null)
+        {
+            popup.NeedsVisualUpdate += OnTreeInvalidated;
+            popup.NeedsLayoutUpdate += OnTreeInvalidated;
+        }
+        InvalidateRender();
+    }
+
+    private void OnPopupClosed(Popup popup)
+    {
+        popup.NeedsVisualUpdate -= OnTreeInvalidated;
+        popup.NeedsLayoutUpdate -= OnTreeInvalidated;
+        InvalidateRender();
+    }
 
     private void OnThemeChanged(Theme theme) => InvalidateRender();
 
@@ -195,6 +212,10 @@ public class SilkWindow : IDisposable, IHostWindow
         if (focused)
         {
             SilkApplication.SetActive(this);
+        }
+        else
+        {
+            ToolTipService.Close(); // a tooltip doesn't outlive the window's activation
         }
         InvalidateRender();
     }
@@ -460,6 +481,24 @@ public class SilkWindow : IDisposable, IHostWindow
     private const uint WM_NCHITTEST = 0x0084;
     private const uint WM_NCDESTROY = 0x0082;
     private const uint WM_NCLBUTTONDOWN = 0x00A1;
+    private const uint WM_MOUSEMOVE = 0x0200;
+    private const uint WM_MOUSELEAVE = 0x02A3;
+    private const uint TME_LEAVE = 0x00000002;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TRACKMOUSEEVENT
+    {
+        public uint cbSize;
+        public uint dwFlags;
+        public IntPtr hwndTrack;
+        public uint dwHoverTime;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool TrackMouseEvent(ref TRACKMOUSEEVENT eventTrack);
+
+    // Whether Windows was asked to report the pointer leaving the window (WM_MOUSELEAVE); reset when it did.
+    private bool _trackingMouseLeave;
 
     private const int HTCLIENT = 1;
     private const int HTCAPTION = 2;
@@ -693,8 +732,8 @@ public class SilkWindow : IDisposable, IHostWindow
         ThemeManager.ThemeChanged += OnThemeChanged;
         StyleManager.GlobalStyles.StylesChanged += OnGlobalStylesChanged;
         StyleManager.ThemeStyles.StylesChanged += OnGlobalStylesChanged;
-        PopupManager.PopupOpened += OnPopupChanged;
-        PopupManager.PopupClosed += OnPopupChanged;
+        PopupManager.PopupOpened += OnPopupOpened;
+        PopupManager.PopupClosed += OnPopupClosed;
 
         HotReloadManager.HotReloadTriggered += OnHotReloadTriggered;
     }
@@ -807,6 +846,24 @@ public class SilkWindow : IDisposable, IHostWindow
         {
             switch (uMsg)
             {
+                case WM_MOUSEMOVE:
+                    if (!_trackingMouseLeave)
+                    {
+                        var track = new TRACKMOUSEEVENT
+                        {
+                            cbSize = (uint)Marshal.SizeOf<TRACKMOUSEEVENT>(),
+                            dwFlags = TME_LEAVE,
+                            hwndTrack = hWnd,
+                        };
+                        _trackingMouseLeave = TrackMouseEvent(ref track);
+                    }
+                    break;
+
+                case WM_MOUSELEAVE:
+                    _trackingMouseLeave = false;
+                    OnPointerLeftWindow();
+                    break;
+
                 case WM_NCCALCSIZE:
                     if (wParam != IntPtr.Zero)
                     {
@@ -1057,6 +1114,7 @@ public class SilkWindow : IDisposable, IHostWindow
     {
         _needsRender = true; // discrete input usually changes something on screen
         FocusManager.NotifyPointerInteraction(); // hide focus rings until the keyboard is used again
+        ToolTipService.OnPointerPressed();
         if (_rootElement == null) return;
 
         var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
@@ -1172,6 +1230,7 @@ public class SilkWindow : IDisposable, IHostWindow
                 _hoveredElement.DispatchBubblePointerEvent(exitE, (el, localE) => el.OnPointerExited(localE));
                 _hoveredElement = null;
             }
+            ToolTipService.OnPointerOver(_hoveredPopupElement);
             return;
         }
         else if (_hoveredPopupElement != null)
@@ -1182,6 +1241,7 @@ public class SilkWindow : IDisposable, IHostWindow
         }
 
         var hit = _rootElement.HitTest(screenPos);
+        ToolTipService.OnPointerOver(hit);
 
         if (hit != _hoveredElement)
         {
@@ -1207,9 +1267,28 @@ public class SilkWindow : IDisposable, IHostWindow
         }
     }
 
+    // The pointer left the window: nothing in it is hovered any more, and a tooltip it showed closes.
+    private void OnPointerLeftWindow()
+    {
+        _needsRender = true;
+        var position = new Point(-1, -1);
+        if (_hoveredPopupElement != null)
+        {
+            _hoveredPopupElement.DispatchBubblePointerEvent(new PointerEventArgs(position, position), (el, e) => el.OnPointerExited(e));
+            _hoveredPopupElement = null;
+        }
+        if (_hoveredElement != null)
+        {
+            _hoveredElement.DispatchBubblePointerEvent(new PointerEventArgs(position, position), (el, e) => el.OnPointerExited(e));
+            _hoveredElement = null;
+        }
+        ToolTipService.OnPointerOver(null);
+    }
+
     private void OnMouseScroll(IMouse mouse, ScrollWheel scroll)
     {
         _needsRender = true; // discrete input usually changes something on screen
+        ToolTipService.OnPointerWheel();
         if (_rootElement == null) return;
 
         var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
@@ -1719,6 +1798,7 @@ public class SilkWindow : IDisposable, IHostWindow
     private void OnClosing()
     {
         _isClosing = true;
+        ToolTipService.Close();
 
         UnhookInputEvents();
         CleanupGraphicsResources();
@@ -1763,8 +1843,8 @@ public class SilkWindow : IDisposable, IHostWindow
         ThemeManager.ThemeChanged -= OnThemeChanged;
         StyleManager.GlobalStyles.StylesChanged -= OnGlobalStylesChanged;
         StyleManager.ThemeStyles.StylesChanged -= OnGlobalStylesChanged;
-        PopupManager.PopupOpened -= OnPopupChanged;
-        PopupManager.PopupClosed -= OnPopupChanged;
+        PopupManager.PopupOpened -= OnPopupOpened;
+        PopupManager.PopupClosed -= OnPopupClosed;
 
         if (_rootElement != null)
         {

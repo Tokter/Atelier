@@ -22,5 +22,10 @@ public enum PlacementMode
     /// <summary>Below the target, right edges aligned.</summary>
     BottomRight = 5,
     /// <summary>Centered in the viewport, ignoring the target's position.</summary>
-    Center = 6
+    Center = 6,
+    /// <summary>
+    /// Below the pointer position at the time the popup opens (below the cursor, like classic desktop tooltips and
+    /// context menus). Falls back to <see cref="Bottom"/> when the pointer position is unknown.
+    /// </summary>
+    Pointer = 7
 }

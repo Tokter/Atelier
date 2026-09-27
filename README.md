@@ -55,6 +55,8 @@ All screenshots show the included [Gallery](samples/Atelier.Gallery) application
 | **Typography**: the MD3 type scale and a live playground | **Layout**: stack, wrap, dock, grid, uniform grid and canvas |
 | ![Popups and dialogs](docs/screenshots/popups-dialogs.png) | ![Property grid](docs/screenshots/property-grid.png) |
 | **Popups & dialogs**: presets, custom content, scoped hosts | **Property grid**: generated metadata, validation, custom editors |
+| ![Tooltips](docs/screenshots/tooltips.png) | |
+| **Tooltips**: plain text, or rich content with clickable actions | |
 
 ---
 
@@ -134,7 +136,8 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `ListBox`, `ItemsControl` | Incremental updates from observable collections, typed templates, type-to-search, keyboard navigation |
 | `TreeView` | Data-bound or item-built trees, children selector, typed templates, configurable expander icons |
 | `Card`, `Border` | Outlined, elevated and filled cards; elevation shadows; per-corner radii; clipping |
-| `Popup`, `Dialog`, `DialogHost` | Smart placement with flipping, light dismiss, dialog presets and custom buttons, async results, scoped hosts |
+| `Popup`, `Dialog`, `DialogHost` | Smart placement with flipping (or at the pointer), light dismiss, dialog presets and custom buttons, async results, scoped hosts |
+| `ToolTip`, `RichToolTip` | `.ToolTip("text")` on any element; rich tooltips hold any element and stay open for their buttons and links; placement, delays, disabled elements, optional keyboard-focus tooltips |
 | `ScrollViewer` | Per-axis scroll bar modes, wheel and keyboard scrolling, scroll events |
 | `TransitioningContentControl` | Fade, slide, zoom, slide-and-fade and composite transitions with configurable duration and easing |
 | `PropertyGrid` | Categories, sorting, filtering, validation, custom editors per type or predicate; metadata generated at compile time |

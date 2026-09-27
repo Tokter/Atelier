@@ -48,6 +48,7 @@ public partial class MainViewModel : ObservableObject
             new TypographyViewModel(),
             new LayoutViewModel(),
             new DialogHostViewModel(),
+            new ToolTipsViewModel(),
             new TransformationViewModel(),
             new TransitionsViewModel(),
             new PropertyGridViewModel(),

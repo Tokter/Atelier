@@ -73,11 +73,11 @@ public class MainView : KeybindingHandler
             .VerticalAlignment(VerticalAlignment.Center)
             .Children(
                 _search,
-                Ui.IconButton(MaterialIconKind.OpenInNew, "New window", ButtonVariant.Text).Column(1).Command(_vm.NewWindowCommand),
+                Ui.IconButton(MaterialIconKind.OpenInNew, "New window", ButtonVariant.Text).Column(1).Command(_vm.NewWindowCommand).ToolTip("Open another gallery window with its own state"),
                 new Button()
                     .Column(2)
                     .Variant(ButtonVariant.Tonal)
-                    .Command(_vm.ToggleThemeCommand)
+                    .Command(_vm.ToggleThemeCommand).ToolTip("Switch the theme in all windows (Ctrl+T)")
                     .Content(new StackPanel().Orientation(Orientation.Horizontal).Spacing(8).Children(
                         new Icon().Size(18).VerticalAlignment(VerticalAlignment.Center).BindKind(_vm, v => v.ThemeToggleIcon),
                         new TextBlock().VerticalAlignment(VerticalAlignment.Center).BindText(_vm, v => v.ThemeToggleText)))));

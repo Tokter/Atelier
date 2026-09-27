@@ -42,10 +42,10 @@ public class ButtonsView : GalleryPage
             Log(Ui.IconButton(MaterialIconKind.Share, "Share", ButtonVariant.Outlined)),
             Log(Ui.IconButton(MaterialIconKind.Add, "Add item", ButtonVariant.Text)))),
         Ui.Demo("Icon only", Ui.Row(
-            Log(IconOnly(MaterialIconKind.Favorite, ButtonVariant.Filled)),
-            Log(IconOnly(MaterialIconKind.Bookmark, ButtonVariant.Tonal)),
-            Log(IconOnly(MaterialIconKind.ContentCopy, ButtonVariant.Outlined)),
-            Log(IconOnly(MaterialIconKind.MoreVert, ButtonVariant.Text)))),
+            Log(IconOnly(MaterialIconKind.Favorite, ButtonVariant.Filled).ToolTip("Add to favorites")),
+            Log(IconOnly(MaterialIconKind.Bookmark, ButtonVariant.Tonal).ToolTip("Bookmark")),
+            Log(IconOnly(MaterialIconKind.ContentCopy, ButtonVariant.Outlined).ToolTip("Copy (Ctrl+C)")),
+            Log(IconOnly(MaterialIconKind.MoreVert, ButtonVariant.Text).ToolTip("More options")))),
         Ui.Demo("Disabled", Ui.Row(Array.ConvertAll(Variants, v => (UIElement)new Button(v.ToString()).Variant(v).IsEnabled(false)))),
         Ui.Demo("Click event", Ui.Readout(_vm, v => v.LastClick)),
         Ui.Columns(320,
@@ -64,9 +64,10 @@ public class ButtonsView : GalleryPage
         Ui.Columns(320,
             Ui.Demo("CanExecute",
                 Ui.Row(
-                    IconOnly(MaterialIconKind.Remove, ButtonVariant.Outlined).Command(_vm.DecrementCommand),
+                    IconOnly(MaterialIconKind.Remove, ButtonVariant.Outlined).Command(_vm.DecrementCommand)
+                        .ToolTip("Decrease (disabled at 0)").ToolTipShowOnDisabled(),
                     new TextBlock().TitleLarge().MinWidth(40).BindText(_vm, v => v.Count.ToString()),
-                    IconOnly(MaterialIconKind.Add, ButtonVariant.Filled).Command(_vm.IncrementCommand)),
+                    IconOnly(MaterialIconKind.Add, ButtonVariant.Filled).Command(_vm.IncrementCommand).ToolTip("Increase")),
                 Ui.Note("The minus button disables itself at 0: the command's CanExecute returns false.")),
             Ui.Demo("CommandParameter",
                 Ui.Row(
@@ -129,9 +130,9 @@ public class ButtonsView : GalleryPage
     private UIElement ToolbarContent() =>
         new DockPanel().Children(
             new StackPanel().Orientation(Orientation.Horizontal).Spacing(4).Dock(Dock.Left).Children(
-                IconOnly(MaterialIconKind.Undo, ButtonVariant.Text),
-                IconOnly(MaterialIconKind.Redo, ButtonVariant.Text),
-                IconOnly(MaterialIconKind.ContentCopy, ButtonVariant.Text)),
+                IconOnly(MaterialIconKind.Undo, ButtonVariant.Text).ToolTip("Undo (Ctrl+Z)"),
+                IconOnly(MaterialIconKind.Redo, ButtonVariant.Text).ToolTip("Redo (Ctrl+Y)"),
+                IconOnly(MaterialIconKind.ContentCopy, ButtonVariant.Text).ToolTip("Copy (Ctrl+C)")),
             new StackPanel().Orientation(Orientation.Horizontal).Spacing(8).Dock(Dock.Right).Children(
                 new Button("Discard").Variant(ButtonVariant.Text),
                 Ui.IconButton(MaterialIconKind.Save, "Save")),
@@ -141,6 +142,7 @@ public class ButtonsView : GalleryPage
         new ToggleButton()
             .Padding(12, 6)
             .Content(new Icon(icon, 20))
+            .ToolTip($"Align {alignment.ToString().ToLowerInvariant()}")
             .BindIsChecked(_vm, v => v.Alignment == alignment)
             .Command(_vm.SelectAlignmentCommand, alignment);
 

@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using Atelier.Controls;
 using Atelier.Core.Primitives;
+using Atelier.Core.Tree;
 using Atelier.Gallery.ViewModels;
 using Atelier.Gallery.Views;
 using Atelier.Rendering;
@@ -57,6 +59,14 @@ internal static class Snapshot
                 root.Arrange(new Rect(0, 0, width, height));
             }
 
+            // ATELIER_GALLERY_TOOLTIP=n opens the tooltip of the page's n-th element (0-based) that has one.
+            if (int.TryParse(Environment.GetEnvironmentVariable("ATELIER_GALLERY_TOOLTIP"), out int toolTipIndex)
+                && FindToolTipOwner(root, ref toolTipIndex) is { } owner)
+            {
+                ToolTipService.Show(owner);
+            }
+            PopupManager.UpdatePopups(new Size(width, height), root);
+
             using var bitmap = new SKBitmap(width, height);
             using (var canvas = new SKCanvas(bitmap))
             {
@@ -64,7 +74,9 @@ internal static class Snapshot
                 canvas.Clear(new SKColor(background.R, background.G, background.B, background.A));
                 var context = new DrawingContext(canvas, registry);
                 VisualTreeRenderer.Render(root, ref context, ThemeVisualPresenter.Instance);
+                PopupManager.RenderPopups(ref context, ThemeVisualPresenter.Instance, root);
             }
+            ToolTipService.Close();
 
             string file = Path.Combine(outputDirectory, $"page{page}{(dark ? "-dark" : "")}.png");
             using var image = SKImage.FromBitmap(bitmap);
@@ -75,6 +87,24 @@ internal static class Snapshot
         }
 
         return true;
+    }
+
+    // Depth-first search for the index-th element with a tooltip.
+    private static UIElement? FindToolTipOwner(VisualNode node, ref int index)
+    {
+        if (node is UIElement element && ToolTipService.GetToolTip(element) != null && index-- == 0)
+        {
+            return element;
+        }
+
+        for (int i = 0; i < node.Children.Count; i++)
+        {
+            if (FindToolTipOwner(node.Children[i], ref index) is { } found)
+            {
+                return found;
+            }
+        }
+        return null;
     }
 
     private static (int Width, int Height) ParseSize(string? size)

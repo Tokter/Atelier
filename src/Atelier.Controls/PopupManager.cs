@@ -127,13 +127,20 @@ public static class PopupManager
         for (int i = popups.Count - 1; i >= 0; i--)
         {
             var popup = popups[i];
-            if (!popup.IsOpen || popup.ActualBounds.IsEmpty) continue;
+            if (!popup.IsOpen || popup.ActualBounds.IsEmpty || !popup.AcceptsPointerInput) continue;
 
             if (popup.ActualBounds.Contains(screenPoint))
             {
-                popupIndex = i;
                 Point localPoint = screenPoint.Offset(-popup.ActualBounds.X, -popup.ActualBounds.Y);
                 var hit = popup.Child?.HitTest(localPoint);
+
+                // Transient popups (tooltips) let input through where nothing in them is hit-testable.
+                if (hit == null && popup.IsTransient)
+                {
+                    continue;
+                }
+
+                popupIndex = i;
                 return hit ?? popup.Child ?? popup;
             }
         }
@@ -157,6 +164,7 @@ public static class PopupManager
     /// <returns><c>true</c> if the press was handled here and must not reach the window's tree.</returns>
     public static bool HandleMouseDown(Point screenPoint, PointerButtons button, ModifierKeys modifiers = ModifierKeys.None, int clickCount = 1, VisualNode? root = null)
     {
+        RecordPointer(screenPoint, root);
         if (_activePopups.Count == 0) return false;
 
         var popups = RentSnapshot(root);
@@ -166,12 +174,21 @@ public static class PopupManager
 
             var hit = HitTest(popups, screenPoint, out int hitIndex);
 
+            // Transient popups (tooltips) close on any press outside them, without consuming it.
+            for (int i = popups.Count - 1; i >= 0; i--)
+            {
+                if (i != hitIndex && popups[i].IsTransient && popups[i].IsOpen)
+                {
+                    popups[i].IsOpen = false;
+                }
+            }
+
             // Close light-dismiss popups above the one hit (all of them when the press is outside every popup).
             bool dismissed = false;
             for (int i = popups.Count - 1; i > hitIndex; i--)
             {
                 var popup = popups[i];
-                if (!popup.StaysOpen && popup.IsOpen)
+                if (!popup.StaysOpen && !popup.IsTransient && popup.IsOpen)
                 {
                     popup.IsOpen = false;
                     dismissed = true;
@@ -269,6 +286,7 @@ public static class PopupManager
     /// <returns><c>true</c> if the pointer is over a popup and the move must not reach the window's tree.</returns>
     public static bool HandleMouseMove(Point screenPoint, ref UIElement? hoveredPopupElement, ModifierKeys modifiers = ModifierKeys.None, VisualNode? root = null)
     {
+        RecordPointer(screenPoint, root);
         UIElement? hit = null;
         if (_activePopups.Count > 0)
         {
@@ -338,7 +356,7 @@ public static class PopupManager
 
             for (int i = 0; i < popups.Count; i++)
             {
-                if (!popups[i].StaysOpen)
+                if (!popups[i].StaysOpen && !popups[i].IsTransient)
                 {
                     return true;
                 }
@@ -360,6 +378,23 @@ public static class PopupManager
     public static bool HandleKeyDown(KeyEventArgs e, VisualNode? root = null)
     {
         if (_activePopups.Count == 0 || e.Key != Key.Escape) return false;
+
+        // Escape first closes transient popups (tooltips); the next Escape reaches the other popups.
+        bool closedTransient = false;
+        for (int i = _activePopups.Count - 1; i >= 0; i--)
+        {
+            var popup = _activePopups[i];
+            if (popup.IsTransient && popup.IsOpen && BelongsTo(popup, root))
+            {
+                popup.IsOpen = false;
+                closedTransient = true;
+            }
+        }
+        if (closedTransient)
+        {
+            e.Handled = true;
+            return true;
+        }
 
         for (int i = _activePopups.Count - 1; i >= 0; i--)
         {
@@ -435,16 +470,41 @@ public static class PopupManager
 
     private static bool BelongsTo(Popup popup, VisualNode? root)
     {
+        return root == null || popup.GetOwnerRoot() == root;
+    }
+
+    // The last pointer position reported by a window, and that window's root (one pointer for all windows).
+    private static Point s_pointerPosition;
+    private static WeakReference<VisualNode>? s_pointerRoot;
+
+    /// <summary>
+    /// Gets the last pointer position in the window of <paramref name="root"/>, in window coordinates, as reported to
+    /// <see cref="HandleMouseMove"/> and <see cref="HandleMouseDown"/>.
+    /// </summary>
+    /// <param name="root">The window's content root.</param>
+    /// <param name="position">The pointer position.</param>
+    /// <returns><c>false</c> if the pointer was last seen in another window, or never.</returns>
+    public static bool TryGetPointerPosition(VisualNode root, out Point position)
+    {
+        position = s_pointerPosition;
+        return s_pointerRoot != null && s_pointerRoot.TryGetTarget(out var last) && last == root;
+    }
+
+    private static void RecordPointer(Point position, VisualNode? root)
+    {
+        s_pointerPosition = position;
         if (root == null)
         {
-            return true;
+            return;
         }
 
-        VisualNode node = popup;
-        while (node.Parent != null)
+        if (s_pointerRoot == null)
         {
-            node = node.Parent;
+            s_pointerRoot = new WeakReference<VisualNode>(root);
         }
-        return node == root;
+        else
+        {
+            s_pointerRoot.SetTarget(root);
+        }
     }
 }

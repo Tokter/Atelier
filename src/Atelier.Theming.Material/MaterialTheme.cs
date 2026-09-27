@@ -58,6 +58,7 @@ public class MaterialTheme : Theme
         renderers.Register(new MaterialTitleBarRenderer(colors));
         renderers.Register(new MaterialComboBoxRenderer(colors));
         renderers.Register(new MaterialPopupRenderer(colors));
+        renderers.Register(new MaterialToolTipRenderer(colors));
         renderers.Register(new MaterialDialogRenderer(colors));
         renderers.Register(new MaterialIconRenderer(colors, renderers));
         renderers.Register(new MaterialTreeViewItemRenderer(colors));

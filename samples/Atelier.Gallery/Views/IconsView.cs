@@ -97,6 +97,7 @@ public class IconsView : GalleryPage
             .MinWidth(0)
             .BindVariant(_vm, v => v.Kind == kind ? ButtonVariant.Tonal : ButtonVariant.Text)
             .Command(_vm.SelectIconCommand, kind)
+            .ToolTip(kind.ToString())
             .Content(new Icon(kind, 22));
 
     private RadioButton ColorOption(ColorRole role) =>
@@ -247,6 +248,7 @@ public class IconsView : GalleryPage
             .CornerRadius(12)
             .BindVariant(_vm, v => v.Kind == kind ? ButtonVariant.Tonal : ButtonVariant.Text)
             .Command(_vm.SelectIconCommand, kind)
+            .ToolTip(item.Name) // the tile trims long names
             .Content(new StackPanel().Spacing(6).Children(
                 new Icon(kind, 28).HorizontalAlignment(HorizontalAlignment.Center),
                 new TextBlock(item.Name)

@@ -16,6 +16,10 @@ namespace Atelier.Controls;
 /// <see cref="PopupManager"/>, which positions it after each layout pass, renders it on top of the window's tree and
 /// routes pointer and keyboard input to it first. Unless <see cref="StaysOpen"/> is set, a click outside the popup or
 /// Escape closes it (light dismiss). A popup closes automatically when it is removed from a displayed tree.
+/// <para>
+/// A popup usually lives in the tree of the element it belongs to. A popup without a parent belongs to the window of
+/// its <see cref="PlacementTarget"/>; attach it with <see cref="VisualNode.AttachToHost"/> to get lifecycle events.
+/// </para>
 /// </remarks>
 public class Popup : Control
 {
@@ -54,6 +58,10 @@ public class Popup : Control
     /// <summary>Identifies the <see cref="StaysOpen"/> property.</summary>
     public static readonly BindableProperty<bool> StaysOpenProperty =
         BindableProperty.Register<Popup, bool>(nameof(StaysOpen), false);
+
+    /// <summary>Identifies the <see cref="IsTransient"/> property.</summary>
+    public static readonly BindableProperty<bool> IsTransientProperty =
+        BindableProperty.Register<Popup, bool>(nameof(IsTransient), false);
 
     /// <summary>Identifies the <see cref="Elevation"/> property.</summary>
     public static readonly BindableProperty<float> ElevationProperty =
@@ -157,6 +165,22 @@ public class Popup : Control
         set => SetValue(StaysOpenProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets whether the popup is transient, like a tooltip: it never takes input away from the window. A press
+    /// outside it or Escape closes it without being consumed, other popups' light dismiss ignores it, and where its
+    /// content isn't hit-testable, pointer input passes through to the elements below. The default is <c>false</c>.
+    /// </summary>
+    public bool IsTransient
+    {
+        get => GetValue(IsTransientProperty);
+        set => SetValue(IsTransientProperty, value);
+    }
+
+    /// <summary>
+    /// Gets whether the popup is hit-tested at all; a tooltip that isn't interactive lets all pointer input through.
+    /// </summary>
+    internal virtual bool AcceptsPointerInput => true;
+
     /// <summary>Gets or sets the shadow depth; 0 draws no shadow. The default is 6.</summary>
     public float Elevation
     {
@@ -231,6 +255,11 @@ public class Popup : Control
         _placementValid = false;
         if (newVal)
         {
+            // Pointer placement anchors at the pointer position when opening; the popup doesn't follow the pointer.
+            _pointerAnchor = Placement == PlacementMode.Pointer && PopupManager.TryGetPointerPosition(GetOwnerRoot(), out var pointer)
+                ? new Rect(pointer.X, pointer.Y, 0, PointerHeight)
+                : null;
+
             PopupManager.OpenPopup(this);
 
             // Position now when a viewport is known, so Opened handlers see real bounds.
@@ -256,15 +285,27 @@ public class Popup : Control
         }
     }
 
-    private Size GetRootSize()
+    private Size GetRootSize() => GetOwnerRoot() is UIElement root && root != this ? root.Bounds.Size : Size.Zero;
+
+    /// <summary>
+    /// Gets the root of the tree the popup belongs to: the root of its own tree, or, for a popup without a parent, the
+    /// root of its <see cref="PlacementTarget"/>'s tree.
+    /// </summary>
+    internal VisualNode GetOwnerRoot()
     {
-        VisualNode node = this;
+        VisualNode node = Parent == null && PlacementTarget != null ? PlacementTarget : this;
         while (node.Parent != null)
         {
             node = node.Parent;
         }
-        return node != this && node is UIElement root ? root.Bounds.Size : Size.Zero;
+        return node;
     }
+
+    // The height of the pointer area a Pointer-placed popup is positioned below (about the height of a cursor).
+    private const float PointerHeight = 20f;
+
+    // The pointer area captured when a Pointer-placed popup opened, in window coordinates; null for the other modes.
+    private Rect? _pointerAnchor;
 
     private void OnChildChanged(UIElement? oldChild, UIElement? newChild)
     {
@@ -281,8 +322,20 @@ public class Popup : Control
     // The target used for positioning: PlacementTarget, else the parent element.
     private UIElement? EffectiveTarget => PlacementTarget ?? Parent as UIElement;
 
-    private Rect GetTargetRect()
+    private Rect GetTargetRect() => GetPlacementTargetRect();
+
+    /// <summary>
+    /// Gets the rectangle, in window coordinates, the popup is placed against: the pointer area for
+    /// <see cref="PlacementMode.Pointer"/>, otherwise the bounds of <see cref="PlacementTarget"/> (or the parent).
+    /// Override to keep a gap to the target, for example.
+    /// </summary>
+    protected virtual Rect GetPlacementTargetRect()
     {
+        if (_pointerAnchor is { } anchor)
+        {
+            return anchor;
+        }
+
         var target = EffectiveTarget;
         if (target == null)
         {
@@ -313,21 +366,24 @@ public class Popup : Control
 
         var target = GetTargetRect();
 
-        child.Measure(new Size(maxWidth, maxHeight));
+        // The child is measured inside the padding; the popup's size includes it.
+        var padding = Padding;
+        float padX = padding.Horizontal, padY = padding.Vertical;
+        child.Measure(new Size(Math.Max(0, maxWidth - padX), Math.Max(0, maxHeight - padY)));
         var desired = child.DesiredSize;
-        float popupWidth = Math.Clamp(desired.Width, minWidth, maxWidth);
+        float popupWidth = Math.Clamp(desired.Width + padX, minWidth, maxWidth);
         if (MatchTargetWidth && target.Width > 0)
         {
             popupWidth = Math.Min(Math.Max(popupWidth, target.Width), maxWidth);
         }
 
         // Re-measure at the width the child will actually be arranged with, so wrapping content gets the right height.
-        if (popupWidth != desired.Width)
+        if (popupWidth != desired.Width + padX)
         {
-            child.Measure(new Size(popupWidth, maxHeight));
+            child.Measure(new Size(Math.Max(0, popupWidth - padX), Math.Max(0, maxHeight - padY)));
             desired = child.DesiredSize;
         }
-        float popupHeight = Math.Clamp(desired.Height, minHeight, maxHeight);
+        float popupHeight = Math.Clamp(desired.Height + padY, minHeight, maxHeight);
 
         float hOffset = HorizontalOffset;
         float vOffset = VerticalOffset;
@@ -344,6 +400,7 @@ public class Popup : Control
             case PlacementMode.Bottom:
             case PlacementMode.BottomLeft:
             case PlacementMode.BottomRight:
+            case PlacementMode.Pointer:
                 if (Placement == PlacementMode.BottomRight)
                 {
                     x = target.Right - popupWidth + hOffset;
@@ -430,8 +487,8 @@ public class Popup : Control
             InvalidateVisual();
         }
 
-        // Arrange child inside the popup's local coordinate system
-        child.Arrange(new Rect(Point.Zero, ActualBounds.Size));
+        // Arrange the child inside the padding, in the popup's local coordinate system.
+        child.Arrange(new Rect(Point.Zero, ActualBounds.Size).Deflate(Padding));
         _placementValid = true;
     }
 
@@ -455,10 +512,27 @@ public class Popup : Control
     /// <param name="presenter">Draws themed elements; <c>null</c> draws only the child's own content.</param>
     public void RenderPopup(ref DrawingContext context, IElementVisualPresenter? presenter)
     {
-        if (!IsOpen || Child == null || ActualBounds.IsEmpty) return;
+        if (!IsOpen || Child == null || ActualBounds.IsEmpty || Opacity <= 0f) return;
 
-        // 1. Draw Material elevation shadow
-        if (Elevation > 0)
+        // The popup's own opacity (e.g. a tooltip fading in) applies to everything below, shadow included.
+        int opacityLayer = Opacity < 1f ? context.SaveOpacityLayer(Opacity) : -1;
+        try
+        {
+            RenderPopupContent(ref context, presenter);
+        }
+        finally
+        {
+            if (opacityLayer >= 0)
+            {
+                context.Canvas.RestoreToCount(opacityLayer);
+            }
+        }
+    }
+
+    private void RenderPopupContent(ref DrawingContext context, IElementVisualPresenter? presenter)
+    {
+        // 1. Without a theme presenter, draw a plain shadow (a themed renderer draws its own, in its shadow color).
+        if (presenter == null && Elevation > 0)
         {
             context.DrawShadow(ActualBounds, CornerRadius, Elevation, Color.Black);
         }

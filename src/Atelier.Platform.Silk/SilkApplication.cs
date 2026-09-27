@@ -410,6 +410,7 @@ public static class SilkApplication
         Slider.SetGlobalAnimationClock(AnimationClock);
         ScrollViewer.SetGlobalAnimationClock(AnimationClock);
         TransitioningContentControl.SetGlobalAnimationClock(AnimationClock);
+        ToolTip.SetGlobalAnimationClock(AnimationClock);
         DialogHost.RootVisualProvider = () => ActiveWindow?.Content;
     }
 
@@ -422,6 +423,7 @@ public static class SilkApplication
         Slider.SetGlobalAnimationClock(null!);
         ScrollViewer.SetGlobalAnimationClock(null!);
         TransitioningContentControl.SetGlobalAnimationClock(null!);
+        ToolTip.SetGlobalAnimationClock(null);
         DialogHost.RootVisualProvider = null;
     }
 }

@@ -34,6 +34,12 @@ public static class PopupMarkup
     /// </summary>
     public static T StaysOpen<T>(this T popup, bool staysOpen = true) where T : Popup => popup.Set(Popup.StaysOpenProperty, staysOpen);
 
+    /// <summary>
+    /// Makes the popup transient, like a tooltip: it never takes input away from the window, and presses outside it or
+    /// Escape close it without being consumed.
+    /// </summary>
+    public static T IsTransient<T>(this T popup, bool isTransient = true) where T : Popup => popup.Set(Popup.IsTransientProperty, isTransient);
+
     /// <summary>Opens or closes the popup.</summary>
     public static T IsOpen<T>(this T popup, bool isOpen = true) where T : Popup => popup.Set(Popup.IsOpenProperty, isOpen);
 

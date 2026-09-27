@@ -54,6 +54,7 @@ internal static class Program
             .Register<TypographyViewModel>(vm => new TypographyView(vm))
             .Register<LayoutViewModel>(vm => new LayoutView(vm))
             .Register<DialogHostViewModel>(vm => new DialogHostView(vm))
+            .Register<ToolTipsViewModel>(vm => new ToolTipsView(vm))
             .Register<TransformationViewModel>(vm => new TransformationView(vm))
             .Register<TransitionsViewModel>(vm => new TransitionsView(vm))
             .Register<PropertyGridViewModel>(vm => new PropertyGridView(vm))

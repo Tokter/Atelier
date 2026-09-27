@@ -110,6 +110,22 @@ public static class MaterialStyles
                 .Set(Popup.ElevationProperty, MaterialElevation.Level2)
                 .Set(Popup.BorderThicknessProperty, Thickness.Zero),
 
+            // Plain tooltips: body-small text in a 24 px high, extra-small (4 px) container, no shadow.
+            new Style(typeof(ToolTip))
+                .Set(Control.PaddingProperty, new Thickness(8, 4))
+                .Set(UIElement.MinHeightProperty, 24f)
+                .Set(UIElement.MaxWidthProperty, 320f)
+                .Set(Control.CornerRadiusProperty, new CornerRadius(MaterialShape.ExtraSmall))
+                .Set(Control.FontSizeProperty, MaterialTypescale.BodySmall.Size)
+                .Set(Popup.ElevationProperty, 0f),
+
+            // Rich tooltips: body-medium content in a medium (12 px) container at elevation level 2, up to 320 px wide.
+            new Style(ToolTip.RichStyleKey, typeof(ToolTip))
+                .Set(Control.PaddingProperty, new Thickness(16, 12))
+                .Set(Control.CornerRadiusProperty, new CornerRadius(MaterialShape.Medium))
+                .Set(Control.FontSizeProperty, MaterialTypescale.BodyMedium.Size)
+                .Set(Popup.ElevationProperty, MaterialElevation.Level2),
+
             // Dialogs: extra-large (28 px) corners, 24 px padding, elevation level 3, no outline.
             new Style(typeof(Dialog))
                 .Set(Control.CornerRadiusProperty, new CornerRadius(MaterialShape.ExtraLarge))
