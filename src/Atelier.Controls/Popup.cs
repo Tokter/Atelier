@@ -472,7 +472,10 @@ public class Popup : Control
         // 4. Render popup child visual tree clipped to CornerRadius
         using (context.PushRoundedClip(new Rect(Point.Zero, ActualBounds.Size), CornerRadius))
         {
-            VisualTreeRenderer.Render(Child!, ref context, presenter);
+            // The child is rendered as a root (which applies only its layout transform), so apply its position in the
+            // popup first: its margin offsets it, as hit-testing expects.
+            using var childOffset = context.PushTransform(Matrix3x2.CreateTranslation(Child!.Bounds.X, Child.Bounds.Y));
+            VisualTreeRenderer.Render(Child, ref context, presenter);
         }
     }
 }

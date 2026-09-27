@@ -102,7 +102,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    [property: Keybinding("ToggleFpsOverlay", "Global", "F12")]
+    [property: Keybinding("ToggleFpsOverlay", "Global", "Ctrl+Shift+F")]
     private void ToggleFpsOverlay() => ToggleFpsOverlayAction?.Invoke();
 
     private void UpdateThemeToggle()
