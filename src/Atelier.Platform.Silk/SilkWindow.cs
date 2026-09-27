@@ -133,10 +133,10 @@ public class SilkWindow : IDisposable, IHostWindow
     /// </summary>
     public double CurrentFps { get; private set; }
 
-    private bool _showFpsOverlay = true;
+    private bool _showFpsOverlay;
 
     /// <summary>
-    /// Gets or sets whether the frame-rate overlay is drawn in the bottom-left corner.
+    /// Gets or sets whether the frame-rate overlay is drawn in the bottom-left corner (a diagnostic; off by default).
     /// </summary>
     public bool ShowFpsOverlay
     {

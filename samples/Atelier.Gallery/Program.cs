@@ -1,23 +1,10 @@
 using System;
-using System.Collections.ObjectModel;
-using System.Numerics;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using SkiaSharp;
-using Atelier.Controls;
-using Atelier.Core.Inspection;
-using Atelier.Core.Primitives;
-using Atelier.Core.Styling;
-using Atelier.Core.Tree;
 using Atelier.Core.ViewResolution;
-using Atelier.Layout;
-using Atelier.Markup;
+using Atelier.Gallery.ViewModels;
+using Atelier.Gallery.Views;
 using Atelier.Platform.Silk;
 using Atelier.Theming;
 using Atelier.Theming.Material;
-using Atelier.Core.Keybinding;
-using Atelier.Gallery.Views;
-using Atelier.Gallery.ViewModels;
 
 namespace Atelier.Gallery;
 
@@ -25,32 +12,22 @@ internal static class Program
 {
     private static void Main()
     {
-        Console.WriteLine("Launching Atelier UI Framework Gallery...");
-
-        // Register compile-time discovered keybindings
+        // Keybindings declared with [Keybinding] are discovered at compile time by the source generator.
         Atelier.Generated.GeneratedKeybindings.RegisterKeybindings();
+        RegisterViews();
 
-        // Register ViewModels with ViewLocator
-        ViewLocator.Current
-            .Register<CheckboxesViewModel>(vm => new CheckboxesView(vm))
-            .Register<TextBoxesViewModel>(vm => new TextBoxesView(vm))
-            .Register<CardsViewModel>(vm => new CardsView(vm))
-            .Register<IconsViewModel>(vm => new IconsView(vm))
-            .Register<TypographyViewModel>(vm => new TypographyView(vm))
-            .Register<TreeViewViewModel>(vm => new TreeViewView(vm))
-            .Register<TransformationViewModel>(vm => new TransformationView(vm))
-            .Register<DialogHostViewModel>(vm => new DialogHostView(vm))
-            .Register<PropertyGridViewModel>(vm => new PropertyGridView(vm))
-            .Register<LayoutViewModel>(vm => new LayoutView(vm))
-            .Register<KeybindingViewModel>(vm => new KeybindingView(vm))
-            .Register<TransitionsViewModel>(vm => new TransitionsView(vm));
+        // ATELIER_GALLERY_SNAPSHOT=<directory> renders the pages to PNG files instead of opening a window.
+        if (Infrastructure.Snapshot.TryRun())
+        {
+            return;
+        }
 
-        // 1. Set the initial theme; ATELIER_GALLERY_THEME=dark starts in the dark theme (used for screenshots)
+        // ATELIER_GALLERY_THEME=dark starts in the dark theme.
         ThemeManager.Current = string.Equals(Environment.GetEnvironmentVariable("ATELIER_GALLERY_THEME"), "dark", StringComparison.OrdinalIgnoreCase)
             ? MaterialTheme.CreateDark()
             : MaterialTheme.CreateLight();
 
-        // 2. Open the main window; ATELIER_GALLERY_WINDOWS=N opens N windows at startup (used for multi-window testing)
+        // ATELIER_GALLERY_WINDOWS=N opens N windows at startup (for multi-window testing).
         var mainWindow = OpenGalleryWindow();
         int extraWindows = int.TryParse(Environment.GetEnvironmentVariable("ATELIER_GALLERY_WINDOWS"), out int count) ? count - 1 : 0;
         for (int i = 0; i < extraWindows; i++)
@@ -58,28 +35,50 @@ internal static class Program
             OpenGalleryWindow();
         }
 
-        // 3. Run until the last window closes
+        // Runs until the last window closes.
         mainWindow.Run();
     }
 
+    /// <summary>Maps each page view model to its view, so a ContentControl showing a page view model shows the page.</summary>
+    private static void RegisterViews() =>
+        ViewLocator.Current
+            .Register<ButtonsViewModel>(vm => new ButtonsView(vm))
+            .Register<CheckboxesViewModel>(vm => new CheckboxesView(vm))
+            .Register<TextBoxesViewModel>(vm => new TextBoxesView(vm))
+            .Register<ComboBoxViewModel>(vm => new ComboBoxView(vm))
+            .Register<RangeControlsViewModel>(vm => new RangeControlsView(vm))
+            .Register<ListsViewModel>(vm => new ListsView(vm))
+            .Register<TreeViewViewModel>(vm => new TreeViewView(vm))
+            .Register<CardsViewModel>(vm => new CardsView(vm))
+            .Register<IconsViewModel>(vm => new IconsView(vm))
+            .Register<TypographyViewModel>(vm => new TypographyView(vm))
+            .Register<LayoutViewModel>(vm => new LayoutView(vm))
+            .Register<DialogHostViewModel>(vm => new DialogHostView(vm))
+            .Register<TransformationViewModel>(vm => new TransformationView(vm))
+            .Register<TransitionsViewModel>(vm => new TransitionsView(vm))
+            .Register<PropertyGridViewModel>(vm => new PropertyGridView(vm))
+            .Register<KeybindingViewModel>(vm => new KeybindingView(vm));
+
     /// <summary>
-    /// Opens a Gallery window with its own view model. Works before and while the application runs.
+    /// Opens a gallery window with its own view model. Works before and while the application runs.
     /// </summary>
     internal static SilkWindow OpenGalleryWindow()
     {
-        // Each window keeps its own state, which is preserved across Hot Reload passes
+        // Each window keeps its own state, which is preserved across Hot Reload passes.
         var vm = new MainViewModel();
 
         var window = new SilkWindow(
-            title: "Atelier UI - Material Design 3 Showcase",
-            width: 1100,
-            height: 800,
+            title: "Atelier Gallery",
+            width: 1280,
+            height: 860,
             isTitleLess: true,
             isTransparent: true,
             windowOpacity: 1.0f,
             iconPath: "Assets/Icons/Atelier.png");
 
-        // Setting content via factory lambda enables instant Hot Reload!
+        vm.ToggleFpsOverlayAction = () => window.ShowFpsOverlay = !window.ShowFpsOverlay;
+
+        // Setting content via a factory lambda enables Hot Reload: the view is rebuilt from the same view model.
         window.SetContent(() => new MainView(vm));
         window.Show();
         return window;

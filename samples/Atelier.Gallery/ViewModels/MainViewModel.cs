@@ -1,79 +1,114 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using Atelier.Theming;
 using Atelier.Theming.Material;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace Atelier.Gallery.ViewModels
+namespace Atelier.Gallery.ViewModels;
+
+public partial class MainViewModel : ObservableObject
 {
-    public partial class MainViewModel : ObservableObject
+    private readonly List<PageViewModel> _allPages;
+
+    [ObservableProperty]
+    private string _themeToggleText = "Dark theme";
+
+    [ObservableProperty]
+    private MaterialIconKind _themeToggleIcon = MaterialIconKind.DarkMode;
+
+    [ObservableProperty]
+    private PageViewModel? _currentPage;
+
+    [ObservableProperty]
+    private string _searchText = string.Empty;
+
+    /// <summary>The pages shown in the navigation: all pages, or those matching <see cref="SearchText"/>.</summary>
+    public ObservableCollection<PageViewModel> Pages { get; } = [];
+
+    /// <summary>Set by the window: shows or hides the frame-rate overlay.</summary>
+    public Action? ToggleFpsOverlayAction { get; set; }
+
+    public MainViewModel()
     {
-        [ObservableProperty]
-        private string _currentThemeMode = "Switch to Dark Mode";
+        _allPages =
+        [
+            new ButtonsViewModel(),
+            new CheckboxesViewModel(),
+            new TextBoxesViewModel(),
+            new ComboBoxViewModel(),
+            new RangeControlsViewModel(),
+            new ListsViewModel(),
+            new TreeViewViewModel(),
+            new CardsViewModel(),
+            new IconsViewModel(),
+            new TypographyViewModel(),
+            new LayoutViewModel(),
+            new DialogHostViewModel(),
+            new TransformationViewModel(),
+            new TransitionsViewModel(),
+            new PropertyGridViewModel(),
+            new KeybindingViewModel(),
+        ];
 
-        [ObservableProperty]
-        private MaterialIconKind _currentThemeIcon = MaterialIconKind.LightMode;
-
-        [ObservableProperty]
-        private List<PageViewModel> _pages = new List<PageViewModel>();
-
-        [ObservableProperty]
-        private PageViewModel? _currentPage;
-
-        public MainViewModel()
+        foreach (var page in _allPages)
         {
-            var initialPage = new CheckboxesViewModel();
-            _pages.Add(initialPage);
-            _pages.Add(new TextBoxesViewModel());
-            _pages.Add(new CardsViewModel());
-            _pages.Add(new IconsViewModel());
-            _pages.Add(new TypographyViewModel());
-            _pages.Add(new TreeViewViewModel());
-            _pages.Add(new TransformationViewModel());
-            _pages.Add(new DialogHostViewModel());
-            _pages.Add(new PropertyGridViewModel());
-            _pages.Add(new LayoutViewModel());
-            _pages.Add(new KeybindingViewModel());
-            _pages.Add(new TransitionsViewModel());
-            _currentPage = initialPage;
+            Pages.Add(page);
+        }
 
-            if (ThemeManager.HasTheme && ThemeManager.Current.IsDark)
-            {
-                _currentThemeMode = "Switch to Light Mode";
-                _currentThemeIcon = MaterialIconKind.DarkMode;
-            }
+        _currentPage = _allPages[0];
 
-            // Start page by index, e.g. for screenshots of a specific page (see also ATELIER_GALLERY_WINDOWS).
-            if (int.TryParse(Environment.GetEnvironmentVariable("ATELIER_GALLERY_PAGE"), out int page) && page >= 0 && page < _pages.Count)
+        // Every window shows the theme toggle, so all of them follow a switch made in any window.
+        ThemeManager.ThemeChanged += _ => UpdateThemeToggle();
+        UpdateThemeToggle();
+
+        // Start page by index, e.g. for screenshots of a specific page (see also ATELIER_GALLERY_WINDOWS).
+        if (int.TryParse(Environment.GetEnvironmentVariable("ATELIER_GALLERY_PAGE"), out int startPage) && startPage >= 0 && startPage < _allPages.Count)
+        {
+            _currentPage = _allPages[startPage];
+        }
+    }
+
+    partial void OnSearchTextChanged(string value)
+    {
+        var current = CurrentPage;
+        Pages.Clear();
+        foreach (var page in _allPages)
+        {
+            if (page.Matches(value))
             {
-                _currentPage = _pages[page];
+                Pages.Add(page);
             }
         }
 
-
-        [RelayCommand]
-        private void NewWindow() => Program.OpenGalleryWindow();
-
-        [RelayCommand]
-        private void ToggleTheme()
+        // Keep showing the current page while it matches; otherwise show the first match.
+        if (current == null || !Pages.Contains(current))
         {
-            if (ThemeManager.Current.IsDark)
-            {
-                ThemeManager.Current = MaterialTheme.CreateLight();
-                CurrentThemeMode = "Switch to Dark Mode";
-                CurrentThemeIcon = MaterialIconKind.LightMode;
-            }
-            else
-            {
-                ThemeManager.Current = MaterialTheme.CreateDark();
-                CurrentThemeMode = "Switch to Light Mode";
-                CurrentThemeIcon = MaterialIconKind.DarkMode;
-            }
+            CurrentPage = Pages.Count > 0 ? Pages[0] : current;
         }
+    }
+
+    [RelayCommand]
+    private void NewWindow() => Program.OpenGalleryWindow();
+
+    [RelayCommand]
+    [property: Keybinding("ToggleTheme", "Global", "Ctrl+T")]
+    private void ToggleTheme()
+    {
+        ThemeManager.Current = ThemeManager.Current.IsDark ? MaterialTheme.CreateLight() : MaterialTheme.CreateDark();
+    }
+
+    [RelayCommand]
+    [property: Keybinding("ToggleFpsOverlay", "Global", "F12")]
+    private void ToggleFpsOverlay() => ToggleFpsOverlayAction?.Invoke();
+
+    private void UpdateThemeToggle()
+    {
+        bool dark = ThemeManager.HasTheme && ThemeManager.Current.IsDark;
+        ThemeToggleText = dark ? "Light theme" : "Dark theme";
+        ThemeToggleIcon = dark ? MaterialIconKind.LightMode : MaterialIconKind.DarkMode;
     }
 }

@@ -1,459 +1,147 @@
-using System;
 using Atelier.Controls;
-using Atelier.Core.Events;
 using Atelier.Core.Primitives;
 using Atelier.Core.Tree;
+using Atelier.Gallery.Infrastructure;
+using Atelier.Gallery.ViewModels;
 using Atelier.Layout;
 using Atelier.Markup;
-using Atelier.Theming;
-using Atelier.Gallery.ViewModels;
-using SkiaSharp;
 
 namespace Atelier.Gallery.Views;
 
-public class CheckboxesView : Grid
+public class CheckboxesView : GalleryPage
 {
-    private readonly CheckboxesViewModel _viewModel;
-    private readonly ScrollViewer _scrollViewer;
-
-    public CheckboxesView() : this(new CheckboxesViewModel())
-    {
-    }
+    private readonly CheckboxesViewModel _vm;
 
     public CheckboxesView(CheckboxesViewModel viewModel)
+        : base(MaterialIconKind.CheckBox, "Selection Controls",
+            "Check boxes, radio buttons and switches let users choose options and turn settings on or off. They support " +
+            "rich content, three states, groups and two-way binding.")
     {
-        _viewModel = viewModel;
-        DataContext = _viewModel;
+        _vm = viewModel;
 
-        this.Rows(GridLength.Auto, GridLength.Star);
-        this.RowSpacing(16);
+        Settings(
+            new Switch("Controls enabled").ShowThumbIcon().BindIsChecked(_vm, v => v.ControlsEnabled, (v, on) => v.ControlsEnabled = on),
+            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
-        // 1. Master Controls & Interactive Toggle Banner (Fixed, Non-Scrolling Header)
-        this.Add(CreateMasterBanner().Row(0));
+        // IsEnabled is inherited: disabling the sections panel disables every demo on the page.
+        SectionsPanel.BindIsEnabled(_vm, v => v.ControlsEnabled);
 
-        // 2. Scrollable Showcase Cards Container
-        var cardsStack = new StackPanel
-        {
-            Orientation = Orientation.Vertical,
-            Spacing = 16
-        }.Children(
-            CreateCheckboxesCard(),
-            CreateRadioButtonsCard(),
-            CreateSwitchesCard()
-        );
-
-        cardsStack.Margin = new Thickness(0, 0, 10, 20);
-
-        _scrollViewer = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = cardsStack
-        }.Row(1);
-
-        this.Add(_scrollViewer);
+        Sections(CheckBoxSection(), RadioButtonSection(), SwitchSection());
     }
 
-    public override void OnPointerWheel(PointerWheelEventArgs e)
-    {
-        base.OnPointerWheel(e);
-        if (!e.Handled && _scrollViewer != null)
-        {
-            _scrollViewer.OnPointerWheel(e);
-        }
-    }
+    private UIElement CheckBoxSection() => Ui.Section("Check boxes",
+        "Select one or more items from a list, or turn an item on or off. A check box can also show a mixed state.",
+        Ui.Demo("States",
+            Ui.Row(
+                new CheckBox("Unchecked"),
+                new CheckBox("Checked").IsChecked(),
+                new CheckBox("Indeterminate").IsThreeState().IsChecked(null)),
+            Ui.Row(
+                new CheckBox("Disabled").IsEnabled(false),
+                new CheckBox("Disabled checked").IsChecked().IsEnabled(false),
+                new CheckBox("Disabled mixed").IsThreeState().IsChecked(null).IsEnabled(false))),
 
-    private UIElement CreateMasterBanner()
-    {
-        var card = new Card(CardVariant.Filled)
-        {
-            Padding = new Thickness(20),
-            CornerRadius = new CornerRadius(14),
-        };
+        Ui.Columns(320,
+            Ui.Demo("Select all (mixed state)",
+                new CheckBox("All toppings").BindIsChecked(_vm, v => v.AllToppings, (v, all) => v.AllToppings = all),
+                Ui.Stack(
+                    new CheckBox("Cheese").BindIsChecked(_vm, v => v.Cheese, (v, on) => v.Cheese = on),
+                    new CheckBox("Mushrooms").BindIsChecked(_vm, v => v.Mushrooms, (v, on) => v.Mushrooms = on),
+                    new CheckBox("Olives").BindIsChecked(_vm, v => v.Olives, (v, on) => v.Olives = on))
+                    .Margin(28, 0, 0, 0),
+                Ui.Note("The parent shows a mixed state while only some toppings are selected; clicking it selects or clears all.")),
 
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
+            Ui.Demo("Three states by click",
+                new CheckBox("Cycles unchecked → checked → mixed")
+                    .IsThreeState()
+                    .BindIsChecked(_vm, v => v.TriState, (v, state) => v.TriState = state),
+                Ui.Readout(_vm, v => $"TriState = {(v.TriState is { } b ? b.ToString() : "null")}"))),
 
-        // Header text
-        stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
-            .Children(
-                new TextBlock("Selection Controls (Material Design 3)").TitleLarge(),
-                new TextBlock("Demonstrating Checkboxes, Radio Buttons, and Switches with rich content, two-way data-binding, and disabled states.")
-                    .Subtext()
-            )
-        );
+        Ui.Columns(320,
+            Ui.Demo("Rich content",
+                new CheckBox().Content(Ui.Row(
+                    new Icon(MaterialIconKind.Cloud, 20).Themed(Control.ForegroundProperty, c => c.Primary),
+                    new TextBlock("Sync with cloud storage"))),
+                new CheckBox().BindIsChecked(_vm, v => v.Subscribe, (v, on) => v.Subscribe = on).Content(
+                    new StackPanel().Spacing(2).Children(
+                        new TextBlock("Product newsletter"),
+                        new TextBlock("One email per month with release notes").BodySmall().Muted()))),
 
-        // Interactive master toggle row
-        var toggleRow = new WrapPanel { HorizontalSpacing = 20, VerticalSpacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Switch("Interactive Controls Enabled")
-                    .ShowThumbIcon()
-                    .BindIsChecked(_viewModel, x => x.InteractiveControlsEnabled, (vm, v) => vm.InteractiveControlsEnabled = v),
+            Ui.Demo("Binding and commands",
+                new CheckBox("Push notifications").BindIsChecked(_vm, v => v.EnableNotifications, (v, on) => v.EnableNotifications = on),
+                Ui.Row(
+                    Ui.Readout(_vm, v => $"EnableNotifications = {v.EnableNotifications}"),
+                    new Button("Toggle from the view model").Variant(ButtonVariant.Outlined).Command(_vm.ToggleNotificationsCommand)))),
 
-                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-                    .Children(
-                        new Icon(MaterialIconKind.CheckCircle, 18)
-                            .VerticalAlignment(VerticalAlignment.Center)
-                            .BindKind(_viewModel, x => x.InteractiveControlsEnabled ? MaterialIconKind.CheckCircle : MaterialIconKind.Cancel)
-                            .BindForeground(_viewModel, x => x.InteractiveControlsEnabled ? Color.FromHex("#4CAF50") : Color.FromHex("#E53935")),
+        Ui.Code("new CheckBox(\"Push notifications\")\n    .BindIsChecked(vm, v => v.EnableNotifications, (v, on) => v.EnableNotifications = on)"));
 
-                        new TextBlock()
-                            .LabelMedium()
-                            .VerticalAlignment(VerticalAlignment.Center)
-                            .BindText(_viewModel, x => x.InteractiveControlsEnabled
-                                ? "Controls are ENABLED (interactive)"
-                                : "Controls are DISABLED (test state)")
-                    ),
+    private UIElement RadioButtonSection() => Ui.Section("Radio buttons",
+        "Select exactly one option from a set. Radio buttons with the same group name form a group; without a name, the " +
+        "radio buttons that share a parent do.",
+        Ui.Columns(320,
+            Ui.Demo("Named group, bound to an enum",
+                new RadioButton("720p HD").GroupName("quality")
+                    .BindIsChecked(_vm, v => v.StreamingQuality, (v, q) => v.StreamingQuality = q, QualitySetting.Standard720p),
+                new RadioButton("1080p Full HD").GroupName("quality")
+                    .BindIsChecked(_vm, v => v.StreamingQuality, (v, q) => v.StreamingQuality = q, QualitySetting.High1080p),
+                new RadioButton("4K Ultra HD").GroupName("quality")
+                    .BindIsChecked(_vm, v => v.StreamingQuality, (v, q) => v.StreamingQuality = q, QualitySetting.Ultra4K),
+                Ui.Readout(_vm, v => $"StreamingQuality = {v.StreamingQuality}")),
 
-                new Button("Reset All to Defaults")
-                    .Variant(ButtonVariant.Tonal)
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ResetDefaultsCommand),
+            Ui.Demo("Unnamed group (shared parent)",
+                new RadioButton("Small"),
+                new RadioButton("Medium").IsChecked(),
+                new RadioButton("Large"),
+                new RadioButton("Extra large (disabled)").IsEnabled(false))),
 
-                new Button("Clear / Uncheck All")
-                    .Variant(ButtonVariant.Outlined)
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ClearAllCommand)
-            );
+        Ui.Demo("Rich content",
+            Ui.Columns(280,
+                ShippingOption("Standard", MaterialIconKind.LocalShipping, "Standard shipping", "3–5 business days · Free"),
+                ShippingOption("Express", MaterialIconKind.Bolt, "Express delivery", "Next business day · $9.99"),
+                ShippingOption("Pickup", MaterialIconKind.Storefront, "Store pickup", "Ready in 2 hours · Free"))),
 
-        stack.Add(toggleRow);
-        card.Child = stack;
-        return card;
-    }
+        Ui.Code("new RadioButton(\"4K Ultra HD\").GroupName(\"quality\")\n" +
+                "    .BindIsChecked(vm, v => v.StreamingQuality, (v, q) => v.StreamingQuality = q, QualitySetting.Ultra4K)"));
 
-    private UIElement CreateCheckboxesCard()
-    {
-        var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
+    private RadioButton ShippingOption(string value, MaterialIconKind icon, string title, string detail) =>
+        new RadioButton()
+            .GroupName("shipping")
+            .BindIsChecked(_vm, v => v.ShippingMethod, (v, m) => v.ShippingMethod = m, value)
+            .Content(new StackPanel().Orientation(Orientation.Horizontal).Spacing(12).Children(
+                new Icon(icon, 24).VerticalAlignment(VerticalAlignment.Center).Themed(Control.ForegroundProperty, c => c.Primary),
+                new StackPanel().Spacing(2).Children(
+                    new TextBlock(title).TitleSmall(),
+                    new TextBlock(detail).BodySmall().Muted())));
 
-        // Sub-section 1: Basic & Disabled States
-        children.Add(new TextBlock("Standard & Disabled States").TitleSmall());
+    private UIElement SwitchSection() => Ui.Section("Switches",
+        "Turn a single setting on or off immediately. Thumb icons make the state clearer; the track size is set by the " +
+        "theme and can be changed per switch.",
+        Ui.Demo("States",
+            Ui.Row(
+                new Switch("Off"),
+                new Switch("On").IsChecked(),
+                new Switch("Thumb icon").ShowThumbIcon(),
+                new Switch("Thumb icon").ShowThumbIcon().IsChecked()),
+            Ui.Row(
+                new Switch("Disabled").IsEnabled(false),
+                new Switch("Disabled on").IsChecked().IsEnabled(false),
+                new Switch("Touch size (52×32)").TrackSize(52, 32).ShowThumbIcon().IsChecked())),
 
-        var statesGrid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star)
-            .Rows(GridLength.Auto, GridLength.Auto)
-            .RowSpacing(12)
-            .ColumnSpacing(20)
-            .Children(
-                new CheckBox("Standard Unchecked")
-                    .BindIsChecked(_viewModel, x => x.BasicUnchecked, (vm, v) => vm.BasicUnchecked = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(0),
+        Ui.Columns(320,
+            Ui.Demo("Rich content",
+                new Switch().ShowThumbIcon().BindIsChecked(_vm, v => v.AirplaneMode, (v, on) => v.AirplaneMode = on).Content(
+                    new StackPanel().Spacing(2).Children(
+                        new TextBlock("Airplane mode"),
+                        new TextBlock("Turns off Wi-Fi, Bluetooth and cellular radios").BodySmall().Muted()))),
 
-                new CheckBox("Standard Checked")
-                    .BindIsChecked(_viewModel, x => x.BasicChecked, (vm, v) => vm.BasicChecked = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(1),
-
-                new CheckBox("Always Disabled (Unchecked)")
-                    .IsEnabled(false)
-                    .Row(1).Column(0),
-
-                new CheckBox("Always Disabled (Checked)")
-                    { IsChecked = true }
-                    .IsEnabled(false)
-                    .Row(1).Column(1)
-            );
-        children.Add(statesGrid);
-
-        // Sub-section 2: Rich Content (Icon, Subtitle)
-        children.Add(new TextBlock("Rich Content (Icons & Multi-line Descriptions)").TitleSmall());
-
-        var iconCheckBox = new CheckBox
-        {
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.CloudQueue, 20) { Foreground = Color.FromHex("#1E88E5"), VerticalAlignment = VerticalAlignment.Center },
-                    new TextBlock("Sync Workspace with Cloud Storage").VerticalAlignment(VerticalAlignment.Center)
-                )
-        }.BindIsChecked(_viewModel, x => x.SyncCloudStorage, (vm, v) => vm.SyncCloudStorage = v)
-         .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
-        children.Add(iconCheckBox);
-
-        var detailedCheckBox = new CheckBox
-        {
-            Content = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-                .Children(
-                    new TextBlock("Automatic Software Updates").TitleSmall(),
-                    new TextBlock("Download and install critical framework hot reload patches in background").Caption()
-                )
-        }.BindIsChecked(_viewModel, x => x.AutoUpdate, (vm, v) => vm.AutoUpdate = v)
-         .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
-        children.Add(detailedCheckBox);
-
-        // Sub-section 3: Two-Way Data Binding
-        children.Add(new TextBlock("Two-Way MVVM Data Binding").TitleSmall());
-
-        var bindingRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new CheckBox("Push Notifications")
-                    .BindIsChecked(_viewModel, x => x.EnableNotifications, (vm, v) => vm.EnableNotifications = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled),
-
-                new Card(CardVariant.Filled)
-                {
-                    Padding = new Thickness(10, 4),
-                    CornerRadius = new CornerRadius(6),
-                    VerticalAlignment = VerticalAlignment.Center
-                }.Child(
-                    new TextBlock()
-                        .Caption()
-                        .BindText(_viewModel, x => $"ViewModel.EnableNotifications: {(x.EnableNotifications ? "TRUE (Enabled)" : "FALSE (Muted)")}")
-                ),
-
-                new Button("Toggle from Code / Command")
-                    .Variant(ButtonVariant.Outlined)
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ToggleNotificationsCommand)
-            );
-        children.Add(bindingRow);
-
-        return CreateCard("Checkboxes", "Checkboxes allow users to select one or multiple options, or toggle independent states.", children);
-    }
-
-    private UIElement CreateRadioButtonsCard()
-    {
-        var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        // Sub-section 1: Mutually Exclusive Selection & Disabled States
-        children.Add(new TextBlock("Standard Mutually Exclusive Group & Disabled States").TitleSmall());
-
-        var groupGrid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star)
-            .Rows(GridLength.Auto, GridLength.Auto)
-            .RowSpacing(12)
-            .ColumnSpacing(20)
-            .Children(
-                new RadioButton("Option A (Standard)")
-                    .GroupName("DemoBasic")
-                    .BindIsChecked(_viewModel, x => x.BasicOption, (vm, v) => vm.BasicOption = v, "Option A")
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(0),
-
-                new RadioButton("Option B (Standard)")
-                    .GroupName("DemoBasic")
-                    .BindIsChecked(_viewModel, x => x.BasicOption, (vm, v) => vm.BasicOption = v, "Option B")
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(1),
-
-                new RadioButton("Always Disabled (Unselected)")
-                    .GroupName("DemoDisabled")
-                    .IsEnabled(false)
-                    .Row(1).Column(0),
-
-                new RadioButton("Always Disabled (Selected)")
-                    .GroupName("DemoDisabled")
-                    .IsChecked(true)
-                    .IsEnabled(false)
-                    .Row(1).Column(1)
-            );
-        children.Add(groupGrid);
-
-        // Sub-section 2: Rich Content (Icon, Header, Badge/Subtitle)
-        children.Add(new TextBlock("Rich Content (Icons, Badges & Multi-line Layout)").TitleSmall());
-
-        var shippingOption1 = new RadioButton
-        {
-            GroupName = "ShippingMethod",
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.LocalShipping, 20) { Foreground = Color.FromHex("#2E7D32"), VerticalAlignment = VerticalAlignment.Center },
-                    new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-                        .Children(
-                            new TextBlock("Standard Shipping").TitleSmall(),
-                            new TextBlock("Estimated delivery in 3-5 business days (Free)").Caption()
-                        )
-                )
-        }.BindIsChecked(_viewModel, x => x.ShippingMethod, (vm, v) => vm.ShippingMethod = v, "Standard")
-         .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
-        children.Add(shippingOption1);
-
-        var shippingOption2 = new RadioButton
-        {
-            GroupName = "ShippingMethod",
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.ElectricBolt, 20) { Foreground = Color.FromHex("#D84315"), VerticalAlignment = VerticalAlignment.Center },
-                    new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-                        .Children(
-                            new TextBlock("Express Delivery (Next-Day)").TitleSmall(),
-                            new TextBlock("Guaranteed morning arrival with real-time GPS tracking ($9.99)").Caption()
-                        )
-                )
-        }.BindIsChecked(_viewModel, x => x.ShippingMethod, (vm, v) => vm.ShippingMethod = v, "Express")
-         .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
-        children.Add(shippingOption2);
-
-        // Sub-section 3: Enum Data Binding
-        children.Add(new TextBlock("Enum / Value Two-Way Data Binding").TitleSmall());
-
-        var enumStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new RadioButton("720p HD")
-                    .GroupName("Quality")
-                    .BindIsChecked(_viewModel, x => x.StreamingQuality, (vm, v) => vm.StreamingQuality = v, QualitySetting.Standard720p)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled),
-
-                new RadioButton("1080p FHD")
-                    .GroupName("Quality")
-                    .BindIsChecked(_viewModel, x => x.StreamingQuality, (vm, v) => vm.StreamingQuality = v, QualitySetting.High1080p)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled),
-
-                new RadioButton("4K Ultra")
-                    .GroupName("Quality")
-                    .BindIsChecked(_viewModel, x => x.StreamingQuality, (vm, v) => vm.StreamingQuality = v, QualitySetting.Ultra4K)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled),
-
-                new Card(CardVariant.Filled)
-                {
-                    Padding = new Thickness(10, 4),
-                    CornerRadius = new CornerRadius(6),
-                    VerticalAlignment = VerticalAlignment.Center
-                }.Child(
-                    new TextBlock()
-                        .Caption()
-                        .BindText(_viewModel, x => $"Selected Enum: {x.StreamingQuality}")
-                )
-            );
-        children.Add(enumStack);
-
-        return CreateCard("Radio Buttons", "Radio buttons allow users to select exactly one option from a mutually exclusive set.", children);
-    }
-
-    private UIElement CreateSwitchesCard()
-    {
-        var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        // Sub-section 1: Standard & Disabled MD3 Switches
-        children.Add(new TextBlock("Material Design 3 Switches & Thumb Icons").TitleSmall());
-
-        var switchGrid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star)
-            .Rows(GridLength.Auto, GridLength.Auto, GridLength.Auto)
-            .RowSpacing(12)
-            .ColumnSpacing(20)
-            .Children(
-                new Switch("Standard Switch (Off)")
-                    .BindIsChecked(_viewModel, x => x.StandardSwitchOff, (vm, v) => vm.StandardSwitchOff = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(0),
-
-                new Switch("Standard Switch (On)")
-                    .BindIsChecked(_viewModel, x => x.StandardSwitchOn, (vm, v) => vm.StandardSwitchOn = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(1),
-
-                new Switch("MD3 Icon Switch (Off)")
-                    .ShowThumbIcon()
-                    .BindIsChecked(_viewModel, x => x.IconSwitchOff, (vm, v) => vm.IconSwitchOff = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(1).Column(0),
-
-                new Switch("MD3 Icon Switch (On)")
-                    .ShowThumbIcon()
-                    .BindIsChecked(_viewModel, x => x.IconSwitchOn, (vm, v) => vm.IconSwitchOn = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(1).Column(1),
-
-                new Switch("Always Disabled (Off)")
-                    .IsEnabled(false)
-                    .Row(2).Column(0),
-
-                new Switch("Always Disabled (On)")
-                    { IsChecked = true }
-                    .IsEnabled(false)
-                    .Row(2).Column(1)
-            );
-        children.Add(switchGrid);
-
-        // Sub-section 2: Rich Content Switches
-        children.Add(new TextBlock("Rich Content (Icons, Titles & Descriptions)").TitleSmall());
-
-        var airplaneSwitch = new Switch
-        {
-            ShowThumbIcon = true,
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.AirplanemodeActive, 20) { Foreground = Color.FromHex("#E65100"), VerticalAlignment = VerticalAlignment.Center },
-                    new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-                        .Children(
-                            new TextBlock("Airplane Mode").TitleSmall(),
-                            new TextBlock("Disables Wi-Fi, Bluetooth, and cellular radios simultaneously").Caption()
-                        )
-                )
-        }.BindIsChecked(_viewModel, x => x.AirplaneMode, (vm, v) => vm.AirplaneMode = v)
-         .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
-        children.Add(airplaneSwitch);
-
-        var fpsSwitch = new Switch
-        {
-            ShowThumbIcon = true,
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.Speed, 20) { Foreground = Color.FromHex("#2E7D32"), VerticalAlignment = VerticalAlignment.Center },
-                    new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-                        .Children(
-                            new TextBlock("High Smoothness (120 Hz VSync)").TitleSmall(),
-                            new TextBlock("Enables sub-pixel spring animations and high-rate frame pacing").Caption()
-                        )
-                )
-        }.BindIsChecked(_viewModel, x => x.HighFpsMode, (vm, v) => vm.HighFpsMode = v)
-         .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
-        children.Add(fpsSwitch);
-
-        // Sub-section 3: Two-Way Data Binding & Batch Actions
-        children.Add(new TextBlock("Two-Way Data Binding & Reactive Batch Actions").TitleSmall());
-
-        var wirelessRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Switch("Wi-Fi")
-                    .ShowThumbIcon()
-                    .BindIsChecked(_viewModel, x => x.WifiEnabled, (vm, v) => vm.WifiEnabled = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled),
-
-                new Switch("Bluetooth")
-                    .ShowThumbIcon()
-                    .BindIsChecked(_viewModel, x => x.BluetoothEnabled, (vm, v) => vm.BluetoothEnabled = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled),
-
-                new Card(CardVariant.Filled)
-                {
-                    Padding = new Thickness(10, 4),
-                    CornerRadius = new CornerRadius(6),
-                    VerticalAlignment = VerticalAlignment.Center
-                }.Child(
-                    new TextBlock()
-                        .Caption()
-                        .BindText(_viewModel, x => $"Wireless State: Wi-Fi: {(x.WifiEnabled ? "ON" : "OFF")} | BT: {(x.BluetoothEnabled ? "ON" : "OFF")}")
-                ),
-
-                new Button("Batch Toggle Both")
-                    .Variant(ButtonVariant.Tonal)
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ToggleAllSwitchesCommand)
-            );
-        children.Add(wirelessRow);
-
-        return CreateCard("Switches (Material Design 3)", "Switches toggle the state of a single item on or off with an animated capsule track (40×22) and expanding thumb.", children);
-    }
-
-    private static UIElement CreateCard(string title, string description, UIElement content)
-    {
-        var card = new Card(CardVariant.Outlined)
-        {
-            Padding = new Thickness(20),
-            CornerRadius = new CornerRadius(12)
-        };
-
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-            .Children(
-                new TextBlock(title).TitleMedium(),
-                new TextBlock(description).Subtext()
-            )
-        );
-
-        stack.Add(content);
-        card.Child = stack;
-        return card;
-    }
+            Ui.Demo("Binding, commands and events",
+                new Switch("Wi-Fi").ShowThumbIcon()
+                    .BindIsChecked(_vm, v => v.WifiEnabled, (v, on) => v.WifiEnabled = on)
+                    .OnCheckedChanged(state => _vm.LastEvent = $"Wi-Fi CheckedChanged → {state}"),
+                new Switch("Bluetooth").ShowThumbIcon()
+                    .BindIsChecked(_vm, v => v.BluetoothEnabled, (v, on) => v.BluetoothEnabled = on)
+                    .OnCheckedChanged(state => _vm.LastEvent = $"Bluetooth CheckedChanged → {state}"),
+                Ui.Row(
+                    new Button("Toggle both").Variant(ButtonVariant.Outlined).Command(_vm.ToggleWirelessCommand),
+                    Ui.Readout(_vm, v => v.LastEvent)))));
 }

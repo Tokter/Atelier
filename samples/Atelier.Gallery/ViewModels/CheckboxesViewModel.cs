@@ -1,4 +1,3 @@
-using System;
 using Atelier.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -14,126 +13,98 @@ public enum QualitySetting
 
 public partial class CheckboxesViewModel : PageViewModel
 {
-    // Master interactive enable/disable toggle
     [ObservableProperty]
-    private bool _interactiveControlsEnabled = true;
+    private bool _controlsEnabled = true;
 
-    // Checkbox observable properties
+    // Check boxes
     [ObservableProperty]
-    private bool _basicUnchecked = false;
-
-    [ObservableProperty]
-    private bool _basicChecked = true;
+    private bool _acceptTerms;
 
     [ObservableProperty]
-    private bool _syncCloudStorage = false;
-
-    [ObservableProperty]
-    private bool _autoUpdate = true;
+    private bool _subscribe = true;
 
     [ObservableProperty]
     private bool _enableNotifications = true;
 
     [ObservableProperty]
-    private bool _sendAnalytics = false;
+    private bool? _triState;
 
-    // Radio Button selections
+    // "Select all" parent of three check boxes: checked, unchecked or indeterminate (mixed).
     [ObservableProperty]
-    private string _basicOption = "Option A";
+    [NotifyPropertyChangedFor(nameof(AllToppings))]
+    private bool _cheese = true;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AllToppings))]
+    private bool _mushrooms;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AllToppings))]
+    private bool _olives;
+
+    public bool? AllToppings
+    {
+        get => Cheese && Mushrooms && Olives ? true : !Cheese && !Mushrooms && !Olives ? false : null;
+        set
+        {
+            bool all = value == true;
+            Cheese = Mushrooms = Olives = all;
+        }
+    }
+
+    // Radio buttons
     [ObservableProperty]
     private string _shippingMethod = "Standard";
 
     [ObservableProperty]
     private QualitySetting _streamingQuality = QualitySetting.High1080p;
 
-    // Switch observable properties
-    [ObservableProperty]
-    private bool _standardSwitchOff = false;
-
-    [ObservableProperty]
-    private bool _standardSwitchOn = true;
-
-    [ObservableProperty]
-    private bool _iconSwitchOff = false;
-
-    [ObservableProperty]
-    private bool _iconSwitchOn = true;
-
+    // Switches
     [ObservableProperty]
     private bool _wifiEnabled = true;
 
     [ObservableProperty]
-    private bool _bluetoothEnabled = false;
+    private bool _bluetoothEnabled;
 
     [ObservableProperty]
-    private bool _airplaneMode = false;
+    private bool _airplaneMode;
 
     [ObservableProperty]
-    private bool _highFpsMode = true;
+    private string _lastEvent = "Toggle a switch to see its events";
 
     public CheckboxesViewModel()
     {
         PageIcon = MaterialIconKind.CheckBox;
         PageTitle = "Selection Controls";
+        Keywords = "checkbox radio button switch toggle tri-state";
     }
 
     [RelayCommand]
-    private void ToggleNotifications()
-    {
-        EnableNotifications = !EnableNotifications;
-    }
+    private void ToggleNotifications() => EnableNotifications = !EnableNotifications;
 
     [RelayCommand]
-    private void ToggleAllSwitches()
+    private void ToggleWireless()
     {
-        bool target = !(WifiEnabled && BluetoothEnabled && HighFpsMode);
+        bool target = !(WifiEnabled && BluetoothEnabled);
         WifiEnabled = target;
         BluetoothEnabled = target;
-        HighFpsMode = target;
     }
 
     [RelayCommand]
-    private void ResetDefaults()
+    private void Reset()
     {
-        InteractiveControlsEnabled = true;
-        BasicUnchecked = false;
-        BasicChecked = true;
-        SyncCloudStorage = false;
-        AutoUpdate = true;
+        ControlsEnabled = true;
+        AcceptTerms = false;
+        Subscribe = true;
         EnableNotifications = true;
-        SendAnalytics = false;
-        BasicOption = "Option A";
+        TriState = null;
+        Cheese = true;
+        Mushrooms = false;
+        Olives = false;
         ShippingMethod = "Standard";
         StreamingQuality = QualitySetting.High1080p;
-        StandardSwitchOff = false;
-        StandardSwitchOn = true;
-        IconSwitchOff = false;
-        IconSwitchOn = true;
         WifiEnabled = true;
         BluetoothEnabled = false;
         AirplaneMode = false;
-        HighFpsMode = true;
-    }
-
-    [RelayCommand]
-    private void ClearAll()
-    {
-        BasicUnchecked = false;
-        BasicChecked = false;
-        SyncCloudStorage = false;
-        AutoUpdate = false;
-        EnableNotifications = false;
-        SendAnalytics = false;
-        BasicOption = "";
-        ShippingMethod = "";
-        StandardSwitchOff = false;
-        StandardSwitchOn = false;
-        IconSwitchOff = false;
-        IconSwitchOn = false;
-        WifiEnabled = false;
-        BluetoothEnabled = false;
-        AirplaneMode = false;
-        HighFpsMode = false;
     }
 }
