@@ -216,17 +216,16 @@ public class PropertyGridBehaviorTests
 
     private static string? ErrorText(PropertyGrid grid, string label)
     {
-        var rowGrid = RowGrid(grid, label);
-        if (rowGrid.Children.Count < 3) return null;
-        var text = (TextBlock)rowGrid.Children[2];
-        return text.Visibility == Visibility.Visible ? text.Text : null;
+        // The error text is the TextBlock in the row grid's second row (below the label and editor).
+        var text = RowGrid(grid, label).Children.OfType<TextBlock>().FirstOrDefault(t => Grid.GetRow(t) == 1);
+        return text is { Visibility: Visibility.Visible } ? text.Text : null;
     }
 
     private static Border CategoryHeader(PropertyGrid grid, string category) =>
         (Border)Descendants(grid).OfType<TextBlock>().First(t => t.Text == category && t.Bold).Parent!.Parent!;
 
     private static ScrollViewer ContentScrollViewer(PropertyGrid grid) =>
-        (ScrollViewer)((Grid)((Border)grid.Children[0]).Child!).Children[0];
+        (ScrollViewer)((Grid)((Grid)((Border)grid.Children[0]).Child!).Children[0]).Children[0];
 
     private static void Enter(TextBox box) => box.OnKeyDown(new KeyEventArgs(Key.Enter));
     private static void Escape(TextBox box) => box.OnKeyDown(new KeyEventArgs(Key.Escape));

@@ -50,6 +50,13 @@ public partial class LayoutViewModel : PageViewModel
     [ObservableProperty]
     private float _gridRowSpacing = 8;
 
+    // GridSplitter
+    [ObservableProperty]
+    private bool _splitterShowsPreview;
+
+    [ObservableProperty]
+    private string _splitterSizes = "Drag a divider, or double-click it to restore the sizes";
+
     // UniformGrid
     [ObservableProperty]
     private float _uniformColumns = 4;
@@ -135,6 +142,7 @@ public partial class LayoutViewModel : PageViewModel
     [RelayCommand]
     private void Reset()
     {
+        SplitterShowsPreview = false;
         StackVertical = false;
         StackSpacing = 12;
         while (StackItems.Count > 3) StackItems.RemoveAt(StackItems.Count - 1);

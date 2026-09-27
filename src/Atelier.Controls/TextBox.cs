@@ -414,6 +414,7 @@ public class TextBox : Control
     {
         PaddingProperty.OverrideDefaultValue<TextBox>(new Thickness(16, 8));
         CornerRadiusProperty.OverrideDefaultValue<TextBox>(new CornerRadius(4));
+        CursorProperty.OverrideDefaultValue<TextBox>(CursorType.IBeam);
     }
 
     /// <summary>Initializes an empty, focusable text box.</summary>

@@ -28,12 +28,14 @@ public class LayoutView : GalleryPage
             WrapPanelSection(),
             DockPanelSection(),
             GridSection(),
+            GridSplitterSection(),
             UniformGridSection(),
             CanvasSection(),
             BorderSection(),
             ScrollViewerSection(),
             AlignmentSection(),
-            VisibilitySection());
+            VisibilitySection(),
+            CursorSection());
     }
 
     private UIElement StackPanelSection()
@@ -151,6 +153,74 @@ public class LayoutView : GalleryPage
             Ui.Demo("Star weights \"*,2*,*\"", Stage(weights)),
             Ui.Code("new Grid().Columns(\"140,*,Auto\").Rows(\"Auto,*,Auto\").Spacing(8, 8).Children(\n" +
                     "    header.Cell(0, 0, columnSpan: 3), sidebar.Cell(1, 0), content.Cell(1, 1), ...)"));
+    }
+
+    private UIElement GridSplitterSection()
+    {
+        // An editor-like layout: sidebar | document over an output panel | inspector, all resizable.
+        var editor = new Grid()
+            .Columns("200,Auto,*,Auto,220")
+            .Rows("*,Auto,110")
+            .Height(320);
+        editor.ColumnDefinitions[0].MinWidth = 120;
+        editor.ColumnDefinitions[2].MinWidth = 160;
+        editor.ColumnDefinitions[4].MinWidth = 120;
+        editor.RowDefinitions[0].MinHeight = 80;
+        editor.RowDefinitions[2].MinHeight = 60;
+
+        editor.Children(
+            Block("Sidebar · 200 px", 1).Cell(0, 0, rowSpan: 3),
+            Splitter().Cell(0, 1, rowSpan: 3),
+            Block("Document · *", 0).Cell(0, 2),
+            Splitter().Cell(1, 2),
+            Block("Output · 110 px", 2).Cell(2, 2),
+            Splitter().Cell(0, 3, rowSpan: 3),
+            Block("Inspector · 220 px", 1).Cell(0, 4, rowSpan: 3));
+
+        GridSplitter Splitter() =>
+            new GridSplitter()
+                .Bind(GridSplitter.ShowsPreviewProperty, _vm, v => v.SplitterShowsPreview)
+                .OnResized(() => _vm.SplitterSizes = Describe(editor));
+
+        return Ui.Section("GridSplitter",
+            "Drag a divider to resize the columns or rows next to it; the arrow keys move a focused divider, Escape " +
+            "cancels a drag and a double click restores the original sizes. Star columns keep their proportions, and a " +
+            "pixel column next to a star one keeps its new width when the window resizes.",
+            Ui.Row(
+                new Switch("Show preview, resize on release").ShowThumbIcon()
+                    .BindIsChecked(_vm, v => v.SplitterShowsPreview, (v, on) => v.SplitterShowsPreview = on),
+                Ui.Readout(_vm, v => v.SplitterSizes)),
+            Stage(editor),
+            Ui.Code("new Grid().Columns(\"200,Auto,*\").Children(\n" +
+                    "    sidebar,\n" +
+                    "    new GridSplitter().Column(1),   // in an Auto column: resizes columns 0 and 2\n" +
+                    "    content.Column(2))"));
+    }
+
+    private static string Describe(Grid grid)
+    {
+        static string Length(GridLength length) => length.IsStar ? $"{length.Value:0.##}*" : length.IsAuto ? "Auto" : $"{length.Value:0}";
+
+        var columns = string.Join(", ", grid.ColumnDefinitions.Select(c => Length(c.Width)));
+        var rows = string.Join(", ", grid.RowDefinitions.Select(r => Length(r.Height)));
+        return $"Columns {columns} · Rows {rows}";
+    }
+
+    private UIElement CursorSection()
+    {
+        CursorType[] cursors =
+        [
+            CursorType.Arrow, CursorType.IBeam, CursorType.Hand, CursorType.Crosshair, CursorType.SizeWestEast,
+            CursorType.SizeNorthSouth, CursorType.SizeNorthwestSoutheast, CursorType.SizeNortheastSouthwest,
+            CursorType.SizeAll, CursorType.NotAllowed, CursorType.Wait, CursorType.AppStarting,
+        ];
+
+        return Ui.Section("Cursors",
+            "Any element can set the mouse cursor shown over it; descendants without their own show their parent's. " +
+            "Text boxes show the text cursor and splitters the resize arrows by default.",
+            new WrapPanel().Spacing(8, 8).Children(
+                cursors.Select((cursor, i) => (UIElement)Block(cursor.ToString(), i).Cursor(cursor).MinWidth(140)).ToArray()),
+            Ui.Code("new Border().Cursor(CursorType.Hand).OnPointerPressed(...)"));
     }
 
     private UIElement UniformGridSection()

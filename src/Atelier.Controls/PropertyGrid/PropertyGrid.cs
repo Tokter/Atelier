@@ -245,6 +245,8 @@ public class PropertyGrid : Control
     private readonly Button _alphabeticalBtn;
     private readonly TextBox _filterTextBox;
     private readonly ScrollViewer _scrollViewer;
+    private readonly Grid _contentArea;
+    private readonly GridSplitter _labelSplitter;
     private readonly StackPanel _contentPanel;
     private readonly Border _placeholder;
     private readonly TextBlock _placeholderText;
@@ -273,6 +275,16 @@ public class PropertyGrid : Control
     private readonly EventHandler<PointerEventArgs> _rowPointerPressedHandler;
     private readonly EventHandler<PointerEventArgs> _headerPointerPressedHandler;
     private readonly EventHandler _editorGotFocusHandler;
+
+    // The narrowest the label and editor columns get when the label column is resized with the splitter.
+    private const float MinLabelWidth = 60f;
+    private const float MinEditorWidth = 80f;
+
+    // The rows' left padding: the splitter's column is this much wider than LabelWidth.
+    private const float RowIndent = 12f;
+
+    // The column of a row's editor (and error text): after the label and the gap under the splitter.
+    private const int EditorColumn = 2;
 
     #endregion
 
@@ -383,6 +395,20 @@ public class PropertyGrid : Control
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto
         };
 
+        // One splitter for the whole grid, over the rows (and category headers): it sits in the gap column every row
+        // leaves between its label and editor, so it never covers an editor. Its column is the rows' label column
+        // (plus their indent); dragging it sets LabelWidth.
+        _labelSplitter = new GridSplitter { ResizeDirection = GridResizeDirection.Columns };
+        _labelSplitter.Resized += OnLabelSplitterResized;
+        _contentArea = new Grid();
+        _contentArea.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Pixels(RowIndent + LabelWidth)) { MinWidth = RowIndent + MinLabelWidth });
+        _contentArea.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        _contentArea.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star) { MinWidth = MinEditorWidth });
+        Grid.SetColumnSpan(_scrollViewer, 3);
+        Grid.SetColumn(_labelSplitter, 1);
+        _contentArea.Add(_scrollViewer);
+        _contentArea.Add(_labelSplitter);
+
         // Message shown over the (empty) content area: no object, no properties or no filter matches.
         _placeholderText = new TextBlock(string.Empty)
         {
@@ -427,13 +453,13 @@ public class PropertyGrid : Control
         _rootLayout.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
         Grid.SetRow(_toolbar, 0);
-        Grid.SetRow(_scrollViewer, 1);
+        Grid.SetRow(_contentArea, 1);
         Grid.SetRow(_placeholder, 1);
         Grid.SetRow(_descriptionPanel, 2);
 
-        // Add ScrollViewer first, then Toolbar so Toolbar renders on top
+        // Add the content first, then the toolbar so it renders on top
         // and its elevation drop shadow casts downward over the scrolling properties.
-        _rootLayout.Add(_scrollViewer);
+        _rootLayout.Add(_contentArea);
         _rootLayout.Add(_toolbar);
         _rootLayout.Add(_placeholder);
         _rootLayout.Add(_descriptionPanel);
@@ -615,8 +641,23 @@ public class PropertyGrid : Control
     private void OnToolbarElevationChanged(float oldVal, float newVal) =>
         _toolbar.Elevation = newVal;
 
+    // The splitter resized its column (the label column plus the rows' indent): that's the new LabelWidth.
+    private void OnLabelSplitterResized(object? sender, EventArgs e)
+    {
+        if (_contentArea.ColumnDefinitions[0].Width is { IsAbsolute: true } width)
+        {
+            LabelWidth = Math.Max(0, width.Value - RowIndent);
+        }
+    }
+
     private void OnLabelWidthChanged(float width)
     {
+        var splitterColumn = GridLength.Pixels(RowIndent + width);
+        if (_contentArea.ColumnDefinitions[0].Width != splitterColumn)
+        {
+            _contentArea.ColumnDefinitions[0].Width = splitterColumn;
+        }
+
         GridLength length = GridLength.Pixels(width);
         for (int i = 0; i < _rows.Count; i++)
         {
@@ -896,10 +937,12 @@ public class PropertyGrid : Control
         {
             _placeholderText.Text = message;
             _placeholder.Visibility = Visibility.Visible;
+            _labelSplitter.Visibility = Visibility.Collapsed;
         }
         else
         {
             _placeholder.Visibility = Visibility.Collapsed;
+            _labelSplitter.Visibility = Visibility.Visible;
         }
     }
 
@@ -960,22 +1003,35 @@ public class PropertyGrid : Control
     {
         string displayName = descriptor.DisplayName ?? descriptor.Name ?? string.Empty;
 
-        var labelPanel = new StackPanel
+        // The name trims with an ellipsis (showing the full name as a tooltip) when the label column is too narrow, and
+        // the label is clipped to its column, so it never runs under the splitter or into the editor. The read-only tag
+        // keeps its size; the name trims first.
+        var labelPanel = new Grid
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 4,
+            ClipToBounds = true,
             VerticalAlignment = VerticalAlignment.Center
         };
-        labelPanel.Add(new TextBlock(displayName) { FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
+        labelPanel.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        labelPanel.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        labelPanel.Add(new TextBlock(displayName)
+        {
+            FontSize = 12,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            ShowsToolTipWhenTrimmed = true,
+            VerticalAlignment = VerticalAlignment.Center
+        });
 
         if (descriptor.IsReadOnly)
         {
-            labelPanel.Add(new TextBlock("(Read-Only)")
+            var readOnlyTag = new TextBlock("(Read-Only)")
             {
                 FontSize = 10,
                 Foreground = s_readOnlyText,
+                Margin = new Thickness(4, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center
-            });
+            };
+            Grid.SetColumn(readOnlyTag, 1);
+            labelPanel.Add(readOnlyTag);
         }
 
         var context = new PropertyEditorContext(this, target, descriptor);
@@ -993,15 +1049,17 @@ public class PropertyGrid : Control
         editor.VerticalAlignment = VerticalAlignment.Center;
         editor.GotFocus += _editorGotFocusHandler;
 
+        // Label | gap under the grid's splitter | editor.
         var labelColumn = new ColumnDefinition(GridLength.Pixels(LabelWidth));
         var rowGrid = new Grid();
         rowGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         rowGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         rowGrid.ColumnDefinitions.Add(labelColumn);
+        rowGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Pixels(GridSplitter.DefaultThickness)));
         rowGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
 
         Grid.SetColumn(labelPanel, 0);
-        Grid.SetColumn(editor, 1);
+        Grid.SetColumn(editor, EditorColumn);
         rowGrid.Add(labelPanel);
         rowGrid.Add(editor);
 
@@ -1142,7 +1200,7 @@ public class PropertyGrid : Control
                         Margin = new Thickness(0, 4, 0, 0)
                     };
                     Grid.SetRow(_errorText, 1);
-                    Grid.SetColumn(_errorText, 1);
+                    Grid.SetColumn(_errorText, EditorColumn);
                     Layout.Add(_errorText);
                 }
                 _errorText.Text = message;

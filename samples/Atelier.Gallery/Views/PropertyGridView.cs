@@ -36,7 +36,7 @@ public class PropertyGridView : GalleryPage
             .Bind(PropertyGrid.IsToolbarVisibleProperty, _vm, v => v.IsToolbarVisible)
             .Bind(PropertyGrid.IsDescriptionVisibleProperty, _vm, v => v.IsDescriptionVisible)
             .Bind(PropertyGrid.ToolbarElevationProperty, _vm, v => v.ToolbarElevation)
-            .Bind(PropertyGrid.LabelWidthProperty, _vm, v => v.LabelWidth)
+            .Bind(PropertyGrid.LabelWidthProperty, _vm, v => v.LabelWidth, (v, w) => v.LabelWidth = w) // two-way: the row dividers change it too
             .OnPropertyValueChanging((_, e) => Validate(e))
             .OnPropertyValueChanged((_, e) => _vm.Log($"Changed {e.Property.Name}: {e.OldValue ?? "null"} → {e.NewValue ?? "null"}"))
             .OnPropertyValueError((_, e) => _vm.Log($"Error in {e.Property.Name}: {e.Exception.Message}"))
@@ -45,7 +45,8 @@ public class PropertyGridView : GalleryPage
 
         return Ui.Section("Inspecting objects",
             "Pick an object to inspect. Each property type gets a matching editor: text, numbers, switches, colors, " +
-            "drop-downs for enums, check boxes for [Flags] enums and nullable values. Edits are validated and logged.",
+            "drop-downs for enums, check boxes for [Flags] enums and nullable values. Edits are validated and logged; " +
+            "drag the divider between labels and editors to change the label width.",
             Ui.Columns(300,
                 Ui.Labeled("Object", Ui.Row(
                     ObjectOption("Shape", InspectedObject.Shape),
@@ -61,7 +62,7 @@ public class PropertyGridView : GalleryPage
                     .LeadingIconKind(MaterialIconKind.FilterList)
                     .BindText(_vm, v => v.FilterText, (v, text) => v.FilterText = text)),
             Ui.Columns(220,
-                Ui.SliderSetting("Label width", _vm, v => v.LabelWidth, (v, w) => v.LabelWidth = w, 100, 260, step: 10),
+                Ui.SliderSetting("Label width", _vm, v => v.LabelWidth, (v, w) => v.LabelWidth = w, 60, 400),
                 Ui.SliderSetting("Toolbar elevation", _vm, v => v.ToolbarElevation, (v, e) => v.ToolbarElevation = e, 0, 8, step: 1),
                 Ui.Stack(
                     new Switch("Toolbar").BindIsChecked(_vm, v => v.IsToolbarVisible, (v, on) => v.IsToolbarVisible = on),

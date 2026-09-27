@@ -30,9 +30,15 @@ public class MainView : KeybindingHandler
             .FieldHeight(36)
             .BindText(_vm, v => v.SearchText, (v, text) => v.SearchText = text);
 
+        // The navigation can be resized with the splitter next to it (between 180 and 400 px).
         var body = new Grid()
-            .Columns(GridLength.Pixels(248), GridLength.Star)
-            .Children(Navigation(), new ContentControl().Column(1).BindContent(_vm, v => v.CurrentPage));
+            .Columns(GridLength.Pixels(248), GridLength.Auto, GridLength.Star)
+            .Children(
+                Navigation(),
+                new GridSplitter().Column(1).Margin(0, 4, 0, 12).ToolTip("Drag to resize the navigation; double-click to reset"),
+                new ContentControl().Column(2).BindContent(_vm, v => v.CurrentPage));
+        body.ColumnDefinitions[0].MinWidth = 180;
+        body.ColumnDefinitions[0].MaxWidth = 400;
 
         Content = new DialogHost()
             .Identifier("RootHost")

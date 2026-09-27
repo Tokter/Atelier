@@ -293,6 +293,32 @@ public sealed class ToolTipTests : IDisposable
     }
 
     [Fact]
+    public void TextBlock_IsHitTestable_OnlyWithATooltip()
+    {
+        var plain = new TextBlock("Plain");
+        var tipped = new TextBlock("Tipped").ToolTip("Details");
+        var trimming = new TextBlock("A long text that is trimmed").TextTrimming().ShowsToolTipWhenTrimmed().Width(40);
+        var forcedOff = new TextBlock("Off").ToolTip("Never shown").IsHitTestVisible(false);
+        var root = new StackPanel().Children(plain, tipped, trimming, forcedOff);
+        root.AttachToHost();
+        root.Measure(new Size(400, 400));
+        root.Arrange(new Rect(0, 0, 400, 400));
+
+        Point Center(TextBlock t) => t.PointToScreen(new Point(t.Bounds.Width / 2, t.Bounds.Height / 2));
+        Assert.Same(root, root.HitTest(Center(plain)));           // plain text lets clicks through to its parent
+        Assert.Same(tipped, root.HitTest(Center(tipped)));
+        Assert.Same(trimming, root.HitTest(Center(trimming)));
+        Assert.Same(root, root.HitTest(Center(forcedOff)));       // an explicit IsHitTestVisible(false) wins
+
+        // Hovering the trimmed text shows its full text.
+        ToolTipService.OnPointerOver(root.HitTest(Center(trimming)));
+        _time.AdvanceMs(500);
+        Assert.Same(trimming, ToolTipService.CurrentOwner);
+        Assert.Equal("A long text that is trimmed", ToolTipService.CurrentToolTip!.Content);
+        root.DetachFromHost();
+    }
+
+    [Fact]
     public void IsInteractive_OverridesTheDefaultForTheContent()
     {
         _save.ToolTip(new TextBlock("Element, but not interactive")).ToolTipIsInteractive(false);

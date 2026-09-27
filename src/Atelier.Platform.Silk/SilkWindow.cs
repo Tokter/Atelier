@@ -17,6 +17,7 @@ using Atelier.Core.Primitives;
 using Atelier.Core.Styling;
 using Atelier.Core.Tree;
 using Atelier.Rendering;
+using CursorType = Atelier.Core.Primitives.CursorType;
 using Atelier.Theming;
 using Atelier.Theming.Material;
 using Atelier.Core.Platform;
@@ -1110,7 +1111,70 @@ public class SilkWindow : IDisposable, IHostWindow
         }
     }
 
+    // The pointer handlers update the cursor afterwards: hovering, capturing or releasing can change which element's
+    // cursor applies.
+    private void OnMouseMove(IMouse mouse, Vector2 position)
+    {
+        OnMouseMoveCore(mouse, position);
+        UpdateCursor(mouse);
+    }
+
     private void OnMouseDown(IMouse mouse, MouseButton button)
+    {
+        OnMouseDownCore(mouse, button);
+        UpdateCursor(mouse);
+    }
+
+    private void OnMouseUp(IMouse mouse, MouseButton button)
+    {
+        OnMouseUpCore(mouse, button);
+        UpdateCursor(mouse);
+    }
+
+    // The cursor last set on the mouse, so it's only changed when it differs.
+    private CursorType _appliedCursor = CursorType.Arrow;
+
+    /// <summary>
+    /// Shows the cursor of the element capturing the pointer, else of the hovered element (see
+    /// <see cref="UIElement.GetEffectiveCursor"/>).
+    /// </summary>
+    private void UpdateCursor(IMouse mouse)
+    {
+        var cursor = UIElement.GetEffectiveCursor(CapturedInThisWindow ?? _hoveredPopupElement ?? _hoveredElement);
+        if (cursor == _appliedCursor)
+        {
+            return;
+        }
+
+        _appliedCursor = cursor;
+        var standard = cursor switch
+        {
+            CursorType.IBeam => StandardCursor.IBeam,
+            CursorType.Hand => StandardCursor.Hand,
+            CursorType.Crosshair => StandardCursor.Crosshair,
+            CursorType.SizeWestEast => StandardCursor.HResize,
+            CursorType.SizeNorthSouth => StandardCursor.VResize,
+            CursorType.SizeNorthwestSoutheast => StandardCursor.NwseResize,
+            CursorType.SizeNortheastSouthwest => StandardCursor.NeswResize,
+            CursorType.SizeAll => StandardCursor.ResizeAll,
+            CursorType.NotAllowed => StandardCursor.NotAllowed,
+            CursorType.Wait => StandardCursor.Wait,
+            CursorType.AppStarting => StandardCursor.WaitArrow,
+            _ => StandardCursor.Default,
+        };
+
+        try
+        {
+            // Older GLFW versions lack some shapes; fall back to the arrow rather than failing.
+            mouse.Cursor.StandardCursor = mouse.Cursor.IsSupported(standard) ? standard : StandardCursor.Default;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[SilkWindow] Cursor {cursor} unavailable: {ex.Message}");
+        }
+    }
+
+    private void OnMouseDownCore(IMouse mouse, MouseButton button)
     {
         _needsRender = true; // discrete input usually changes something on screen
         FocusManager.NotifyPointerInteraction(); // hide focus rings until the keyboard is used again
@@ -1151,7 +1215,7 @@ public class SilkWindow : IDisposable, IHostWindow
         }
     }
 
-    private void OnMouseUp(IMouse mouse, MouseButton button)
+    private void OnMouseUpCore(IMouse mouse, MouseButton button)
     {
         _needsRender = true; // discrete input usually changes something on screen
         if (_rootElement == null) return;
@@ -1192,7 +1256,7 @@ public class SilkWindow : IDisposable, IHostWindow
         _pressedElement = null;
     }
 
-    private void OnMouseMove(IMouse mouse, Vector2 position)
+    private void OnMouseMoveCore(IMouse mouse, Vector2 position)
     {
         if (_isManualDragging)
         {

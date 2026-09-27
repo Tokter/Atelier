@@ -140,14 +140,16 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `ToolTip`, `RichToolTip` | `.ToolTip("text")` on any element; rich tooltips hold any element and stay open for their buttons and links; placement, delays, disabled elements, optional keyboard-focus tooltips |
 | `ScrollViewer` | Per-axis scroll bar modes, wheel and keyboard scrolling, scroll events |
 | `TransitioningContentControl` | Fade, slide, zoom, slide-and-fade and composite transitions with configurable duration and easing |
-| `PropertyGrid` | Categories, sorting, filtering, validation, custom editors per type or predicate; metadata generated at compile time |
+| `PropertyGrid` | Categories, sorting, filtering, validation, custom editors per type or predicate, a resizable label column; metadata generated at compile time |
+| `GridSplitter` | Resizes grid columns or rows by dragging or with the arrow keys; keeps star proportions; min/max limits, snapping, preview mode, Escape to cancel, double-click to restore |
 | `Icon`, `Image`, `TextBlock` | Material Symbols with variable axes and custom SVG paths; stretch modes; wrapping, trimming, max lines and line height |
 | `TitleBar`, `Toolbar`, `KeybindingHandler` | Custom window chrome, action bars, scoped keyboard shortcuts with chords |
 
 ### Layout
 
 `StackPanel`, `WrapPanel`, `DockPanel`, `Grid` (Auto, pixel and star sizes, spans), `UniformGrid` and `Canvas`, plus
-margin, padding, alignment, min/max sizes, visibility, clipping, opacity, layout transforms and render transforms.
+margin, padding, alignment, min/max sizes, visibility, clipping, opacity, layout transforms and render transforms. Any
+element can set the mouse cursor (`.Cursor(CursorType.Hand)`); text boxes show the I-beam and splitters the resize arrows.
 
 ### Theming and styling
 

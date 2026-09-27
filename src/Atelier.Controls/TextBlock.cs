@@ -220,6 +220,35 @@ public class TextBlock : UIElement
     /// <summary>Gets or sets whether the text is drawn de-emphasized (the theme's secondary text color, or the foreground at reduced opacity).</summary>
     public bool Muted { get => GetValue(MutedProperty); set => SetValue(MutedProperty, value); }
 
+    /// <summary>Identifies the <see cref="ShowsToolTipWhenTrimmed"/> property.</summary>
+    public static readonly BindableProperty<bool> ShowsToolTipWhenTrimmedProperty =
+        BindableProperty.Register<TextBlock, bool>(nameof(ShowsToolTipWhenTrimmed), false);
+
+    /// <summary>
+    /// Gets or sets whether the full <see cref="Text"/> is shown as a tooltip while it is trimmed (see
+    /// <see cref="IsTextTrimmed"/>). A tooltip set with <see cref="ToolTipService.ToolTipProperty"/> takes precedence.
+    /// The default is <c>false</c>.
+    /// </summary>
+    public bool ShowsToolTipWhenTrimmed { get => GetValue(ShowsToolTipWhenTrimmedProperty); set => SetValue(ShowsToolTipWhenTrimmedProperty, value); }
+
+    /// <summary>
+    /// Gets whether the last layout cut the text off: a line ends with an ellipsis (see <see cref="TextTrimming"/>).
+    /// </summary>
+    public bool IsTextTrimmed
+    {
+        get
+        {
+            for (int i = 0; i < _lines.Count; i++)
+            {
+                if (_lines[i].HasEllipsis)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
     private readonly List<TextLine> _lines = new();
     private string?[] _lineTexts = Array.Empty<string?>();
     private LayoutKey _layoutKey;
@@ -228,10 +257,38 @@ public class TextBlock : UIElement
     private float _lineAdvance;
     private float _firstBaseline;
 
+    static TextBlock()
+    {
+        // Text isn't hit-testable by default, so clicks reach the control around it (see HitTest for the exception).
+        IsHitTestVisibleProperty.OverrideDefaultValue<TextBlock>(false);
+    }
+
     /// <summary>Initializes an empty text block.</summary>
     public TextBlock()
     {
-        IsHitTestVisible = false;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// A text block isn't hit-testable by default, so clicks go to the element around it. A text block with a tooltip
+    /// (set, or <see cref="ShowsToolTipWhenTrimmed"/>) is, so hovering the text shows its tooltip; its pointer events
+    /// still bubble to the parent. An explicitly set <see cref="UIElement.IsHitTestVisible"/> is always honored.
+    /// </remarks>
+    public override UIElement? HitTest(Point point)
+    {
+        bool defaultOff = !IsHitTestVisible && GetValueSource(IsHitTestVisibleProperty) == ValueSource.Default;
+        if (!defaultOff || Visibility != Visibility.Visible || !(ShowsToolTipWhenTrimmed || ToolTipService.GetToolTip(this) != null))
+        {
+            return base.HitTest(point);
+        }
+
+        // The local transform maps this element's coordinates (including its position) to the parent's.
+        if (!System.Numerics.Matrix3x2.Invert(GetLocalTransform(), out var toLocal))
+        {
+            return null;
+        }
+        var local = System.Numerics.Vector2.Transform(new System.Numerics.Vector2(point.X, point.Y), toLocal);
+        return local.X >= 0 && local.Y >= 0 && local.X < Bounds.Width && local.Y < Bounds.Height ? this : null;
     }
 
     /// <summary>Initializes a text block showing <paramref name="text"/>; text containing emoji uses the "Segoe UI Emoji" font.</summary>

@@ -77,6 +77,13 @@ public static class ToolTipService
     /// <summary>Gets the tooltip of <paramref name="element"/>.</summary>
     public static object? GetToolTip(UIElement element) => element.GetValue(ToolTipProperty);
 
+    /// <summary>
+    /// Gets what the tooltip of <paramref name="element"/> shows right now: its <see cref="ToolTipProperty"/>, or for a
+    /// <see cref="TextBlock"/> with <see cref="TextBlock.ShowsToolTipWhenTrimmed"/>, its full text while it is trimmed.
+    /// </summary>
+    public static object? GetEffectiveToolTip(UIElement element) =>
+        GetToolTip(element) ?? (element is TextBlock { ShowsToolTipWhenTrimmed: true, IsTextTrimmed: true } text ? text.Text : null);
+
     /// <summary>Sets the tooltip of <paramref name="element"/>: a string, an element or any object; <c>null</c> removes it.</summary>
     public static void SetToolTip(UIElement element, object? toolTip) => element.SetValue(ToolTipProperty, toolTip);
 
@@ -357,7 +364,7 @@ public static class ToolTipService
             return;
         }
 
-        var content = GetToolTip(target);
+        var content = GetEffectiveToolTip(target);
         if (content == null || !CanShow(target) || !target.IsAttachedToVisualTree)
         {
             return;
@@ -433,7 +440,7 @@ public static class ToolTipService
             Close();
         }
 
-        if (ShowOnKeyboardFocus && newFocus != null && GetToolTip(newFocus) != null)
+        if (ShowOnKeyboardFocus && newFocus != null && GetEffectiveToolTip(newFocus) != null)
         {
             // Whether the focus came from the keyboard is checked when the delay ends (IsFocusVisible).
             ScheduleOpen(newFocus, byKeyboard: true);
@@ -450,7 +457,7 @@ public static class ToolTipService
                 return null;
             }
 
-            if (GetToolTip(node) != null && GetIsEnabled(node))
+            if (GetEffectiveToolTip(node) != null && GetIsEnabled(node))
             {
                 return CanShow(node) ? node : null;
             }

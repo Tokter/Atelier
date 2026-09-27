@@ -461,6 +461,40 @@ public abstract class UIElement : VisualNode
     /// Gets or sets whether <see cref="HitTest"/> can return this element or any of its descendants. The default is <c>true</c>.
     /// </summary>
     public bool IsHitTestVisible { get => GetValue(IsHitTestVisibleProperty); set => SetValue(IsHitTestVisibleProperty, value); }
+
+    /// <summary>Identifies the <see cref="Cursor"/> bindable property.</summary>
+    public static readonly BindableProperty<CursorType> CursorProperty =
+        BindableProperty.Register<UIElement, CursorType>(nameof(Cursor), CursorType.Default);
+
+    /// <summary>
+    /// Gets or sets the mouse cursor shown while the pointer is over the element (and its descendants that don't set
+    /// their own). The default, <see cref="CursorType.Default"/>, shows the parent's cursor; see <see cref="GetEffectiveCursor"/>.
+    /// </summary>
+    public CursorType Cursor { get => GetValue(CursorProperty); set => SetValue(CursorProperty, value); }
+
+    /// <summary>
+    /// Gets the cursor to show over <paramref name="element"/>: its own <see cref="Cursor"/>, else that of its nearest
+    /// ancestor that sets one, else <see cref="CursorType.Arrow"/>. Windows call this for the element under the pointer
+    /// (or the element capturing it).
+    /// </summary>
+    public static CursorType GetEffectiveCursor(UIElement? element)
+    {
+        for (VisualNode? node = element; node != null; node = node.Parent)
+        {
+            if (node is UIElement current && current.GetCursor() is var cursor && cursor != CursorType.Default)
+            {
+                return cursor;
+            }
+        }
+        return CursorType.Arrow;
+    }
+
+    /// <summary>
+    /// Gets the cursor this element shows, <see cref="CursorType.Default"/> for its parent's. The base implementation
+    /// returns <see cref="Cursor"/>; controls whose cursor depends on their state (such as a splitter's direction)
+    /// override it and still honor a set <see cref="Cursor"/>.
+    /// </summary>
+    protected virtual CursorType GetCursor() => Cursor;
     /// <summary>
     /// Gets a value indicating whether this element is an overlay (such as a popup) that is positioned in window
     /// coordinates at <see cref="OverlayOrigin"/> rather than within its parent.

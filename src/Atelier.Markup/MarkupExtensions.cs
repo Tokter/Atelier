@@ -171,6 +171,12 @@ public static class MarkupExtensions
     public static T IsHitTestVisible<T>(this T element, bool isHitTestVisible = true) where T : UIElement =>
         element.Set(UIElement.IsHitTestVisibleProperty, isHitTestVisible);
 
+    /// <summary>
+    /// Sets the mouse cursor shown over the element and its descendants (unless they set their own), e.g.
+    /// <see cref="CursorType.Hand"/> for a clickable card. Text boxes show the I-beam by default.
+    /// </summary>
+    public static T Cursor<T>(this T element, CursorType cursor) where T : UIElement => element.Set(UIElement.CursorProperty, cursor);
+
     /// <summary>Clips the element's children to its bounds, including the rounded corners of a <see cref="Border"/>.</summary>
     public static T ClipToBounds<T>(this T element, bool clip = true) where T : UIElement => element.Set(UIElement.ClipToBoundsProperty, clip);
 

@@ -410,7 +410,8 @@ public class PropertyGridTests
 
         var toolbar = propertyGrid.Toolbar;
         Assert.NotNull(toolbar);
-        var scrollViewer = rootLayout.Children[0] as ScrollViewer;
+        var contentArea = rootLayout.Children[0] as Grid; // the scroll viewer with the label splitter over it
+        var scrollViewer = contentArea?.Children[0] as ScrollViewer;
         Assert.NotNull(scrollViewer);
 
         // Toolbar must be at the top with compact height (< 60px)
@@ -418,8 +419,8 @@ public class PropertyGridTests
         Assert.InRange(toolbar.Bounds.Height, 35f, 60f);
 
         // ScrollViewer must start immediately below toolbar and take the remaining height
-        Assert.Equal(toolbar.Bounds.Bottom, scrollViewer.Bounds.Y);
-        Assert.InRange(scrollViewer.Bounds.Height, 280f, 325f);
+        Assert.Equal(toolbar.Bounds.Bottom, contentArea!.Bounds.Y);
+        Assert.InRange(contentArea.Bounds.Height, 280f, 325f);
 
         // Verify content panel inside ScrollViewer has children arranged sequentially
         var contentPanel = scrollViewer.Content as StackPanel;
@@ -452,7 +453,7 @@ public class PropertyGridTests
 
         var rootBorder = (Border)propertyGrid.Children[0];
         var rootLayout = (Grid)rootBorder.Child!;
-        var scrollViewer = (ScrollViewer)rootLayout.Children[0];
+        var scrollViewer = (ScrollViewer)((Grid)rootLayout.Children[0]).Children[0];
         var toolbar = propertyGrid.Toolbar;
         var contentPanel = (StackPanel)scrollViewer.Content!;
         var toolbarGrid = (Grid)toolbar.Content!;
@@ -538,7 +539,7 @@ public class PropertyGridTests
         scrollViewer.Measure(new Size(1000, 800));
         scrollViewer.Arrange(new Rect(0, 0, 1000, 800));
 
-        var scrollViewerInner = (ScrollViewer)rootLayout.Children[0];
+        var scrollViewerInner = (ScrollViewer)((Grid)rootLayout.Children[0]).Children[0];
         var contentPanel = (StackPanel)scrollViewerInner.Content!;
 
         // Should filter down to 1 category (Network) and 1 item (Port Number)
@@ -564,7 +565,7 @@ public class PropertyGridTests
 
         var rootBorder = (Border)propertyGrid.Children[0];
         var rootLayout = (Grid)rootBorder.Child!;
-        var scrollViewer = (ScrollViewer)rootLayout.Children[0];
+        var scrollViewer = (UIElement)rootLayout.Children[0]; // the content area: the scroll viewer with the label splitter
         var toolbar = propertyGrid.Toolbar;
 
         // Verify initial state: toolbar is visible, occupies top row, scrollViewer starts below it
@@ -692,7 +693,7 @@ public class PropertyGridTests
         var rootLayout = (Grid)rootBorder.Child!;
 
         // ScrollViewer is child 0, Toolbar is child 1 so Toolbar renders on top (casting shadow over ScrollViewer)
-        Assert.IsType<ScrollViewer>(rootLayout.Children[0]);
+        Assert.IsType<ScrollViewer>(Assert.IsType<Grid>(rootLayout.Children[0]).Children[0]);
         Assert.IsType<Toolbar>(rootLayout.Children[1]);
         Assert.Same(propertyGrid.Toolbar, rootLayout.Children[1]);
     }

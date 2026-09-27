@@ -42,6 +42,13 @@ public static class TextBlockMarkup
     /// <summary>Draws the text in the theme's muted (secondary) text color, for less important text.</summary>
     public static T Muted<T>(this T textBlock, bool muted = true) where T : TextBlock => textBlock.Set(TextBlock.MutedProperty, muted);
 
+    /// <summary>
+    /// Shows the full text as a tooltip while it is trimmed; combine with <see cref="TextTrimming{T}"/>:
+    /// <c>new TextBlock(name).TextTrimming().ShowsToolTipWhenTrimmed()</c>.
+    /// </summary>
+    public static T ShowsToolTipWhenTrimmed<T>(this T textBlock, bool show = true) where T : TextBlock =>
+        textBlock.Set(TextBlock.ShowsToolTipWhenTrimmedProperty, show);
+
     #endregion
 
     #region Layout
