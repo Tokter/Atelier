@@ -148,7 +148,7 @@ public class DialogHostView : Grid
                 UpdateControlsVisuals();
                 vm.Log($"CloseOnClickAway set to {v}. Scrim clicks will {(v ? "dismiss dialog" : "be swallowed")}.");
             })
-            .VerticalAlign(VerticalAlignment.Center);
+            .VerticalAlignment(VerticalAlignment.Center);
 
         var clickAwayGroup = new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
             .Children(
@@ -281,7 +281,7 @@ public class DialogHostView : Grid
         var btn = new Button(buttonText)
             .Variant(ButtonVariant.Filled)
             .Padding(12, 6)
-            .VerticalAlign(VerticalAlignment.Center)
+            .VerticalAlignment(VerticalAlignment.Center)
             .OnClick(action)
             .Column(1);
 
@@ -377,7 +377,7 @@ public class DialogHostView : Grid
         var clickCounterText = new TextBlock()
             .Caption()
             .Bold()
-            .VerticalAlign(VerticalAlignment.Center)
+            .VerticalAlignment(VerticalAlignment.Center)
             .BindText(_viewModel, vm => $"Clicks: {vm.LocalCardClickCount}");
 
         var clickRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }

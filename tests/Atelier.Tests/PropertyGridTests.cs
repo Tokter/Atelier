@@ -361,11 +361,11 @@ public class PropertyGridTests
     {
         var model = new TestInspectableModel();
         var grid = new PropertyGrid()
-            .Inspect(model)
-            .WithSortMode(PropertySortMode.Alphabetical)
-            .WithFilter("Port")
-            .WithLabelWidth(180f)
-            .ShowToolbar(true);
+            .SelectedObject(model)
+            .SortMode(PropertySortMode.Alphabetical)
+            .FilterText("Port")
+            .LabelWidth(180f)
+            .IsToolbarVisible(true);
 
         Assert.Same(model, grid.SelectedObject);
         Assert.Equal(PropertySortMode.Alphabetical, grid.SortMode);
@@ -394,9 +394,9 @@ public class PropertyGridTests
     {
         var model = new TestServerConfigModel();
         var propertyGrid = new PropertyGrid()
-            .Inspect(model)
-            .WithSortMode(PropertySortMode.Categorized)
-            .WithLabelWidth(140f);
+            .SelectedObject(model)
+            .SortMode(PropertySortMode.Categorized)
+            .LabelWidth(140f);
         propertyGrid.Height = 360f;
 
         propertyGrid.Measure(new Size(600, 360));
@@ -442,9 +442,9 @@ public class PropertyGridTests
     {
         var model = new TestServerConfigModel();
         var propertyGrid = new PropertyGrid()
-            .Inspect(model)
-            .WithSortMode(PropertySortMode.Categorized)
-            .WithLabelWidth(140f);
+            .SelectedObject(model)
+            .SortMode(PropertySortMode.Categorized)
+            .LabelWidth(140f);
         propertyGrid.Height = 360f;
 
         propertyGrid.Measure(new Size(600, 360));
@@ -499,9 +499,9 @@ public class PropertyGridTests
     {
         var model = new TestServerConfigModel();
         var propertyGrid = new PropertyGrid()
-            .Inspect(model)
-            .WithSortMode(PropertySortMode.Categorized)
-            .WithLabelWidth(140f);
+            .SelectedObject(model)
+            .SortMode(PropertySortMode.Categorized)
+            .LabelWidth(140f);
         propertyGrid.Height = 360f;
 
         var card = new Border { Padding = new Thickness(16), Child = propertyGrid };

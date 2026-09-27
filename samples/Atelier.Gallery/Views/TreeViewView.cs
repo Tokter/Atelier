@@ -35,8 +35,8 @@ public class TreeViewView : Grid
         // 2. TreeView control setup
         _treeView = new TreeView()
             .IndentSize(_viewModel.IndentSize)
-            .ChildrenSelector<TreeItemNode>(node => node.Children)
-            .WithItemTemplate<TreeItemNode>(CreateNodeTemplate);
+            .WithChildrenSelector((TreeItemNode node) => node.Children)
+            .WithItemTemplate((TreeItemNode node) => CreateNodeTemplate(node));
 
         _treeView.ItemsSource = _viewModel.RootNodes;
         _treeView.BindSelectedItem(_viewModel, vm => vm.SelectedNode, (vm, v) => vm.SelectedNode = v as TreeItemNode);
@@ -107,17 +107,17 @@ public class TreeViewView : Grid
             .Children(
                 new Button("Expand All")
                     .Variant(ButtonVariant.Filled)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ExpandAllCommand),
 
                 new Button("Collapse All")
                     .Variant(ButtonVariant.Tonal)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.CollapseAllCommand),
 
                 new Button("Reset Sample Tree")
                     .Variant(ButtonVariant.Outlined)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ResetTreeCommand)
             );
 
@@ -138,7 +138,7 @@ public class TreeViewView : Grid
         var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.FolderOpen, 22) { Foreground = Color.FromHex("#FBBF24"), VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Project Explorer").TitleMedium().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Project Explorer").TitleMedium().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     CornerRadius = new CornerRadius(10),
@@ -178,17 +178,17 @@ public class TreeViewView : Grid
             .Children(
                 new Button("Add Child")
                     .Variant(ButtonVariant.Filled)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.AddChildCommand),
 
                 new Button("Add Root")
                     .Variant(ButtonVariant.Tonal)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.AddRootCommand),
 
                 new Button("Delete")
                     .Variant(ButtonVariant.Outlined)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.RemoveSelectedCommand)
             );
         toolbar.Add(buttonsRow);
@@ -315,12 +315,12 @@ public class TreeViewView : Grid
             .Children(
                 new Button("Add Sub-item")
                     .Variant(ButtonVariant.Tonal)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.AddChildCommand),
 
                 new Button("Delete Node")
                     .Variant(ButtonVariant.Outlined)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.RemoveSelectedCommand)
             );
 
@@ -405,10 +405,10 @@ public class TreeViewView : Grid
                 Padding = new Thickness(6, 2),
                 Background = Color.FromRgb(128, 128, 128).WithAlpha(0.16f),
                 VerticalAlignment = VerticalAlignment.Center,
-                Child = new TextBlock(key).Caption().Bold().VerticalAlign(VerticalAlignment.Center)
+                Child = new TextBlock(key).Caption().Bold().VerticalAlignment(VerticalAlignment.Center)
             };
 
-            var descText = new TextBlock(description).Caption().VerticalAlign(VerticalAlignment.Center);
+            var descText = new TextBlock(description).Caption().VerticalAlignment(VerticalAlignment.Center);
 
             return new StackPanel
             {
@@ -439,7 +439,7 @@ public class TreeViewView : Grid
 
         var nameText = new TextBlock(node.Name)
             .LabelMedium()
-            .VerticalAlign(VerticalAlignment.Center);
+            .VerticalAlignment(VerticalAlignment.Center);
         nameText.BindText(node, n => n.Name);
 
         var badge = new Border
@@ -450,13 +450,13 @@ public class TreeViewView : Grid
             VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock(node.Badge ?? string.Empty)
                 .Caption()
-                .VerticalAlign(VerticalAlignment.Center)
+                .VerticalAlignment(VerticalAlignment.Center)
         };
 
         var detailsText = new TextBlock(node.Details)
             .Caption()
             .Muted()
-            .VerticalAlign(VerticalAlignment.Center);
+            .VerticalAlignment(VerticalAlignment.Center);
         detailsText.BindText(node, n => n.Details);
 
         return new StackPanel

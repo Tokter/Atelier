@@ -90,7 +90,7 @@ public partial class TextBoxMD3Tests
         var tb = new TextBox()
             .Variant(TextBoxVariant.Filled)
             .Label("Password")
-            .LeadingIcon(MaterialIconKind.Lock)
+            .LeadingIconKind(MaterialIconKind.Lock)
             .SupportingText("Minimum 8 characters")
             .Text("Secret123")
             .IsReadOnly(true);

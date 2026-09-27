@@ -673,7 +673,7 @@ public class PopupAndComboBoxTests
         var ic = new ItemsControl()
             .BindItemsSource(vm, x => x.Cities)
             .Items("Madrid")
-            .ItemTemplate<string>(s => new TextBlock(s.ToUpper()));
+            .WithItemTemplate((string s) => new TextBlock(s.ToUpper()));
 
         Assert.Equal(4, ic.Items.Count);
         Assert.NotNull(ic.ItemTemplate);
@@ -705,7 +705,7 @@ public class PopupAndComboBoxTests
             .BindSelectedItem(viewModel, x => x.CurrentPage, (vm, p) => vm.CurrentPage = p)
             .BindItemsSource(viewModel, x => x.Pages)
             .Dock(Dock.Left)
-            .ItemTemplate<TestPageItem>(item =>
+            .WithItemTemplate((TestPageItem item) =>
             {
                 var sp = new StackPanel { Orientation = Orientation.Horizontal };
                 var icon = new Icon();

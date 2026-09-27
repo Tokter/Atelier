@@ -127,7 +127,7 @@ public class PropertyGridView : Grid
         var titleStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Tune, 26, foreground: Color.FromHex("#1E88E5")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("PropertyGrid & Native AOT Property Editors").TitleLarge().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("PropertyGrid & Native AOT Property Editors").TitleLarge().Bold().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     Background = Color.FromHex("#10B981").WithAlpha(0.15f),
@@ -148,7 +148,7 @@ public class PropertyGridView : Grid
             .Foreground(Color.FromHex("#757575"));
 
         // Target Model Selector Chips
-        var modelSelectorLabel = new TextBlock("Inspect Target:").LabelMedium().Bold().VerticalAlign(VerticalAlignment.Center);
+        var modelSelectorLabel = new TextBlock("Inspect Target:").LabelMedium().Bold().VerticalAlignment(VerticalAlignment.Center);
 
         _btnGraphicModel = new Button
         {
@@ -349,7 +349,7 @@ public class PropertyGridView : Grid
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.ViewList, 20, foreground: Color.FromHex("#1E88E5")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Live Property Inspector Grid").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center)
+                new TextBlock("Live Property Inspector Grid").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center)
             );
 
         var tipText = new TextBlock("Use the built-in toolbar below to filter properties or switch sort modes. Expand/collapse categories by clicking section headers.")
@@ -388,7 +388,7 @@ public class PropertyGridView : Grid
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.AutoAwesome, 20, foreground: Color.FromHex("#1E88E5")),
-                new TextBlock("Live 2D Graphic Output").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Live 2D Graphic Output").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     Background = model.Visible ? Color.FromHex("#10B981").WithAlpha(0.15f) : Color.FromHex("#EF4444").WithAlpha(0.15f),
@@ -474,7 +474,7 @@ public class PropertyGridView : Grid
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Dns, 20, foreground: Color.FromHex("#10B981")),
-                new TextBlock("Live Microservice Status").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Live Microservice Status").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     Background = model.StatusColor.WithAlpha(0.15f),
@@ -509,8 +509,8 @@ public class PropertyGridView : Grid
                                 Background = model.StatusColor,
                                 VerticalAlignment = VerticalAlignment.Center
                             },
-                            new TextBlock(model.ServiceName).Bold().FontSize(14).VerticalAlign(VerticalAlignment.Center),
-                            new TextBlock($"https://{model.HostAddress}:{model.Port}").FontSize(12).Foreground(Color.FromHex("#6B7280")).VerticalAlign(VerticalAlignment.Center)
+                            new TextBlock(model.ServiceName).Bold().FontSize(14).VerticalAlignment(VerticalAlignment.Center),
+                            new TextBlock($"https://{model.HostAddress}:{model.Port}").FontSize(12).Foreground(Color.FromHex("#6B7280")).VerticalAlignment(VerticalAlignment.Center)
                         ),
                     new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 }
                         .Children(
@@ -537,7 +537,7 @@ public class PropertyGridView : Grid
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Storm, 20, foreground: Color.FromHex("#FF9800")),
-                new TextBlock("Live Particle Simulation Dashboard").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Live Particle Simulation Dashboard").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     Background = model.IsActive ? Color.FromHex("#10B981").WithAlpha(0.15f) : Color.FromHex("#9E9E9E").WithAlpha(0.15f),
@@ -618,7 +618,7 @@ public class PropertyGridView : Grid
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Extension, 20, foreground: Color.FromHex("#8B5CF6")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Built-in Editors Reference Matrix").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center)
+                new TextBlock("Built-in Editors Reference Matrix").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center)
             );
 
         static Border CreateEditorRow(string typeName, string editorName, string description, Color badgeColor)
@@ -684,7 +684,7 @@ public class PropertyGridView : Grid
         var headerTitle = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.History, 20, foreground: Color.FromHex("#F59E0B")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Property Change Audit Log").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center)
+                new TextBlock("Property Change Audit Log").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center)
             ).Column(0);
 
         clearBtn.Column(1);

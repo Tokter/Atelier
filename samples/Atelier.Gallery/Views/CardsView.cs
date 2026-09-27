@@ -84,12 +84,12 @@ public class CardsView : Grid
             .Children(
                 new Button("Reset Playground")
                     .Variant(ButtonVariant.Tonal)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ResetPlaygroundCommand),
 
                 new Button("Clear Counters")
                     .Variant(ButtonVariant.Outlined)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ClearInteractionsCommand)
             );
 
@@ -130,7 +130,7 @@ public class CardsView : Grid
                             .Row(1),
                         new Button("Elevated Action")
                             .Variant(ButtonVariant.Filled)
-                            .HorizontalAlign(HorizontalAlignment.Left)
+                            .HorizontalAlignment(HorizontalAlignment.Left)
                             .Row(2)
                     )
             ).Column(0);
@@ -160,7 +160,7 @@ public class CardsView : Grid
                             .Row(1),
                         new Button("Filled Action")
                             .Variant(ButtonVariant.Tonal)
-                            .HorizontalAlign(HorizontalAlignment.Left)
+                            .HorizontalAlignment(HorizontalAlignment.Left)
                             .Row(2)
                     )
             ).Column(1);
@@ -190,7 +190,7 @@ public class CardsView : Grid
                             .Row(1),
                         new Button("Outlined Action")
                             .Variant(ButtonVariant.Outlined)
-                            .HorizontalAlign(HorizontalAlignment.Left)
+                            .HorizontalAlignment(HorizontalAlignment.Left)
                             .Row(2)
                     )
             ).Column(2);
@@ -244,10 +244,10 @@ public class CardsView : Grid
                             .Children(
                                 new Button("Explore Studio")
                                     .Variant(ButtonVariant.Filled)
-                                    .VerticalAlign(VerticalAlignment.Center),
+                                    .VerticalAlignment(VerticalAlignment.Center),
                                 new Button()
                                     .Variant(ButtonVariant.Outlined)
-                                    .VerticalAlign(VerticalAlignment.Center)
+                                    .VerticalAlignment(VerticalAlignment.Center)
                                     .Command(_viewModel.ToggleFavoriteCommand)
                                     .Content(
                                         new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
@@ -295,13 +295,13 @@ public class CardsView : Grid
                             .Children(
                                 new Button("Tap Card Action")
                                     .Variant(ButtonVariant.Tonal)
-                                    .VerticalAlign(VerticalAlignment.Center)
+                                    .VerticalAlignment(VerticalAlignment.Center)
                                     .Command(_viewModel.CardClickCommand),
 
                                 new Card(CardVariant.Filled)
                                     .Padding(10, 4)
                                     .CornerRadius(6)
-                                    .VerticalAlign(VerticalAlignment.Center)
+                                    .VerticalAlignment(VerticalAlignment.Center)
                                     .Child(
                                         new TextBlock()
                                             .LabelSmall()
@@ -388,7 +388,7 @@ public class CardsView : Grid
             .BindElevation(_viewModel, x => x.PlaygroundElevation)
             .BindCornerRadius(_viewModel, x => x.PlaygroundCornerRadius)
             .BindPadding(_viewModel, x => x.PlaygroundPadding)
-            .VerticalAlign(VerticalAlignment.Center)
+            .VerticalAlignment(VerticalAlignment.Center)
             .Child(
                 new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
                     .Children(
@@ -405,7 +405,7 @@ public class CardsView : Grid
                             .BindText(_viewModel, x => $"Corner Radius: {x.PlaygroundCornerRadius:F0}dp  |  Padding: {x.PlaygroundPadding:F0}dp"),
                         new Button("Interactive Preview Action")
                             .Variant(ButtonVariant.Filled)
-                            .HorizontalAlign(HorizontalAlignment.Left)
+                            .HorizontalAlignment(HorizontalAlignment.Left)
                     )
             );
 

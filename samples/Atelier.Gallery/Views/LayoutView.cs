@@ -115,7 +115,7 @@ public class LayoutView : Grid
         var titleStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Dashboard, 26, foreground: Color.FromHex("#1E88E5")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Layout Systems & Panels").TitleLarge().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Layout Systems & Panels").TitleLarge().Bold().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     Background = Color.FromHex("#1E88E5").WithAlpha(0.12f),
@@ -212,7 +212,7 @@ public class LayoutView : Grid
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.ViewStream, 20, foreground: Color.FromHex("#1E88E5")),
-                new TextBlock("StackPanel — Linear Flow & Spacing").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("StackPanel — Linear Flow & Spacing").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     Background = Color.FromHex("#1E88E5").WithAlpha(0.12f),
@@ -353,7 +353,7 @@ public class LayoutView : Grid
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Dock, 20, foreground: Color.FromHex("#10B981")),
-                new TextBlock("DockPanel — Edge Pinning & LastChildFill").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("DockPanel — Edge Pinning & LastChildFill").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     Background = Color.FromHex("#10B981").WithAlpha(0.12f),
@@ -543,7 +543,7 @@ public class LayoutView : Grid
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.GridView, 20, foreground: Color.FromHex("#8B5CF6")),
-                new TextBlock("Grid — Multi-Cell Proportional Matrix").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Grid — Multi-Cell Proportional Matrix").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     Background = Color.FromHex("#8B5CF6").WithAlpha(0.12f),
@@ -646,7 +646,7 @@ public class LayoutView : Grid
         }
 
         var grid = new Grid()
-            .Spacing(_viewModel.GridRowSpacing, _viewModel.GridColumnSpacing);
+            .Spacing(_viewModel.GridColumnSpacing, _viewModel.GridRowSpacing);
 
         switch (_viewModel.SelectedGridPreset)
         {
@@ -747,7 +747,7 @@ public class LayoutView : Grid
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.WrapText, 20, foreground: Color.FromHex("#F59E0B")),
-                new TextBlock("WrapPanel — Responsive Flow & Dynamic Wrapping").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("WrapPanel — Responsive Flow & Dynamic Wrapping").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     Background = Color.FromHex("#F59E0B").WithAlpha(0.12f),
@@ -896,7 +896,7 @@ public class LayoutView : Grid
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Brush, 20, foreground: Color.FromHex("#EC4899")),
-                new TextBlock("Canvas — Absolute 2D Coordinate System").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Canvas — Absolute 2D Coordinate System").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     Background = Color.FromHex("#EC4899").WithAlpha(0.12f),
@@ -1036,7 +1036,7 @@ public class LayoutView : Grid
         var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.CropFree, 20, foreground: Color.FromHex("#06B6D4")),
-                new TextBlock("Border & Card — Container Decorators").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Border & Card — Container Decorators").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 new Border
                 {
                     Background = Color.FromHex("#06B6D4").WithAlpha(0.12f),
@@ -1088,7 +1088,7 @@ public class LayoutView : Grid
             VerticalAlignment = VerticalAlignment.Center,
             Child = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center }
                 .Children(
-                    new TextBlock("Decorated Border Container").Bold().FontSize(13).Foreground(Color.FromHex("#0891B2")).HorizontalAlign(HorizontalAlignment.Center),
+                    new TextBlock("Decorated Border Container").Bold().FontSize(13).Foreground(Color.FromHex("#0891B2")).HorizontalAlignment(HorizontalAlignment.Center),
                     new TextBlock("Hosts child elements with custom padding, borders & drop shadows.")
                     {
                         FontSize = 11,

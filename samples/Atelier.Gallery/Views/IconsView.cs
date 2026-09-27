@@ -111,12 +111,12 @@ public class IconsView : Grid
             .Children(
                 new Button("Toggle Outlined / Filled")
                     .Variant(ButtonVariant.Filled)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ToggleFillCommand),
 
                 new Button("Reset All Axes")
                     .Variant(ButtonVariant.Outlined)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ResetPlaygroundCommand)
             );
 
@@ -142,15 +142,15 @@ public class IconsView : Grid
             .BindGrade(_viewModel, x => x.PlaygroundGrade)
             .BindOpticalSize(_viewModel, x => x.PlaygroundOpticalSize)
             .BindSize(_viewModel, x => x.PlaygroundSize)
-            .HorizontalAlign(HorizontalAlignment.Center)
-            .VerticalAlign(VerticalAlignment.Center);
+            .HorizontalAlignment(HorizontalAlignment.Center)
+            .VerticalAlignment(VerticalAlignment.Center);
 
         var heroBox = new Card(CardVariant.Filled)
             .CornerRadius(16)
             .Padding(24)
             .MinHeight(160)
-            .HorizontalAlign(HorizontalAlignment.Stretch)
-            .VerticalAlign(VerticalAlignment.Center)
+            .HorizontalAlignment(HorizontalAlignment.Stretch)
+            .VerticalAlignment(VerticalAlignment.Center)
             .Child(heroIcon);
 
         var readoutsCard = new Card(CardVariant.Outlined)
@@ -241,8 +241,8 @@ public class IconsView : Grid
     private Button CreatePickerButton(MaterialIconKind kind, Color color)
     {
         var icon = new Icon(kind, 20, isFilled: true, foreground: color)
-            .HorizontalAlign(HorizontalAlignment.Center)
-            .VerticalAlign(VerticalAlignment.Center);
+            .HorizontalAlignment(HorizontalAlignment.Center)
+            .VerticalAlignment(VerticalAlignment.Center);
 
         var btn = new Button
         {
@@ -374,11 +374,11 @@ public class IconsView : Grid
             .Fill(fill)
             .Grade(grade)
             .OpticalSize(opsz)
-            .HorizontalAlign(HorizontalAlignment.Center);
+            .HorizontalAlignment(HorizontalAlignment.Center);
 
         var text = new TextBlock(label)
             .LabelSmall()
-            .HorizontalAlign(HorizontalAlignment.Center);
+            .HorizontalAlignment(HorizontalAlignment.Center);
 
         return new Card(CardVariant.Filled)
             .Padding(6, 10)
@@ -392,14 +392,14 @@ public class IconsView : Grid
     private static UIElement CreateFillPairTile(MaterialIconKind kind, string name, Color color)
     {
         var outlined = new Icon(kind, 24, isFilled: false, color)
-            .VerticalAlign(VerticalAlignment.Center);
+            .VerticalAlignment(VerticalAlignment.Center);
 
         var filled = new Icon(kind, 24, isFilled: true, color)
-            .VerticalAlign(VerticalAlignment.Center);
+            .VerticalAlignment(VerticalAlignment.Center);
 
         var label = new TextBlock(name)
             .LabelSmall()
-            .HorizontalAlign(HorizontalAlignment.Center);
+            .HorizontalAlignment(HorizontalAlignment.Center);
 
         return new Card(CardVariant.Filled)
             .Padding(10, 8)
@@ -419,11 +419,11 @@ public class IconsView : Grid
         var icon = new Icon(kind, size)
             .Grade(grade)
             .OpticalSize(opsz)
-            .HorizontalAlign(HorizontalAlignment.Center);
+            .HorizontalAlignment(HorizontalAlignment.Center);
 
         var text = new TextBlock(label)
             .Caption()
-            .HorizontalAlign(HorizontalAlignment.Center);
+            .HorizontalAlignment(HorizontalAlignment.Center);
 
         return new StackPanel { Orientation = Orientation.Vertical, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center }
             .Children(icon, text);
@@ -499,7 +499,7 @@ public class IconsView : Grid
     private static UIElement CreateCustomTile(Icon icon, string label)
     {
         icon.HorizontalAlignment = HorizontalAlignment.Center;
-        var text = new TextBlock(label).LabelSmall().HorizontalAlign(HorizontalAlignment.Center);
+        var text = new TextBlock(label).LabelSmall().HorizontalAlignment(HorizontalAlignment.Center);
 
         return new Card(CardVariant.Filled)
             .Padding(8, 10)
@@ -533,7 +533,7 @@ public class IconsView : Grid
 
         // Search bar row (TextBox + Clear button)
         var searchBox = new TextBox()
-            .LeadingIcon(MaterialIconKind.Search)
+            .LeadingIconKind(MaterialIconKind.Search)
             .Placeholder("Search 2,100+ icons (e.g. arrow, favorite, heart, user, cloud)...")
             .BindText(_viewModel, vm => vm.SearchText, (vm, v) => vm.SearchText = v);
 
@@ -633,11 +633,11 @@ public class IconsView : Grid
         bool isSelected = item.Kind == _viewModel.PlaygroundKind;
 
         var icon = new Icon(item.Kind, 26, isFilled: false, foreground: item.Color)
-            .HorizontalAlign(HorizontalAlignment.Center);
+            .HorizontalAlignment(HorizontalAlignment.Center);
 
         var label = new TextBlock(item.DisplayName)
             .Caption()
-            .HorizontalAlign(HorizontalAlignment.Center)
+            .HorizontalAlignment(HorizontalAlignment.Center)
             .TextAlignment(TextAlignment.Center)
             .TextWrapping(TextWrapping.Wrap);
 

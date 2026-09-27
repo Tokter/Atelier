@@ -241,27 +241,27 @@ public class TransformationView : Grid
             .Children(
                 new Button("Reset Transforms")
                     .Variant(ButtonVariant.Filled)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ResetTransformsCommand),
 
                 new Button("Reset Zoom (100%)")
                     .Variant(ButtonVariant.Tonal)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ResetZoomCommand),
 
                 new Button("Isometric Tilt")
                     .Variant(ButtonVariant.Outlined)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ApplyIsometricTiltCommand),
 
                 new Button("Card Tilt")
                     .Variant(ButtonVariant.Outlined)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ApplyCardTiltCommand),
 
                 new Button("Badge Stamp")
                     .Variant(ButtonVariant.Outlined)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ApplyBadgeStampCommand)
             );
 
@@ -322,7 +322,7 @@ public class TransformationView : Grid
 
         _zoomLabel = new TextBlock("Zoom Scale: 100%")
             .LabelMedium()
-            .VerticalAlign(VerticalAlignment.Center)
+            .VerticalAlignment(VerticalAlignment.Center)
             .Column(0);
 
         _zoomSlider = new Slider
@@ -345,7 +345,7 @@ public class TransformationView : Grid
 
         var appScopeSwitch = new Switch("Scale Entire App Window")
             .BindIsChecked(_viewModel, vm => vm.ScaleWholeApp, (vm, v) => vm.ScaleWholeApp = v)
-            .VerticalAlign(VerticalAlignment.Center)
+            .VerticalAlignment(VerticalAlignment.Center)
             .Column(2);
 
         zoomSliderRow.Add(_zoomLabel);
@@ -374,7 +374,7 @@ public class TransformationView : Grid
     private Border CreateZoomTarget()
     {
         var icon = new Icon(MaterialIconKind.Accessibility, 24) { Foreground = Color.FromHex("#1E88E5"), VerticalAlignment = VerticalAlignment.Center };
-        var title = new TextBlock("Accessibility Scaled Subtree").TitleSmall().VerticalAlign(VerticalAlignment.Center);
+        var title = new TextBlock("Accessibility Scaled Subtree").TitleSmall().VerticalAlignment(VerticalAlignment.Center);
         var subtext = new TextBlock("This container scales dynamically. Text remains sharp at all magnification levels.").Caption();
 
         var testBtn = new Button("Click Scaled Button")
@@ -599,7 +599,7 @@ public class TransformationView : Grid
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
                     .Children(
                         new Icon(MaterialIconKind.AutoAwesome, 16) { Foreground = Color.FromHex("#8B5CF6"), VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock("Transformed Target").Bold().FontSize(12).VerticalAlign(VerticalAlignment.Center)
+                        new TextBlock("Transformed Target").Bold().FontSize(12).VerticalAlignment(VerticalAlignment.Center)
                     ).Column(0),
                 pivotBadge.Column(1)
             );
@@ -694,8 +694,8 @@ public class TransformationView : Grid
         {
             var cellStack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center }
                 .Children(
-                    new TextBlock(label).Caption().Muted().HorizontalAlign(HorizontalAlignment.Center),
-                    valueText.HorizontalAlign(HorizontalAlignment.Center)
+                    new TextBlock(label).Caption().Muted().HorizontalAlignment(HorizontalAlignment.Center),
+                    valueText.HorizontalAlignment(HorizontalAlignment.Center)
                 );
 
             return new Border

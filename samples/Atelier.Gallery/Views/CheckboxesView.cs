@@ -92,13 +92,13 @@ public class CheckboxesView : Grid
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
                     .Children(
                         new Icon(MaterialIconKind.CheckCircle, 18)
-                            .VerticalAlign(VerticalAlignment.Center)
+                            .VerticalAlignment(VerticalAlignment.Center)
                             .BindKind(_viewModel, x => x.InteractiveControlsEnabled ? MaterialIconKind.CheckCircle : MaterialIconKind.Cancel)
                             .BindForeground(_viewModel, x => x.InteractiveControlsEnabled ? Color.FromHex("#4CAF50") : Color.FromHex("#E53935")),
 
                         new TextBlock()
                             .LabelMedium()
-                            .VerticalAlign(VerticalAlignment.Center)
+                            .VerticalAlignment(VerticalAlignment.Center)
                             .BindText(_viewModel, x => x.InteractiveControlsEnabled
                                 ? "Controls are ENABLED (interactive)"
                                 : "Controls are DISABLED (test state)")
@@ -106,12 +106,12 @@ public class CheckboxesView : Grid
 
                 new Button("Reset All to Defaults")
                     .Variant(ButtonVariant.Tonal)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ResetDefaultsCommand),
 
                 new Button("Clear / Uncheck All")
                     .Variant(ButtonVariant.Outlined)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ClearAllCommand)
             );
 
@@ -162,7 +162,7 @@ public class CheckboxesView : Grid
             Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
                 .Children(
                     new Icon(MaterialIconKind.CloudQueue, 20) { Foreground = Color.FromHex("#1E88E5"), VerticalAlignment = VerticalAlignment.Center },
-                    new TextBlock("Sync Workspace with Cloud Storage").VerticalAlign(VerticalAlignment.Center)
+                    new TextBlock("Sync Workspace with Cloud Storage").VerticalAlignment(VerticalAlignment.Center)
                 )
         }.BindIsChecked(_viewModel, x => x.SyncCloudStorage, (vm, v) => vm.SyncCloudStorage = v)
          .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled);
@@ -201,7 +201,7 @@ public class CheckboxesView : Grid
 
                 new Button("Toggle from Code / Command")
                     .Variant(ButtonVariant.Outlined)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ToggleNotificationsCommand)
             );
         children.Add(bindingRow);
@@ -427,7 +427,7 @@ public class CheckboxesView : Grid
 
                 new Button("Batch Toggle Both")
                     .Variant(ButtonVariant.Tonal)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ToggleAllSwitchesCommand)
             );
         children.Add(wirelessRow);

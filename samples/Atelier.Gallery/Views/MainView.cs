@@ -88,7 +88,7 @@ namespace Atelier.Gallery.Views
                                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
                                 .Children(
                                     new Icon { Kind = MaterialIconKind.OpenInNew, Size = 18, VerticalAlignment = VerticalAlignment.Center },
-                                    new TextBlock("New window").LabelMedium().VerticalAlign(VerticalAlignment.Center)
+                                    new TextBlock("New window").LabelMedium().VerticalAlignment(VerticalAlignment.Center)
                                 )
                         },
                         new Button
@@ -110,7 +110,7 @@ namespace Atelier.Gallery.Views
                                     }.BindKind(_viewModel, x => x.CurrentThemeIcon),
                                     new TextBlock()
                                         .LabelMedium()
-                                        .VerticalAlign(VerticalAlignment.Center)
+                                        .VerticalAlignment(VerticalAlignment.Center)
                                         .BindText(_viewModel, x => x.CurrentThemeMode)
                                 )
                         }
@@ -128,14 +128,14 @@ namespace Atelier.Gallery.Views
                 .BindItemsSource(_viewModel, x => x.Pages)
                 .Margin(10)
                 .Dock(Dock.Left)
-                .ItemTemplate<PageViewModel>(item =>
+                .WithItemTemplate((PageViewModel item) =>
                 {
                     return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 }
                     .Children(
                         new Icon().BindKind(item, x => x.PageIcon),
                         new TextBlock()
                             .LabelLarge()
-                            .VerticalAlign(VerticalAlignment.Center)
+                            .VerticalAlignment(VerticalAlignment.Center)
                             .BindText(item, x => x.PageTitle)
                     );
                 }),

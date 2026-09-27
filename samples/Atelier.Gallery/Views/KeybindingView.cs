@@ -127,7 +127,7 @@ public class KeybindingView : KeybindingHandler
                 new TextBlock("KeybindingHandler & Declarative [Keybinding]")
                     .TitleLarge()
                     .Bold()
-                    .VerticalAlign(VerticalAlignment.Center),
+                    .VerticalAlignment(VerticalAlignment.Center),
                 CreatePillBadge("Roslyn Generator", Color.FromHex("#10B981")),
                 CreatePillBadge("Scoped Bubbling", Color.FromHex("#8B5CF6")),
                 CreatePillBadge("Native AOT Ready", Color.FromHex("#F59E0B"))
@@ -143,7 +143,7 @@ public class KeybindingView : KeybindingHandler
             .BodySmall()
             .Bold()
             .Foreground(Color.FromHex("#1E88E5"))
-            .VerticalAlign(VerticalAlignment.Center);
+            .VerticalAlignment(VerticalAlignment.Center);
 
         var hintBox = new Border
         {
@@ -175,7 +175,7 @@ public class KeybindingView : KeybindingHandler
         var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.EditNote, 22, foreground: Color.FromHex("#10B981")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Editor Scope").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Editor Scope").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 CreatePillBadge("KeybindingHandler(\"Editor\")", Color.FromHex("#10B981"))
             );
 
@@ -228,7 +228,7 @@ public class KeybindingView : KeybindingHandler
 
         var statsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
-                new TextBlock("Styling Output:").FontSize(11).Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Styling Output:").FontSize(11).Bold().VerticalAlignment(VerticalAlignment.Center),
                 _editorBoldBadge,
                 _editorItalicBadge,
                 _editorCaseBadge,
@@ -292,7 +292,7 @@ public class KeybindingView : KeybindingHandler
         var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.PlayCircle, 22, foreground: Color.FromHex("#3B82F6")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Media Player Scope").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Media Player Scope").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 CreatePillBadge("KeybindingHandler(\"Player\")", Color.FromHex("#3B82F6"))
             );
 
@@ -312,7 +312,7 @@ public class KeybindingView : KeybindingHandler
 
         var trackHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
-                new TextBlock("🎵 " + _viewModel.PlayerScope.TrackTitle).Bold().FontSize(13).VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("🎵 " + _viewModel.PlayerScope.TrackTitle).Bold().FontSize(13).VerticalAlignment(VerticalAlignment.Center),
                 _playerPlayStateBadge
             );
 
@@ -362,7 +362,7 @@ public class KeybindingView : KeybindingHandler
                 trackHeader,
                 artistText,
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                    .Children(new TextBlock("Position:").FontSize(11).VerticalAlign(VerticalAlignment.Center), _playerTimeText),
+                    .Children(new TextBlock("Position:").FontSize(11).VerticalAlignment(VerticalAlignment.Center), _playerTimeText),
                 _playerProgressSlider,
                 transportRow,
                 _playerStatusText
@@ -429,7 +429,7 @@ public class KeybindingView : KeybindingHandler
         var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.AltRoute, 22, foreground: Color.FromHex("#8B5CF6")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Hierarchical Visual Tree Bubbling").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Hierarchical Visual Tree Bubbling").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 CreatePillBadge("Group = \"Global\"", Color.FromHex("#8B5CF6"))
             );
 
@@ -465,7 +465,7 @@ public class KeybindingView : KeybindingHandler
         var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Radar, 22, foreground: Color.FromHex("#F59E0B")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Keystroke Probe & Simulator").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Keystroke Probe & Simulator").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 CreatePillBadge("Live Diagnostics", Color.FromHex("#F59E0B"))
             );
 
@@ -477,8 +477,8 @@ public class KeybindingView : KeybindingHandler
         var testerPrompt = new TextBlock("🎯 Click here to focus & test physical keyboard shortcuts...")
             .FontSize(12)            
             .Foreground(Color.FromHex("#F59E0B"))
-            .HorizontalAlign(HorizontalAlignment.Center)
-            .VerticalAlign(VerticalAlignment.Center);
+            .HorizontalAlignment(HorizontalAlignment.Center)
+            .VerticalAlignment(VerticalAlignment.Center);
 
         _testerFocusBorder = new FocusableTesterBorder(e =>
         {
@@ -585,7 +585,7 @@ public class KeybindingView : KeybindingHandler
         var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.ListAlt, 22, foreground: Color.FromHex("#06B6D4")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Keybinding Registry Catalog").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Keybinding Registry Catalog").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 CreatePillBadge("Live Descriptors", Color.FromHex("#06B6D4"))
             );
 
@@ -638,10 +638,10 @@ public class KeybindingView : KeybindingHandler
                     Child = row
                 };
 
-                row.Add(CreatePillBadge(groupName, groupColor).Column(0).VerticalAlign(VerticalAlignment.Center));
-                row.Add(new TextBlock(descriptor.Name).Bold().FontSize(12).VerticalAlign(VerticalAlignment.Center).Column(1));
-                row.Add(new TextBlock(descriptor.Keybinding).FontSize(12).Bold().Foreground(Color.FromHex("#F59E0B")).VerticalAlign(VerticalAlignment.Center).Column(2));
-                row.Add(new TextBlock(commandType).FontSize(11).Foreground(Color.FromHex("#757575")).VerticalAlign(VerticalAlignment.Center).Column(3));
+                row.Add(CreatePillBadge(groupName, groupColor).Column(0).VerticalAlignment(VerticalAlignment.Center));
+                row.Add(new TextBlock(descriptor.Name).Bold().FontSize(12).VerticalAlignment(VerticalAlignment.Center).Column(1));
+                row.Add(new TextBlock(descriptor.Keybinding).FontSize(12).Bold().Foreground(Color.FromHex("#F59E0B")).VerticalAlignment(VerticalAlignment.Center).Column(2));
+                row.Add(new TextBlock(commandType).FontSize(11).Foreground(Color.FromHex("#757575")).VerticalAlignment(VerticalAlignment.Center).Column(3));
 
                 tableStack.Add(rowBorder);
             }
@@ -669,7 +669,7 @@ public class KeybindingView : KeybindingHandler
         var headerRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.History, 22, foreground: Color.FromHex("#EC4899")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Real-Time Intercept & Audit Log").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Real-Time Intercept & Audit Log").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 CreatePillBadge("Live Feed", Color.FromHex("#EC4899"))
             );
 
@@ -716,11 +716,11 @@ public class KeybindingView : KeybindingHandler
                 Child = row
             };
 
-            row.Add(new TextBlock(entry.Time).FontSize(10).Foreground(Color.FromHex("#757575")).VerticalAlign(VerticalAlignment.Center).Column(0));
-            row.Add(CreatePillBadge(entry.Group, groupColor).Column(1).VerticalAlign(VerticalAlignment.Center));
-            row.Add(new TextBlock(entry.Gesture).FontSize(11).Bold().Foreground(Color.FromHex("#F59E0B")).VerticalAlign(VerticalAlignment.Center).Column(2));
-            row.Add(new TextBlock(entry.Command).FontSize(11).Bold().VerticalAlign(VerticalAlignment.Center).Column(3));
-            row.Add(new TextBlock(entry.Status).FontSize(11).Foreground(Color.FromHex("#9E9E9E")).VerticalAlign(VerticalAlignment.Center).Column(4));
+            row.Add(new TextBlock(entry.Time).FontSize(10).Foreground(Color.FromHex("#757575")).VerticalAlignment(VerticalAlignment.Center).Column(0));
+            row.Add(CreatePillBadge(entry.Group, groupColor).Column(1).VerticalAlignment(VerticalAlignment.Center));
+            row.Add(new TextBlock(entry.Gesture).FontSize(11).Bold().Foreground(Color.FromHex("#F59E0B")).VerticalAlignment(VerticalAlignment.Center).Column(2));
+            row.Add(new TextBlock(entry.Command).FontSize(11).Bold().VerticalAlignment(VerticalAlignment.Center).Column(3));
+            row.Add(new TextBlock(entry.Status).FontSize(11).Foreground(Color.FromHex("#9E9E9E")).VerticalAlignment(VerticalAlignment.Center).Column(4));
 
             _logListPanel.Add(rowBorder);
         }

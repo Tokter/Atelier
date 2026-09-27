@@ -91,13 +91,13 @@ public class TextBoxesView : Grid
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
                     .Children(
                         new Icon(MaterialIconKind.CheckCircle, 18)
-                            .VerticalAlign(VerticalAlignment.Center)
+                            .VerticalAlignment(VerticalAlignment.Center)
                             .BindKind(_viewModel, x => x.InteractiveControlsEnabled ? MaterialIconKind.CheckCircle : MaterialIconKind.Cancel)
                             .BindForeground(_viewModel, x => x.InteractiveControlsEnabled ? Color.FromHex("#4CAF50") : Color.FromHex("#E53935")),
 
                         new TextBlock()
                             .LabelMedium()
-                            .VerticalAlign(VerticalAlignment.Center)
+                            .VerticalAlignment(VerticalAlignment.Center)
                             .BindText(_viewModel, x => x.InteractiveControlsEnabled
                                 ? "Controls are ENABLED (interactive)"
                                 : "Controls are DISABLED (test state)")
@@ -105,12 +105,12 @@ public class TextBoxesView : Grid
 
                 new Button("Reset to Defaults")
                     .Variant(ButtonVariant.Tonal)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ResetDefaultsCommand),
 
                 new Button("Clear All Fields")
                     .Variant(ButtonVariant.Outlined)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ClearAllCommand)
             );
 
@@ -151,7 +151,7 @@ public class TextBoxesView : Grid
                 new TextBox()
                     .Variant(TextBoxVariant.Outlined)
                     .Label("Search Symbols")
-                    .LeadingIcon(MaterialIconKind.Search)
+                    .LeadingIconKind(MaterialIconKind.Search)
                     .Placeholder("Type symbol or keyword...")
                     .BindText(_viewModel, x => x.OutlinedSearch, (vm, v) => vm.OutlinedSearch = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
@@ -170,7 +170,7 @@ public class TextBoxesView : Grid
                 new TextBox()
                     .Variant(TextBoxVariant.Outlined)
                     .Label("Mobile Number")
-                    .LeadingIcon(MaterialIconKind.Phone)
+                    .LeadingIconKind(MaterialIconKind.Phone)
                     .SupportingText("Include country code (e.g. +1)")
                     .BindText(_viewModel, x => x.OutlinedPhone, (vm, v) => vm.OutlinedPhone = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
@@ -179,7 +179,7 @@ public class TextBoxesView : Grid
                 new TextBox()
                     .Variant(TextBoxVariant.Outlined)
                     .Label("Account Security Key")
-                    .LeadingIcon(MaterialIconKind.Lock)
+                    .LeadingIconKind(MaterialIconKind.Lock)
                     .SupportingText("Minimum 8 characters with symbols")
                     .BindText(_viewModel, x => x.OutlinedSecurityKey, (vm, v) => vm.OutlinedSecurityKey = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
@@ -241,7 +241,7 @@ public class TextBoxesView : Grid
                 new TextBox()
                     .Variant(TextBoxVariant.Filled)
                     .Label("API Bearer Token")
-                    .LeadingIcon(MaterialIconKind.Key)
+                    .LeadingIconKind(MaterialIconKind.Key)
                     .Placeholder("Paste OAuth or bearer token...")
                     .BindText(_viewModel, x => x.FilledApiToken, (vm, v) => vm.FilledApiToken = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
@@ -260,7 +260,7 @@ public class TextBoxesView : Grid
                 new TextBox()
                     .Variant(TextBoxVariant.Filled)
                     .Label("Primary Office")
-                    .LeadingIcon(MaterialIconKind.LocationOn)
+                    .LeadingIconKind(MaterialIconKind.LocationOn)
                     .SupportingText("Headquarters campus location")
                     .BindText(_viewModel, x => x.FilledLocation, (vm, v) => vm.FilledLocation = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
@@ -269,7 +269,7 @@ public class TextBoxesView : Grid
                 new TextBox()
                     .Variant(TextBoxVariant.Filled)
                     .Label("Inquiry Inbox")
-                    .LeadingIcon(MaterialIconKind.Mail)
+                    .LeadingIconKind(MaterialIconKind.Mail)
                     .SupportingText("Monitored during standard business hours")
                     .BindText(_viewModel, x => x.FilledInbox, (vm, v) => vm.FilledInbox = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
@@ -314,7 +314,7 @@ public class TextBoxesView : Grid
                 new TextBox()
                     .Variant(TextBoxVariant.Outlined)
                     .Label("Username")
-                    .LeadingIcon(MaterialIconKind.Person)
+                    .LeadingIconKind(MaterialIconKind.Person)
                     .BindText(_viewModel, x => x.Username, (vm, v) => vm.Username = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
                     .Row(0).Column(0),
@@ -322,7 +322,7 @@ public class TextBoxesView : Grid
                 new TextBox()
                     .Variant(TextBoxVariant.Outlined)
                     .Label("Email Address")
-                    .LeadingIcon(MaterialIconKind.Email)
+                    .LeadingIconKind(MaterialIconKind.Email)
                     .BindText(_viewModel, x => x.Email, (vm, v) => vm.Email = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
                     .Row(0).Column(1),
@@ -330,7 +330,7 @@ public class TextBoxesView : Grid
                 new TextBox()
                     .Variant(TextBoxVariant.Filled)
                     .Label("Direct Contact")
-                    .LeadingIcon(MaterialIconKind.Phone)
+                    .LeadingIconKind(MaterialIconKind.Phone)
                     .BindText(_viewModel, x => x.Phone, (vm, v) => vm.Phone = v)
                     .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
                     .Row(1).Column(0),

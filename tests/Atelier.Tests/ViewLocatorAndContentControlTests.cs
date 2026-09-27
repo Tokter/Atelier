@@ -95,7 +95,7 @@ public class ProfileDetailView : StackPanel
     {
         TitleText = new TextBlock("User Profile");
         UserText = new TextBlock();
-        UserText.BindText<ProfileDetailViewModel>(vm => vm.UserName);
+        UserText.BindText((ProfileDetailViewModel vm) => vm.UserName);
         Add(TitleText);
         Add(UserText);
     }

@@ -116,7 +116,7 @@ public partial class MaterialIconTests
         var icon = new Icon()
             .Kind(MaterialIconKind.Star)
             .Size(40)
-            .Filled()
+            .IsFilled()
             .Weight(700)
             .Grade(200)
             .OpticalSize(40)
@@ -297,7 +297,7 @@ public partial class MaterialIconTests
         Assert.Equal(Color.Red, icon1.Foreground);
 
         string svg = "M0 0h24v24H0z";
-        var icon2 = svg.ToIcon(size: 20f).StrokeWidth(1.5f);
+        var icon2 = new Icon(svg, 20f).StrokeWidth(1.5f);
         Assert.Equal(svg, icon2.PathData);
         Assert.NotNull(icon2.Data);
         Assert.Equal(20f, icon2.Size);

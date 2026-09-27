@@ -203,7 +203,7 @@ public class StylingAndBindingTests
         panel.DataContext = vm;
 
         var textBlock = new TextBlock();
-        textBlock.BindText<BindingTestViewModel>(x => x.Title);
+        textBlock.BindText((BindingTestViewModel x) => x.Title);
         panel.Add(textBlock);
 
         Assert.Equal("DC Title", textBlock.Text);
@@ -220,7 +220,7 @@ public class StylingAndBindingTests
         panel.DataContext = vm;
 
         var textBox = new TextBox();
-        textBox.BindText<BindingTestViewModel>(x => x.Title, (m, v) => m.Title = v);
+        textBox.BindText((BindingTestViewModel x) => x.Title, (m, v) => m.Title = v);
         panel.Add(textBox);
 
         Assert.Equal("DC TwoWay Initial", textBox.Text);
@@ -237,7 +237,7 @@ public class StylingAndBindingTests
         panel.DataContext = vm1;
 
         var textBox = new TextBox();
-        textBox.BindText<BindingTestViewModel>(x => x.Title, (m, v) => m.Title = v);
+        textBox.BindText((BindingTestViewModel x) => x.Title, (m, v) => m.Title = v);
         panel.Add(textBox);
 
         Assert.Equal("First VM", textBox.Text);
@@ -469,8 +469,8 @@ public class StylingAndBindingTests
         var vm = new BindingTestViewModel { SliderValue = 75f, IsChecked = true };
         var panel = new StackPanel { DataContext = vm };
 
-        var slider = new Slider().BindValue<BindingTestViewModel>(x => x.SliderValue, (m, v) => m.SliderValue = v);
-        var checkBox = new CheckBox().BindIsChecked<BindingTestViewModel>(x => x.IsChecked, (m, v) => m.IsChecked = v);
+        var slider = new Slider().BindValue((BindingTestViewModel x) => x.SliderValue, (m, v) => m.SliderValue = v);
+        var checkBox = new CheckBox().BindIsChecked((BindingTestViewModel x) => x.IsChecked, (m, v) => m.IsChecked = v);
 
         panel.Add(slider);
         panel.Add(checkBox);
@@ -530,7 +530,7 @@ public class StylingAndBindingTests
         var vm = new BindingTestViewModel { Title = "DC Initial" };
         var panel = new StackPanel { DataContext = vm };
 
-        var textBox = new TextBox().BindText<BindingTestViewModel>(x => x.Title, (m, v) => m.Title = v, UpdateSourceTrigger.LostFocus);
+        var textBox = new TextBox().BindText((BindingTestViewModel x) => x.Title, (m, v) => m.Title = v, UpdateSourceTrigger.LostFocus);
         var button = new Button();
         panel.Add(textBox);
         panel.Add(button);

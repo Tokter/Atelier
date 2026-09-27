@@ -38,7 +38,7 @@ public class TreeViewTests
 
         var treeView = new TreeView()
             .ItemsSource(new[] { root })
-            .ChildrenSelector<TestNode>(item => item.Children)
+            .WithChildrenSelector((TestNode item) => item.Children)
             .IndentSize(24f);
 
         treeView.Measure(new Size(400, 600));
@@ -74,8 +74,8 @@ public class TreeViewTests
 
         var treeView = new TreeView()
             .ItemsSource(items)
-            .ChildrenSelector<TestNode>(item => item.Children)
-            .ItemTemplate<TestNode>(node => new StackPanel
+            .WithChildrenSelector((TestNode item) => item.Children)
+            .WithItemTemplate((TestNode node) => new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 4f
@@ -99,7 +99,7 @@ public class TreeViewTests
         var root = new TestNode("Root", new TestNode("Child"));
         var treeView = new TreeView()
             .ItemsSource(new[] { root })
-            .ChildrenSelector<TestNode>(item => item.Children);
+            .WithChildrenSelector((TestNode item) => item.Children);
 
         treeView.Measure(new Size(400, 600));
         treeView.Arrange(new Rect(0, 0, 400, 600));
@@ -130,7 +130,7 @@ public class TreeViewTests
         var leaf = new TestNode("Solo File");
         var treeView = new TreeView()
             .ItemsSource(new[] { leaf })
-            .ChildrenSelector<TestNode>(item => item.Children);
+            .WithChildrenSelector((TestNode item) => item.Children);
 
         treeView.Measure(new Size(400, 600));
         treeView.Arrange(new Rect(0, 0, 400, 600));
@@ -145,7 +145,7 @@ public class TreeViewTests
         var root = new TestNode("Root", new TestNode("Child 1"), new TestNode("Child 2"));
         var treeView = new TreeView()
             .ItemsSource(new[] { root })
-            .ChildrenSelector<TestNode>(item => item.Children);
+            .WithChildrenSelector((TestNode item) => item.Children);
 
         object? selected = null;
         treeView.SelectionChanged += (s, item) => selected = item;
@@ -178,7 +178,7 @@ public class TreeViewTests
 
         var treeView = new TreeView()
             .ItemsSource(new[] { root })
-            .ChildrenSelector<TestNode>(item => item.Children);
+            .WithChildrenSelector((TestNode item) => item.Children);
 
         treeView.Measure(new Size(400, 600));
         treeView.Arrange(new Rect(0, 0, 400, 600));
@@ -227,7 +227,7 @@ public class TreeViewTests
 
         var treeView = new TreeView()
             .ItemsSource(new[] { root })
-            .ChildrenSelector<TestNode>(item => item.Children);
+            .WithChildrenSelector((TestNode item) => item.Children);
 
         treeView.Measure(new Size(400, 600));
         treeView.Arrange(new Rect(0, 0, 400, 600));
@@ -274,7 +274,7 @@ public class TreeViewTests
 
         var treeView = new TreeView()
             .ItemsSource(new[] { root })
-            .ChildrenSelector<TestNode>(item => item.Children);
+            .WithChildrenSelector((TestNode item) => item.Children);
 
         treeView.ExpandAll();
         Assert.Equal(5, treeView.GetVisibleItems().Count);
@@ -291,7 +291,7 @@ public class TreeViewTests
 
         var treeView = new TreeView()
             .ItemsSource(new[] { root })
-            .ChildrenSelector<TestNode>(item => item.Children);
+            .WithChildrenSelector((TestNode item) => item.Children);
 
         treeView.Measure(new Size(400, 600));
         treeView.Arrange(new Rect(0, 0, 400, 600));
@@ -329,7 +329,7 @@ public class TreeViewTests
 
         var treeView = new TreeView()
             .ItemsSource(new[] { root })
-            .ChildrenSelector<TestNode>(item => item.Children);
+            .WithChildrenSelector((TestNode item) => item.Children);
 
         treeView.Measure(new Size(400, 600));
         treeView.Arrange(new Rect(0, 0, 400, 600));
@@ -363,7 +363,7 @@ public class TreeViewTests
 
         var treeView = new TreeView()
             .ItemsSource(roots)
-            .ChildrenSelector<TestNode>(item => item.Children);
+            .WithChildrenSelector((TestNode item) => item.Children);
 
         treeView.Measure(new Size(400, 600));
         treeView.Arrange(new Rect(0, 0, 400, 600));

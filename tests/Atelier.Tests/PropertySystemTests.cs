@@ -65,7 +65,7 @@ public class PropertySystemTests
 
         var middle = new StackPanel();
         var leaf = new TextBox();
-        leaf.BindText<BindingTestViewModel>(x => x.Title, (m, v) => m.Title = v);
+        leaf.BindText((BindingTestViewModel x) => x.Title, (m, v) => m.Title = v);
         middle.Add(leaf);
         root1.Add(middle);
         Assert.Equal("First", leaf.Text);
@@ -336,7 +336,7 @@ public class PropertySystemTests
     {
         var vm = new BindingTestViewModel { Title = "Bound" };
         var tb = new TextBox { DataContext = vm };
-        tb.BindText<BindingTestViewModel>(x => x.Title);
+        tb.BindText((BindingTestViewModel x) => x.Title);
         Assert.Equal("Bound", tb.Text);
 
         tb.DataContext = null;

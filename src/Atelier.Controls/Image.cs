@@ -116,6 +116,13 @@ public class Image : Control
         SetOwnedSource(LoadImage(pathOrResource));
     }
 
+    /// <summary>
+    /// Loads the image at <paramref name="pathOrResource"/> with <see cref="LoadImage"/> and shows it. The loaded image is
+    /// owned (and disposed on replacement) by the control. Shows nothing if the image can't be found.
+    /// </summary>
+    /// <param name="pathOrResource">A file path or embedded resource name.</param>
+    public void LoadSource(string pathOrResource) => SetOwnedSource(LoadImage(pathOrResource));
+
     private void SetOwnedSource(SKImage? image)
     {
         Source = image;

@@ -87,23 +87,23 @@ public class TypographyView : Grid
         var actionRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Button("Toggle Bold")
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ToggleBoldCommand)
                     .BindVariant(_viewModel, vm => vm.IsBold ? ButtonVariant.Filled : ButtonVariant.Outlined),
 
                 new Button("Toggle Italic")
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ToggleItalicCommand)
                     .BindVariant(_viewModel, vm => vm.IsItalic ? ButtonVariant.Filled : ButtonVariant.Outlined),
 
                 new Button("Toggle Muted")
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ToggleMutedCommand)
                     .BindVariant(_viewModel, vm => vm.IsMuted ? ButtonVariant.Filled : ButtonVariant.Outlined),
 
                 new Button("Reset All")
                     .Variant(ButtonVariant.Tonal)
-                    .VerticalAlign(VerticalAlignment.Center)
+                    .VerticalAlignment(VerticalAlignment.Center)
                     .Command(_viewModel.ResetPlaygroundCommand)
             );
 
@@ -260,7 +260,7 @@ public class TypographyView : Grid
         // 1. Sample Text Input
         var textLabel = new TextBlock("Sample Text").LabelMedium();
         var sampleInput = new TextBox()
-            .LeadingIcon(MaterialIconKind.Edit)
+            .LeadingIconKind(MaterialIconKind.Edit)
             .Placeholder("Type sample text here...")
             .BindText(_viewModel, vm => vm.SampleText, (vm, v) => vm.SampleText = v);
 
@@ -517,11 +517,11 @@ public class TypographyView : Grid
         var badgeCard = new Card(CardVariant.Outlined)
             .Padding(8, 4)
             .CornerRadius(6)
-            .VerticalAlign(VerticalAlignment.Center)
+            .VerticalAlignment(VerticalAlignment.Center)
             .Child(new TextBlock(badge).Caption());
 
         grid.Add(metaStack.Column(0));
-        grid.Add(sample.Column(1).VerticalAlign(VerticalAlignment.Center));
+        grid.Add(sample.Column(1).VerticalAlignment(VerticalAlignment.Center));
         grid.Add(badgeCard.Column(2));
 
         card.Child = grid;

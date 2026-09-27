@@ -51,16 +51,16 @@ public class TransitionsView : Grid
         _durationLabel = new TextBlock($"{_viewModel.DurationMs:F0} ms")
             .BodyMedium()
             .Bold()
-            .VerticalAlign(VerticalAlignment.Center);
+            .VerticalAlignment(VerticalAlignment.Center);
 
         _statusLabel = new TextBlock(_viewModel.StatusMessage)
             .BodySmall()
-            .VerticalAlign(VerticalAlignment.Center);
+            .VerticalAlignment(VerticalAlignment.Center);
 
         _activeModeLabel = new TextBlock(_viewModel.SelectedTransitionType.ToString())
             .BodyMedium()
             .Bold()
-            .VerticalAlign(VerticalAlignment.Center);
+            .VerticalAlignment(VerticalAlignment.Center);
 
         // Left: Controls Card
         mainGrid.Add(CreateControlsPanel().Column(0));
@@ -129,7 +129,7 @@ public class TransitionsView : Grid
                 new TextBlock("Animated Transitions & TransitioningContentControl")
                     .TitleLarge()
                     .Bold()
-                    .VerticalAlign(VerticalAlignment.Center),
+                    .VerticalAlignment(VerticalAlignment.Center),
                 CreatePillBadge("AnimationClock Driven", Color.FromHex("#10B981")),
                 CreatePillBadge("Dual-Child Layout", Color.FromHex("#8B5CF6")),
                 CreatePillBadge("M3 Motion Curves", Color.FromHex("#F59E0B")),
@@ -171,7 +171,7 @@ public class TransitionsView : Grid
         var transitionHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Animation, 20, foreground: Color.FromHex("#1E88E5")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Transition Type").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center)
+                new TextBlock("Transition Type").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center)
             );
         stack.Add(transitionHeader);
 
@@ -188,7 +188,7 @@ public class TransitionsView : Grid
                     return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
                         .Children(
                             new Icon(tItem.Icon, 18, foreground: Color.FromHex("#1E88E5")) { VerticalAlignment = VerticalAlignment.Center },
-                            new TextBlock(tItem.Name).BodyMedium().VerticalAlign(VerticalAlignment.Center)
+                            new TextBlock(tItem.Name).BodyMedium().VerticalAlignment(VerticalAlignment.Center)
                         );
                 }
                 return new TextBlock(item?.ToString() ?? string.Empty);
@@ -208,7 +208,7 @@ public class TransitionsView : Grid
         var durationHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Timer, 20, foreground: Color.FromHex("#F59E0B")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Duration:").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center),
+                new TextBlock("Duration:").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
                 _durationLabel
             );
         stack.Add(durationHeader);
@@ -230,7 +230,7 @@ public class TransitionsView : Grid
         var easingHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Timeline, 20, foreground: Color.FromHex("#10B981")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Motion Curve (Easing)").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center)
+                new TextBlock("Motion Curve (Easing)").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center)
             );
         stack.Add(easingHeader);
 
@@ -247,7 +247,7 @@ public class TransitionsView : Grid
                     return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
                         .Children(
                             new Icon(MaterialIconKind.Timeline, 18, foreground: Color.FromHex("#10B981")) { VerticalAlignment = VerticalAlignment.Center },
-                            new TextBlock(eItem.Name).BodyMedium().VerticalAlign(VerticalAlignment.Center)
+                            new TextBlock(eItem.Name).BodyMedium().VerticalAlignment(VerticalAlignment.Center)
                         );
                 }
                 return new TextBlock(item?.ToString() ?? string.Empty);
@@ -267,13 +267,13 @@ public class TransitionsView : Grid
         var stressHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
             .Children(
                 new Icon(MaterialIconKind.Bolt, 20, foreground: Color.FromHex("#EC4899")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Stress Testing").TitleMedium().Bold().VerticalAlign(VerticalAlignment.Center)
+                new TextBlock("Stress Testing").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center)
             );
         stack.Add(stressHeader);
 
         var stressBtn = new Button("Rapid Fire (5x Switches)")
             .Variant(ButtonVariant.Tonal)
-            .HorizontalAlign(HorizontalAlignment.Stretch);
+            .HorizontalAlignment(HorizontalAlignment.Stretch);
 
         stressBtn.Click += async (s, e) =>
         {
@@ -304,7 +304,7 @@ public class TransitionsView : Grid
         var navBar = new Grid()
             .Columns(GridLength.Auto, GridLength.Star, GridLength.Auto)
             .Rows(GridLength.Auto)
-            .VerticalAlign(VerticalAlignment.Center);
+            .VerticalAlignment(VerticalAlignment.Center);
 
         var prevBtn = new Button("◀ Previous")
             .Variant(ButtonVariant.Outlined);
@@ -371,8 +371,8 @@ public class TransitionsView : Grid
         var rootCard = new Card(CardVariant.Outlined)
             .Padding(24)
             .CornerRadius(12)
-            .HorizontalAlign(HorizontalAlignment.Stretch)
-            .VerticalAlign(VerticalAlignment.Stretch);
+            .HorizontalAlignment(HorizontalAlignment.Stretch)
+            .VerticalAlignment(VerticalAlignment.Stretch);
 
         var stack = new StackPanel
         {
@@ -385,7 +385,7 @@ public class TransitionsView : Grid
         var header = new Grid()
             .Columns(GridLength.Auto, GridLength.Star, GridLength.Auto)
             .Rows(GridLength.Auto)
-            .VerticalAlign(VerticalAlignment.Center);
+            .VerticalAlignment(VerticalAlignment.Center);
 
         var iconContainer = new Border
         {
@@ -448,7 +448,7 @@ public class TransitionsView : Grid
                 .BodySmall()
                 .Bold()
                 .Foreground(color)
-                .VerticalAlign(VerticalAlignment.Center)
+                .VerticalAlignment(VerticalAlignment.Center)
         };
     }
 }
