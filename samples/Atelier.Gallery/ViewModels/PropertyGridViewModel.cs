@@ -8,163 +8,101 @@ using CommunityToolkit.Mvvm.Input;
 
 namespace Atelier.Gallery.ViewModels;
 
-public enum ActivePropertyModel
+public enum InspectedObject
 {
-    GraphicElement,
-    MicroserviceConfig,
-    ParticleEmitter
+    Shape,
+    Service,
+    Emitter
 }
 
 public partial class PropertyGridViewModel : PageViewModel
 {
+    private static readonly Color[] Palette =
+    [
+        Color.FromHex("#6750A4"), Color.FromHex("#006A6A"), Color.FromHex("#B3261E"),
+        Color.FromHex("#7D5260"), Color.FromHex("#386A20"), Color.FromHex("#00639B"),
+    ];
+
+    private readonly Random _random = new(7);
+
     [ObservableProperty]
-    private ActivePropertyModel _activeModel = ActivePropertyModel.GraphicElement;
+    [NotifyPropertyChangedFor(nameof(SelectedObject))]
+    private InspectedObject _inspected = InspectedObject.Shape;
 
     [ObservableProperty]
     private PropertySortMode _sortMode = PropertySortMode.Categorized;
 
     [ObservableProperty]
+    private string _filterText = string.Empty;
+
+    [ObservableProperty]
     private bool _isToolbarVisible = true;
 
     [ObservableProperty]
-    private float _toolbarElevation = 2.0f;
+    private bool _isDescriptionVisible = true;
 
     [ObservableProperty]
-    private float _labelWidth = 150.0f;
+    private float _toolbarElevation = 2;
 
     [ObservableProperty]
-    private string _lastEditedInfo = "Ready. Edit any property in the grid to see real-time inspection updates.";
+    private float _labelWidth = 160;
 
-    public GraphicElementModel GraphicModel { get; private set; } = new();
-    public MicroserviceConfigModel MicroserviceModel { get; private set; } = new();
-    public ParticleEmitterModel ParticleModel { get; private set; } = new();
+    public ShapeModel Shape { get; } = new();
 
-    public ObservableCollection<string> ChangeLogs { get; } = new();
+    public ServiceConfigModel Service { get; } = new();
 
-    public object CurrentInspectableObject => ActiveModel switch
+    public EmitterModel Emitter { get; } = new();
+
+    public PreferencesModel Preferences { get; } = new();
+
+    public object SelectedObject => Inspected switch
     {
-        ActivePropertyModel.GraphicElement => GraphicModel,
-        ActivePropertyModel.MicroserviceConfig => MicroserviceModel,
-        ActivePropertyModel.ParticleEmitter => ParticleModel,
-        _ => GraphicModel
+        InspectedObject.Service => Service,
+        InspectedObject.Emitter => Emitter,
+        _ => Shape,
     };
 
-    public event Action? RequestRebuild;
-    public event Action? RequestExpandAll;
-    public event Action? RequestCollapseAll;
+    /// <summary>The grid's events, newest first.</summary>
+    public ObservableCollection<string> Events { get; } = [];
 
     public PropertyGridViewModel()
     {
         PageTitle = "Property Grid";
         PageIcon = MaterialIconKind.Tune;
+        Keywords = "propertygrid property grid inspector editor properties";
     }
 
-    public void LogChange(string propertyName, object? oldValue, object? newValue)
+    public void Log(string message)
     {
-        string timestamp = DateTime.Now.ToString("HH:mm:ss");
-        string message = $"[{timestamp}] '{propertyName}': {oldValue ?? "<null>"} → {newValue ?? "<null>"}";
-        LastEditedInfo = message;
-
-        if (ChangeLogs.Count > 40)
+        Events.Insert(0, $"{DateTime.Now:HH:mm:ss}  {message}");
+        while (Events.Count > 8)
         {
-            ChangeLogs.RemoveAt(ChangeLogs.Count - 1);
+            Events.RemoveAt(Events.Count - 1);
         }
-        ChangeLogs.Insert(0, message);
     }
 
     [RelayCommand]
-    public void SelectGraphicModel()
+    private void RandomizeShape()
     {
-        ActiveModel = ActivePropertyModel.GraphicElement;
-        OnPropertyChanged(nameof(CurrentInspectableObject));
-        RequestRebuild?.Invoke();
+        Inspected = InspectedObject.Shape;
+        Shape.Width = _random.Next(80, 360);
+        Shape.Height = _random.Next(60, 200);
+        Shape.Kind = (ShapeKind)_random.Next(3);
+        Shape.Fill = Palette[_random.Next(Palette.Length)];
+        Shape.Opacity = MathF.Round(0.5f + (float)_random.NextDouble() * 0.5f, 2);
+        Log("Shape changed in code; the grid follows through INotifyPropertyChanged");
     }
 
     [RelayCommand]
-    public void SelectMicroserviceModel()
+    private void Reset()
     {
-        ActiveModel = ActivePropertyModel.MicroserviceConfig;
-        OnPropertyChanged(nameof(CurrentInspectableObject));
-        RequestRebuild?.Invoke();
-    }
-
-    [RelayCommand]
-    public void SelectParticleModel()
-    {
-        ActiveModel = ActivePropertyModel.ParticleEmitter;
-        OnPropertyChanged(nameof(CurrentInspectableObject));
-        RequestRebuild?.Invoke();
-    }
-
-    [RelayCommand]
-    public void ToggleSortMode()
-    {
-        SortMode = SortMode == PropertySortMode.Categorized
-            ? PropertySortMode.Alphabetical
-            : PropertySortMode.Categorized;
-    }
-
-    [RelayCommand]
-    public void ExpandAll()
-    {
-        RequestExpandAll?.Invoke();
-    }
-
-    [RelayCommand]
-    public void CollapseAll()
-    {
-        RequestCollapseAll?.Invoke();
-    }
-
-    [RelayCommand]
-    public void ToggleToolbar()
-    {
-        IsToolbarVisible = !IsToolbarVisible;
-    }
-
-    [RelayCommand]
-    public void CycleElevation()
-    {
-        ToolbarElevation = ToolbarElevation switch
-        {
-            0f => 2f,
-            2f => 4f,
-            4f => 8f,
-            _ => 0f
-        };
-    }
-
-    [RelayCommand]
-    public void SetLabelWidth(float width)
-    {
-        LabelWidth = width;
-    }
-
-    [RelayCommand]
-    public void ResetCurrentModel()
-    {
-        switch (ActiveModel)
-        {
-            case ActivePropertyModel.GraphicElement:
-                GraphicModel = new GraphicElementModel();
-                break;
-            case ActivePropertyModel.MicroserviceConfig:
-                MicroserviceModel = new MicroserviceConfigModel();
-                break;
-            case ActivePropertyModel.ParticleEmitter:
-                ParticleModel = new ParticleEmitterModel();
-                break;
-        }
-
-        OnPropertyChanged(nameof(CurrentInspectableObject));
-        RequestRebuild?.Invoke();
-        LogChange("All Properties", "Previous Values", "Default Preset Restored");
-    }
-
-    [RelayCommand]
-    public void ClearLog()
-    {
-        ChangeLogs.Clear();
-        LastEditedInfo = "Change audit log cleared.";
+        Shape.Reset();
+        SortMode = PropertySortMode.Categorized;
+        FilterText = string.Empty;
+        IsToolbarVisible = true;
+        IsDescriptionVisible = true;
+        ToolbarElevation = 2;
+        LabelWidth = 160;
+        Events.Clear();
     }
 }

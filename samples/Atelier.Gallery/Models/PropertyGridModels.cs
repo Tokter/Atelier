@@ -1,35 +1,17 @@
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using Atelier.Core.Inspection;
 using Atelier.Core.Primitives;
 
 namespace Atelier.Gallery.Models;
 
-#region Enums
-
 public enum ShapeKind
 {
     Rectangle,
-    RoundedRect,
-    Circle,
+    Rounded,
     Pill
-}
-
-public enum BlendMode
-{
-    Normal,
-    Additive,
-    Multiply,
-    Screen
-}
-
-public enum LogSeverity
-{
-    Verbose,
-    Debug,
-    Information,
-    Warning,
-    Error,
-    Fatal
 }
 
 public enum CloudRegion
@@ -37,8 +19,7 @@ public enum CloudRegion
     UsEast,
     UsWest,
     EuCentral,
-    ApSouth,
-    SaEast
+    AsiaPacific
 }
 
 public enum EnvironmentType
@@ -48,163 +29,195 @@ public enum EnvironmentType
     Production
 }
 
-public enum ParticleShape
+public enum LogSeverity
 {
-    Spark,
-    Orb,
-    Star,
-    Smoke
+    Debug,
+    Information,
+    Warning,
+    Error
+}
+
+[Flags]
+public enum ServiceFeatures
+{
+    None = 0,
+    Caching = 1,
+    Compression = 2,
+    Metrics = 4,
+    Tracing = 8
 }
 
 public enum CollisionMode
 {
     None,
     Bounce,
-    Dissolve,
     Stick
 }
 
-#endregion
-
-#region Inspectable Models
-
 /// <summary>
-/// Model representing an interactive 2D graphic shape with geometric, appearance, and rendering properties.
-/// Changes directly update the live shape preview in real-time.
+/// A shape shown next to the property grid. It raises <see cref="INotifyPropertyChanged.PropertyChanged"/>, so the
+/// grid and the preview follow changes made in code as well as in the grid.
 /// </summary>
 [Inspectable]
-public partial class GraphicElementModel
+public partial class ShapeModel : INotifyPropertyChanged
 {
-    [InspectableProperty("Element Name", "General")]
-    public string Name { get; set; } = "Hero Card Background";
+    private string _name = "Preview shape";
+    private bool _isVisible = true;
+    private int _width = 220;
+    private int _height = 120;
+    private ShapeKind _kind = ShapeKind.Rounded;
+    private Color _fill = Color.FromHex("#6750A4");
+    private Color _stroke = Color.FromHex("#21005D");
+    private float _strokeWidth = 2;
+    private float _opacity = 1;
 
-    [InspectableProperty("Visible", "General")]
-    public bool Visible { get; set; } = true;
+    public event PropertyChangedEventHandler? PropertyChanged;
 
-    [InspectableProperty("Width (px)", "Geometry")]
-    public int Width { get; set; } = 280;
+    [InspectableProperty("Name", "General", Description = "A label for the shape.")]
+    public string Name { get => _name; set => Set(ref _name, value); }
 
-    [InspectableProperty("Height (px)", "Geometry")]
-    public int Height { get; set; } = 160;
+    [InspectableProperty("Visible", "General", Description = "Hides the shape without removing it.")]
+    public bool IsVisible { get => _isVisible; set => Set(ref _isVisible, value); }
 
-    [InspectableProperty("Corner Radius", "Geometry")]
-    public int CornerRadius { get; set; } = 16;
+    [InspectableProperty("Width", "Size", Description = "Width in pixels, 40 to 400.")]
+    public int Width { get => _width; set => Set(ref _width, Math.Clamp(value, 40, 400)); }
 
-    [InspectableProperty("Shape Type", "Geometry")]
-    public ShapeKind ShapeType { get; set; } = ShapeKind.RoundedRect;
+    [InspectableProperty("Height", "Size", Description = "Height in pixels, 40 to 240.")]
+    public int Height { get => _height; set => Set(ref _height, Math.Clamp(value, 40, 240)); }
 
-    [InspectableProperty("Fill Color", "Appearance")]
-    public Color FillColor { get; set; } = Color.FromHex("#1E88E5");
+    [InspectableProperty("Kind", "Appearance", Description = "The corner style: square, rounded or fully rounded.")]
+    public ShapeKind Kind { get => _kind; set => Set(ref _kind, value); }
 
-    [InspectableProperty("Border / Stroke", "Appearance")]
-    public Color StrokeColor { get; set; } = Color.FromHex("#90CAF9");
+    [InspectableProperty("Fill", "Appearance", Description = "The fill color.")]
+    public Color Fill { get => _fill; set => Set(ref _fill, value); }
 
-    [InspectableProperty("Opacity (0 - 1)", "Appearance")]
-    public float Opacity { get; set; } = 1.0f;
+    [InspectableProperty("Stroke", "Appearance", Description = "The outline color.")]
+    public Color Stroke { get => _stroke; set => Set(ref _stroke, value); }
 
-    [InspectableProperty("Shadow Elevation", "Appearance")]
-    public float ShadowElevation { get; set; } = 6.0f;
+    [InspectableProperty("Stroke width", "Appearance", Description = "The outline width in pixels.")]
+    public float StrokeWidth { get => _strokeWidth; set => Set(ref _strokeWidth, Math.Clamp(value, 0, 12)); }
 
-    [InspectableProperty("Blend Mode", "Rendering")]
-    public BlendMode BlendMode { get; set; } = BlendMode.Normal;
+    [InspectableProperty("Opacity", "Appearance", Description = "From 0 (invisible) to 1 (opaque).")]
+    public float Opacity { get => _opacity; set => Set(ref _opacity, Math.Clamp(value, 0, 1)); }
 
-    [InspectableProperty("Anti-Aliasing", "Rendering")]
-    public bool AntiAliasing { get; set; } = true;
+    [InspectableProperty("Area", "Size", IsReadOnly = true, Description = "Width × height, computed.")]
+    public int Area => Width * Height;
 
-    [InspectableProperty("Hardware GPU ID", "System", IsReadOnly = true)]
-    public string HardwareId { get; } = "GPU-VK-DX12-0042";
+    public void Reset()
+    {
+        Name = "Preview shape";
+        IsVisible = true;
+        Width = 220;
+        Height = 120;
+        Kind = ShapeKind.Rounded;
+        Fill = Color.FromHex("#6750A4");
+        Stroke = Color.FromHex("#21005D");
+        StrokeWidth = 2;
+        Opacity = 1;
+    }
 
-    [InspectableProperty("Created At", "System", IsReadOnly = true)]
-    public string CreatedTimestamp { get; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+    private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value))
+        {
+            return;
+        }
+
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        if (name is nameof(Width) or nameof(Height))
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Area)));
+        }
+    }
 }
 
-/// <summary>
-/// Model representing a backend microservice configuration with network, security, and performance metrics.
-/// </summary>
+/// <summary>A service configuration: strings, numbers, enums, a flags enum and a nullable value.</summary>
 [Inspectable]
-public partial class MicroserviceConfigModel
+public partial class ServiceConfigModel
 {
-    [InspectableProperty("Service Name", "Cluster")]
-    public string ServiceName { get; set; } = "atelier-auth-gateway";
+    [InspectableProperty("Service name", "Service", Description = "Must not be empty: the grid's PropertyValueChanging handler rejects empty names.")]
+    public string ServiceName { get; set; } = "auth-gateway";
 
-    [InspectableProperty("Cloud Region", "Cluster")]
+    [InspectableProperty("Region", "Service")]
     public CloudRegion Region { get; set; } = CloudRegion.EuCentral;
 
-    [InspectableProperty("Environment", "Cluster")]
+    [InspectableProperty("Environment", "Service")]
     public EnvironmentType Environment { get; set; } = EnvironmentType.Production;
 
-    [InspectableProperty("Host Address", "Network")]
-    public string HostAddress { get; set; } = "auth.internal.atelier.io";
+    [InspectableProperty("Features", "Service", Description = "A [Flags] enum is edited with one check box per flag.")]
+    public ServiceFeatures Features { get; set; } = ServiceFeatures.Caching | ServiceFeatures.Metrics;
 
-    [InspectableProperty("Port Number", "Network")]
+    [InspectableProperty("Host", "Network")]
+    public string Host { get; set; } = "auth.internal.example.com";
+
+    [InspectableProperty("Port", "Network", Description = "1 to 65535. Other values are rejected by the PropertyValueChanging handler.")]
     public int Port { get; set; } = 8443;
 
-    [InspectableProperty("Max Connections", "Network")]
-    public int MaxConnections { get; set; } = 10000;
+    [InspectableProperty("Max connections", "Network", Description = "Nullable: clear the value for no limit.")]
+    public int? MaxConnections { get; set; } = 10_000;
 
-    [InspectableProperty("Enable TLS 1.3", "Security")]
-    public bool EnableTls { get; set; } = true;
+    [InspectableProperty("Use TLS", "Security")]
+    public bool UseTls { get; set; } = true;
 
-    [InspectableProperty("API Token Key", "Security")]
-    public string ApiKey { get; set; } = "ak_live_99fa8c12b07d";
-
-    [InspectableProperty("Timeout (seconds)", "Performance")]
+    [InspectableProperty("Timeout (s)", "Performance")]
     public double TimeoutSeconds { get; set; } = 3.5;
 
-    [InspectableProperty("Target Cache Ratio", "Performance")]
-    public double TargetCacheRatio { get; set; } = 0.95;
-
-    [InspectableProperty("Log Severity", "Diagnostics")]
+    [InspectableProperty("Log level", "Diagnostics")]
     public LogSeverity LogLevel { get; set; } = LogSeverity.Information;
 
-    [InspectableProperty("Status Indicator", "Appearance")]
-    public Color StatusColor { get; set; } = Color.FromHex("#10B981");
-
-    [InspectableProperty("Runtime Build", "Diagnostics", IsReadOnly = true)]
-    public string RuntimeVersion { get; } = ".NET 9.0 Native AOT";
-
-    [InspectableProperty("Service Uptime", "Diagnostics", IsReadOnly = true)]
-    public string Uptime { get; } = "99.98% (42 days 14h)";
+    [InspectableProperty("Runtime", "Diagnostics", IsReadOnly = true)]
+    public string Runtime { get; } = ".NET 9";
 }
 
-/// <summary>
-/// Model representing particle physics simulation parameters.
-/// </summary>
+/// <summary>A particle emitter whose setters validate by throwing, to show how the grid reports errors.</summary>
 [Inspectable]
-public partial class ParticleEmitterModel
+public partial class EmitterModel
 {
-    [InspectableProperty("Emitter Identifier", "Emitter")]
-    public string EmitterName { get; set; } = "Cosmic Spark Emitter";
+    private int _rate = 250;
 
-    [InspectableProperty("Is Active", "Emitter")]
+    [InspectableProperty("Name", "Emitter")]
+    public string Name { get; set; } = "Sparks";
+
+    [InspectableProperty("Active", "Emitter")]
     public bool IsActive { get; set; } = true;
 
-    [InspectableProperty("Emission Rate (p/s)", "Simulation")]
-    public int EmissionRate { get; set; } = 250;
+    [InspectableProperty("Rate (per second)", "Simulation", Description = "The setter throws above 5000; the grid shows the message on the row.")]
+    public int Rate
+    {
+        get => _rate;
+        set => _rate = value <= 5000 ? value : throw new ArgumentOutOfRangeException(nameof(value), "The rate can be at most 5000 per second.");
+    }
 
-    [InspectableProperty("Target FPS", "Simulation")]
-    public int TargetFps { get; set; } = 120;
+    [InspectableProperty("Gravity", "Simulation")]
+    public float Gravity { get; set; } = 9.81f;
 
-    [InspectableProperty("Gravity Force", "Physics")]
-    public float GravityForce { get; set; } = 9.81f;
+    [InspectableProperty("Bounciness", "Simulation")]
+    public double Bounciness { get; set; } = 0.75;
 
-    [InspectableProperty("Restitution / Bounce", "Physics")]
-    public double Elasticity { get; set; } = 0.75;
+    [InspectableProperty("Collision", "Simulation")]
+    public CollisionMode Collision { get; set; } = CollisionMode.Bounce;
 
-    [InspectableProperty("Collision Mode", "Physics")]
-    public CollisionMode CollisionMode { get; set; } = CollisionMode.Bounce;
-
-    [InspectableProperty("Primary Particle Color", "Visuals")]
-    public Color ParticleColor { get; set; } = Color.FromHex("#FF9800");
-
-    [InspectableProperty("Secondary Trail Color", "Visuals")]
-    public Color TrailColor { get; set; } = Color.FromHex("#E91E63");
-
-    [InspectableProperty("Particle Geometry", "Visuals")]
-    public ParticleShape Shape { get; set; } = ParticleShape.Star;
-
-    [InspectableProperty("Compute Engine", "Hardware", IsReadOnly = true)]
-    public string ComputeEngine { get; } = "DirectCompute Shader 6.0";
+    [InspectableProperty("Color", "Appearance")]
+    public Color Color { get; set; } = Color.FromHex("#FF9800");
 }
 
-#endregion
+/// <summary>Settings edited with custom editors: a slider for every float and a star rating for "Rating".</summary>
+[Inspectable]
+public partial class PreferencesModel
+{
+    [InspectableProperty("Display name", "Profile")]
+    public string DisplayName { get; set; } = "Ada";
+
+    [InspectableProperty("Rating", "Profile", Description = "Edited with a custom editor chosen by a predicate (the property name).")]
+    public int Rating { get; set; } = 4;
+
+    [InspectableProperty("Volume", "Audio", Description = "Every float in this grid uses a custom slider editor registered for the type.")]
+    public float Volume { get; set; } = 0.7f;
+
+    [InspectableProperty("Balance", "Audio")]
+    public float Balance { get; set; } = 0.5f;
+
+    [InspectableProperty("Accent color", "Appearance")]
+    public Color Accent { get; set; } = Color.FromHex("#006A6A");
+}

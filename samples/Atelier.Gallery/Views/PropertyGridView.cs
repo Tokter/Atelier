@@ -2,734 +2,217 @@ using System;
 using Atelier.Controls;
 using Atelier.Core.Primitives;
 using Atelier.Core.Tree;
+using Atelier.Gallery.Infrastructure;
 using Atelier.Gallery.Models;
 using Atelier.Gallery.ViewModels;
 using Atelier.Layout;
 using Atelier.Markup;
-using Atelier.Theming;
-using Atelier.Theming.Material;
 
 namespace Atelier.Gallery.Views;
 
-public class PropertyGridView : Grid
+public class PropertyGridView : GalleryPage
 {
-    private readonly PropertyGridViewModel _viewModel;
-    private readonly PropertyGrid _propertyGrid;
-
-    // Master controls
-    private Button? _btnGraphicModel;
-    private Button? _btnMicroserviceModel;
-    private Button? _btnParticleModel;
-    private Button? _btnSortMode;
-    private Button? _btnToolbarToggle;
-    private Button? _btnElevationCycle;
-    private Button? _btnLabelWidth130;
-    private Button? _btnLabelWidth160;
-    private Button? _btnLabelWidth200;
-
-    // Live preview containers
-    private readonly Border _previewCard;
-    private readonly StackPanel _previewContent;
-
-    // Audit log container
-    private readonly TextBlock _lastEditedText;
-    private readonly StackPanel _logListPanel;
-
-    public PropertyGridView() : this(new PropertyGridViewModel())
-    {
-    }
+    private readonly PropertyGridViewModel _vm;
 
     public PropertyGridView(PropertyGridViewModel viewModel)
+        : base(MaterialIconKind.Tune, "Property Grid",
+            "The PropertyGrid lists and edits the properties of an object, grouped by category. Objects marked " +
+            "[Inspectable] describe their properties at compile time, so no reflection is needed.")
     {
-        _viewModel = viewModel;
-        DataContext = _viewModel;
+        _vm = viewModel;
 
-        this.Rows(GridLength.Auto, GridLength.Star);
-        this.RowSpacing(16);
+        Settings(new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
-        // 1. Initialize PropertyGrid
-        _propertyGrid = new PropertyGrid
-        {
-            SelectedObject = _viewModel.CurrentInspectableObject,
-            SortMode = _viewModel.SortMode,
-            IsToolbarVisible = _viewModel.IsToolbarVisible,
-            ToolbarElevation = _viewModel.ToolbarElevation,
-            LabelWidth = _viewModel.LabelWidth,
-        };
-
-        _propertyGrid.PropertyValueChanged += (s, e) =>
-        {
-            _viewModel.LogChange(e.Property.DisplayName, e.OldValue, e.NewValue);
-            UpdateLivePreview();
-            UpdateLogDisplay();
-        };
-
-        // Hook up viewmodel requests
-        _viewModel.RequestRebuild += () =>
-        {
-            _propertyGrid.SelectedObject = _viewModel.CurrentInspectableObject;
-            UpdateControlsVisuals();
-            UpdateLivePreview();
-        };
-
-        _viewModel.RequestExpandAll += () => _propertyGrid.ExpandAll();
-        _viewModel.RequestCollapseAll += () => _propertyGrid.CollapseAll();
-
-        // 2. Initialize Preview & Log Containers
-        _previewContent = new StackPanel { Orientation = Orientation.Vertical, Spacing = 12 };
-        _previewCard = new Card(CardVariant.Filled)
-            .Padding(18)
-            .CornerRadius(12)
-            .Child(_previewContent);
-
-        _lastEditedText = new TextBlock(_viewModel.LastEditedInfo)
-            .FontSize(12)
-            .Bold()
-            .Foreground(Color.FromHex("#1E88E5"));
-
-        _logListPanel = new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 };
-
-        // 3. Add Banner Card
-        this.Add(CreateMasterBanner().Row(0));
-
-        // 4. Scrollable 2-Column Content Layout
-        var scrollViewer = new ScrollViewer();
-        var mainGrid = new Grid()
-            .Columns(GridLength.Stars(1.15f), GridLength.Stars(1.0f))
-            .ColumnSpacing(16);
-
-        // Left Column: PropertyGrid Control Card
-        mainGrid.Add(CreateGridHostCard().Column(0));
-
-        // Right Column: Live Target Preview + Reference Matrix + Audit Log
-        var rightStack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 16 };
-        rightStack.Add(_previewCard);
-        rightStack.Add(CreateEditorsReferenceCard());
-        rightStack.Add(CreateAuditLogCard());
-
-        mainGrid.Add(rightStack.Column(1));
-
-        scrollViewer.Content = mainGrid;
-        this.Add(scrollViewer.Row(1));
-
-        // 5. Initial state synchronization
-        UpdateControlsVisuals();
-        UpdateLivePreview();
-        UpdateLogDisplay();
+        Sections(InspectorSection(), CustomEditorSection());
     }
 
-    private UIElement CreateMasterBanner()
+    private UIElement InspectorSection()
     {
-        var card = new Card(CardVariant.Filled)
-            .Padding(20)
-            .CornerRadius(14);
+        var grid = new PropertyGrid()
+            .Height(560)
+            .BindSelectedObject(_vm, v => v.SelectedObject)
+            .BindTwoWay(PropertyGrid.SortModeProperty, _vm, v => v.SortMode, (v, mode) => v.SortMode = mode)
+            .BindTwoWay(PropertyGrid.FilterTextProperty, _vm, v => v.FilterText, (v, text) => v.FilterText = text)
+            .Bind(PropertyGrid.IsToolbarVisibleProperty, _vm, v => v.IsToolbarVisible)
+            .Bind(PropertyGrid.IsDescriptionVisibleProperty, _vm, v => v.IsDescriptionVisible)
+            .Bind(PropertyGrid.ToolbarElevationProperty, _vm, v => v.ToolbarElevation)
+            .Bind(PropertyGrid.LabelWidthProperty, _vm, v => v.LabelWidth)
+            .OnPropertyValueChanging((_, e) => Validate(e))
+            .OnPropertyValueChanged((_, e) => _vm.Log($"Changed {e.Property.Name}: {e.OldValue ?? "null"} → {e.NewValue ?? "null"}"))
+            .OnPropertyValueError((_, e) => _vm.Log($"Error in {e.Property.Name}: {e.Exception.Message}"))
+            .OnSelectedObjectChanged((_, target) => _vm.Log($"Inspecting {target?.GetType().Name ?? "nothing"}"))
+            .OnSortModeChanged((_, mode) => _vm.Log($"Sort mode: {mode}"));
 
-        var titleStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.Tune, 26, foreground: Color.FromHex("#1E88E5")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("PropertyGrid & Native AOT Property Editors").TitleLarge().Bold().VerticalAlignment(VerticalAlignment.Center),
-                new Border
-                {
-                    Background = Color.FromHex("#10B981").WithAlpha(0.15f),
-                    CornerRadius = new CornerRadius(12),
-                    Padding = new Thickness(8, 3),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Child = new TextBlock("100% Native AOT & Zero Reflection")
-                    {
-                        FontSize = 11,
-                        Bold = true,
-                        Foreground = Color.FromHex("#059669")
-                    }
-                }
-            );
-
-        var descText = new TextBlock("A high-performance property inspector designed for Native AOT and single-file bundling. Includes built-in editors for strings, booleans, integer types, floating-point types, enums, colors, and read-only properties, featuring real-time search filtering and categorized/alphabetical grouping.")
-            .BodyMedium()
-            .Foreground(Color.FromHex("#757575"));
-
-        // Target Model Selector Chips
-        var modelSelectorLabel = new TextBlock("Inspect Target:").LabelMedium().Bold().VerticalAlignment(VerticalAlignment.Center);
-
-        _btnGraphicModel = new Button
-        {
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.Palette, 16, foreground: Color.FromHex("#1E88E5")) { VerticalAlignment = VerticalAlignment.Center },
-                    new TextBlock("2D Graphic Element") { FontSize = 12, VerticalAlignment = VerticalAlignment.Center }
-                ),
-            Padding = new Thickness(12, 6),
-            CornerRadius = new CornerRadius(16),
-            Command = _viewModel.SelectGraphicModelCommand
-        };
-
-        _btnMicroserviceModel = new Button
-        {
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.Cloud, 16, foreground: Color.FromHex("#10B981")) { VerticalAlignment = VerticalAlignment.Center },
-                    new TextBlock("Microservice Config") { FontSize = 12, VerticalAlignment = VerticalAlignment.Center }
-                ),
-            Padding = new Thickness(12, 6),
-            CornerRadius = new CornerRadius(16),
-            Command = _viewModel.SelectMicroserviceModelCommand
-        };
-
-        _btnParticleModel = new Button
-        {
-            Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.AutoAwesome, 16, foreground: Color.FromHex("#FF9800")) { VerticalAlignment = VerticalAlignment.Center },
-                    new TextBlock("Particle Simulation") { FontSize = 12, VerticalAlignment = VerticalAlignment.Center }
-                ),
-            Padding = new Thickness(12, 6),
-            CornerRadius = new CornerRadius(16),
-            Command = _viewModel.SelectParticleModelCommand
-        };
-
-        var modelButtonsRow = new WrapPanel { HorizontalSpacing = 8, VerticalSpacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(modelSelectorLabel, _btnGraphicModel, _btnMicroserviceModel, _btnParticleModel);
-
-        // Actions & Customization Row
-        _btnSortMode = new Button
-        {
-            Padding = new Thickness(10, 6),
-            CornerRadius = new CornerRadius(16),
-            Content = new TextBlock("Sort: Categorized") { FontSize = 12 }
-        };
-        _btnSortMode.Click += (s, e) =>
-        {
-            _viewModel.ToggleSortMode();
-            _propertyGrid.SortMode = _viewModel.SortMode;
-            UpdateControlsVisuals();
-        };
-
-        var btnExpandAll = new Button("Expand All")
-        {
-            Variant = ButtonVariant.Outlined,
-            Padding = new Thickness(10, 6),
-            CornerRadius = new CornerRadius(16),
-            Command = _viewModel.ExpandAllCommand
-        };
-
-        var btnCollapseAll = new Button("Collapse All")
-        {
-            Variant = ButtonVariant.Outlined,
-            Padding = new Thickness(10, 6),
-            CornerRadius = new CornerRadius(16),
-            Command = _viewModel.CollapseAllCommand
-        };
-
-        _btnToolbarToggle = new Button
-        {
-            Variant = ButtonVariant.Outlined,
-            Padding = new Thickness(10, 6),
-            CornerRadius = new CornerRadius(16),
-            Content = new TextBlock("Toolbar: Visible") { FontSize = 12 }
-        };
-        _btnToolbarToggle.Click += (s, e) =>
-        {
-            _viewModel.ToggleToolbar();
-            _propertyGrid.IsToolbarVisible = _viewModel.IsToolbarVisible;
-            UpdateControlsVisuals();
-        };
-
-        _btnElevationCycle = new Button
-        {
-            Variant = ButtonVariant.Outlined,
-            Padding = new Thickness(10, 6),
-            CornerRadius = new CornerRadius(16),
-            Content = new TextBlock("Elevation: 2dp") { FontSize = 12 }
-        };
-        _btnElevationCycle.Click += (s, e) =>
-        {
-            _viewModel.CycleElevation();
-            _propertyGrid.ToolbarElevation = _viewModel.ToolbarElevation;
-            UpdateControlsVisuals();
-        };
-
-        var widthLabel = new TextBlock("Label Width:") { FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
-
-        _btnLabelWidth130 = new Button("130px")
-        {
-            Padding = new Thickness(8, 4),
-            CornerRadius = new CornerRadius(12),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        _btnLabelWidth130.Click += (s, e) => SetLabelWidth(130f);
-
-        _btnLabelWidth160 = new Button("160px")
-        {
-            Padding = new Thickness(8, 4),
-            CornerRadius = new CornerRadius(12),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        _btnLabelWidth160.Click += (s, e) => SetLabelWidth(160f);
-
-        _btnLabelWidth200 = new Button("200px")
-        {
-            Padding = new Thickness(8, 4),
-            CornerRadius = new CornerRadius(12),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        _btnLabelWidth200.Click += (s, e) => SetLabelWidth(200f);
-
-        var btnReset = new Button("Reset Model")
-        {
-            Variant = ButtonVariant.Text,
-            Padding = new Thickness(10, 6),
-            CornerRadius = new CornerRadius(16),
-            Command = _viewModel.ResetCurrentModelCommand
-        };
-
-        var actionsRow = new WrapPanel { HorizontalSpacing = 8, VerticalSpacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                _btnSortMode,
-                btnExpandAll,
-                btnCollapseAll,
-                _btnToolbarToggle,
-                _btnElevationCycle,
-                widthLabel,
-                _btnLabelWidth130,
-                _btnLabelWidth160,
-                _btnLabelWidth200,
-                btnReset
-            );
-
-        return card.Child(new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 }
-            .Children(titleStack, descText, modelButtonsRow, actionsRow));
+        return Ui.Section("Inspecting objects",
+            "Pick an object to inspect. Each property type gets a matching editor: text, numbers, switches, colors, " +
+            "drop-downs for enums, check boxes for [Flags] enums and nullable values. Edits are validated and logged.",
+            Ui.Columns(300,
+                Ui.Labeled("Object", Ui.Row(
+                    ObjectOption("Shape", InspectedObject.Shape),
+                    ObjectOption("Service", InspectedObject.Service),
+                    ObjectOption("Emitter", InspectedObject.Emitter))),
+                Ui.Labeled("Sort mode", Ui.Row(
+                    new RadioButton("Categorized").GroupName("pg-sort")
+                        .BindIsChecked(_vm, v => v.SortMode, (v, m) => v.SortMode = m, PropertySortMode.Categorized),
+                    new RadioButton("Alphabetical").GroupName("pg-sort")
+                        .BindIsChecked(_vm, v => v.SortMode, (v, m) => v.SortMode = m, PropertySortMode.Alphabetical))),
+                new TextBox()
+                    .Label("Filter")
+                    .LeadingIconKind(MaterialIconKind.FilterList)
+                    .BindText(_vm, v => v.FilterText, (v, text) => v.FilterText = text)),
+            Ui.Columns(220,
+                Ui.SliderSetting("Label width", _vm, v => v.LabelWidth, (v, w) => v.LabelWidth = w, 100, 260, step: 10),
+                Ui.SliderSetting("Toolbar elevation", _vm, v => v.ToolbarElevation, (v, e) => v.ToolbarElevation = e, 0, 8, step: 1),
+                Ui.Stack(
+                    new Switch("Toolbar").BindIsChecked(_vm, v => v.IsToolbarVisible, (v, on) => v.IsToolbarVisible = on),
+                    new Switch("Description panel").BindIsChecked(_vm, v => v.IsDescriptionVisible, (v, on) => v.IsDescriptionVisible = on))),
+            Ui.Row(
+                new Button("Expand all").Variant(ButtonVariant.Outlined).OnClick(grid.ExpandAll),
+                new Button("Collapse all").Variant(ButtonVariant.Outlined).OnClick(grid.CollapseAll),
+                Ui.IconButton(MaterialIconKind.Shuffle, "Change shape in code", ButtonVariant.Tonal).Command(_vm.RandomizeShapeCommand)),
+            Ui.Columns(360,
+                grid,
+                Ui.Stack(ShapePreview(), EventLog())));
     }
 
-    private void SetLabelWidth(float width)
-    {
-        _viewModel.SetLabelWidth(width);
-        _propertyGrid.LabelWidth = width;
-        UpdateControlsVisuals();
-    }
+    private RadioButton ObjectOption(string text, InspectedObject value) =>
+        new RadioButton(text).GroupName("pg-object").BindIsChecked(_vm, v => v.Inspected, (v, o) => v.Inspected = o, value);
 
-    private void UpdateControlsVisuals()
+    // PropertyValueChanging can reject an edit before it reaches the object; the editor then shows the old value again.
+    private void Validate(PropertyValueChangingEventArgs e)
     {
-        if (_btnGraphicModel != null)
-            _btnGraphicModel.Variant = _viewModel.ActiveModel == ActivePropertyModel.GraphicElement ? ButtonVariant.Filled : ButtonVariant.Outlined;
-        if (_btnMicroserviceModel != null)
-            _btnMicroserviceModel.Variant = _viewModel.ActiveModel == ActivePropertyModel.MicroserviceConfig ? ButtonVariant.Filled : ButtonVariant.Outlined;
-        if (_btnParticleModel != null)
-            _btnParticleModel.Variant = _viewModel.ActiveModel == ActivePropertyModel.ParticleEmitter ? ButtonVariant.Filled : ButtonVariant.Outlined;
-
-        if (_btnSortMode != null)
+        string? error = e.Property.Name switch
         {
-            _btnSortMode.Variant = _propertyGrid.SortMode == PropertySortMode.Categorized ? ButtonVariant.Tonal : ButtonVariant.Outlined;
-            _btnSortMode.Content = new TextBlock($"Sort: {_propertyGrid.SortMode}") { FontSize = 12 };
+            nameof(ServiceConfigModel.ServiceName) when string.IsNullOrWhiteSpace(e.NewValue as string) => "the name can't be empty",
+            nameof(ServiceConfigModel.Port) when e.NewValue is int port && (port < 1 || port > 65535) => "the port must be 1 to 65535",
+            _ => null,
+        };
+
+        if (error != null)
+        {
+            e.Cancel = true;
+            _vm.Log($"Rejected {e.Property.Name}: {error}");
         }
-
-        if (_btnToolbarToggle != null)
-        {
-            _btnToolbarToggle.Variant = _propertyGrid.IsToolbarVisible ? ButtonVariant.Tonal : ButtonVariant.Outlined;
-            _btnToolbarToggle.Content = new TextBlock($"Toolbar: {(_propertyGrid.IsToolbarVisible ? "Visible" : "Hidden")}") { FontSize = 12 };
-        }
-
-        if (_btnElevationCycle != null)
-        {
-            _btnElevationCycle.Content = new TextBlock($"Elevation: {_propertyGrid.ToolbarElevation:0}dp") { FontSize = 12 };
-        }
-
-        if (_btnLabelWidth130 != null)
-            _btnLabelWidth130.Variant = MathF.Abs(_propertyGrid.LabelWidth - 130f) < 5f ? ButtonVariant.Filled : ButtonVariant.Outlined;
-        if (_btnLabelWidth160 != null)
-            _btnLabelWidth160.Variant = MathF.Abs(_propertyGrid.LabelWidth - 160f) < 5f ? ButtonVariant.Filled : ButtonVariant.Outlined;
-        if (_btnLabelWidth200 != null)
-            _btnLabelWidth200.Variant = MathF.Abs(_propertyGrid.LabelWidth - 200f) < 5f ? ButtonVariant.Filled : ButtonVariant.Outlined;
     }
 
-    private UIElement CreateGridHostCard()
+    private UIElement ShapePreview()
     {
-        var card = new Card(CardVariant.Outlined)
-            .Padding(16)
-            .CornerRadius(12);
-
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.ViewList, 20, foreground: Color.FromHex("#1E88E5")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Live Property Inspector Grid").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center)
-            );
-
-        var tipText = new TextBlock("Use the built-in toolbar below to filter properties or switch sort modes. Expand/collapse categories by clicking section headers.")
-            .FontSize(12)
-            .Foreground(Color.FromHex("#757575"));
-
-        var hostStack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
-            .Children(header, tipText, _propertyGrid);
-
-        return card.Child(hostStack);
-    }
-
-    private void UpdateLivePreview()
-    {
-        _previewContent.Clear();
-
-        switch (_viewModel.ActiveModel)
-        {
-            case ActivePropertyModel.GraphicElement:
-                BuildGraphicElementPreview(_viewModel.GraphicModel);
-                break;
-            case ActivePropertyModel.MicroserviceConfig:
-                BuildMicroservicePreview(_viewModel.MicroserviceModel);
-                break;
-            case ActivePropertyModel.ParticleEmitter:
-                BuildParticlePreview(_viewModel.ParticleModel);
-                break;
-        }
-
-        _previewCard.InvalidateMeasure();
-        _previewCard.InvalidateVisual();
-    }
-
-    private void BuildGraphicElementPreview(GraphicElementModel model)
-    {
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.AutoAwesome, 20, foreground: Color.FromHex("#1E88E5")),
-                new TextBlock("Live 2D Graphic Output").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
-                new Border
-                {
-                    Background = model.Visible ? Color.FromHex("#10B981").WithAlpha(0.15f) : Color.FromHex("#EF4444").WithAlpha(0.15f),
-                    CornerRadius = new CornerRadius(10),
-                    Padding = new Thickness(6, 2),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Child = new TextBlock(model.Visible ? "Visible" : "Hidden")
-                    {
-                        FontSize = 10,
-                        Bold = true,
-                        Foreground = model.Visible ? Color.FromHex("#059669") : Color.FromHex("#DC2626")
-                    }
-                }
-            );
-
-        // Render actual shape based on model properties
-        CornerRadius radius = model.ShapeType switch
-        {
-            ShapeKind.Circle => new CornerRadius(Math.Min(model.Width, model.Height) / 2),
-            ShapeKind.Pill => new CornerRadius(Math.Min(model.Width, model.Height) / 2),
-            ShapeKind.RoundedRect => new CornerRadius(model.CornerRadius),
-            _ => new CornerRadius(0)
-        };
-
-        var renderedShape = new Border
-        {
-            Width = Math.Clamp(model.Width, 40, 320),
-            Height = Math.Clamp(model.Height, 40, 180),
-            CornerRadius = radius,
-            Background = model.FillColor,
-            BorderThickness = new Thickness(2),
-            BorderBrush = model.StrokeColor,
-            Opacity = Math.Clamp(model.Opacity, 0f, 1f),
-            Elevation = Math.Clamp(model.ShadowElevation, 0f, 24f),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Visibility = model.Visible ? Visibility.Visible : Visibility.Hidden,
-            Child = new StackPanel { Orientation = Orientation.Vertical, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new TextBlock(model.Name)
-                    {
-                        FontSize = 13,
-                        Bold = true,
-                        Foreground = Color.White,
-                        HorizontalAlignment = HorizontalAlignment.Center
-                    },
-                    new TextBlock($"{model.Width} × {model.Height} px • {model.ShapeType}")
-                    {
-                        FontSize = 11,
-                        Foreground = Color.White.WithAlpha(0.85f),
-                        HorizontalAlignment = HorizontalAlignment.Center
-                    }
-                )
-        };
-
-        var shapeContainer = new Border
-        {
-            Height = 200,
-            Background = Color.FromHex("#000000").WithAlpha(0.04f),
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1),
-            BorderBrush = Color.FromHex("#000000").WithAlpha(0.08f),
-            Padding = new Thickness(16),
-            Child = renderedShape
-        };
-
-        // Telemetry metadata badges
-        var infoRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 }
-            .Children(
-                CreateBadge("Blend", model.BlendMode.ToString(), Color.FromHex("#8B5CF6")),
-                CreateBadge("Anti-Alias", model.AntiAliasing ? "ON" : "OFF", model.AntiAliasing ? Color.FromHex("#10B981") : Color.FromHex("#EF4444")),
-                CreateBadge("Fill Hex", model.FillColor.ToString(), Color.FromHex("#1E88E5")),
-                CreateBadge("Device", model.HardwareId, Color.FromHex("#6B7280"))
-            );
-
-        _previewContent.Add(header);
-        _previewContent.Add(shapeContainer);
-        _previewContent.Add(infoRow);
-    }
-
-    private void BuildMicroservicePreview(MicroserviceConfigModel model)
-    {
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.Dns, 20, foreground: Color.FromHex("#10B981")),
-                new TextBlock("Live Microservice Status").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
-                new Border
-                {
-                    Background = model.StatusColor.WithAlpha(0.15f),
-                    CornerRadius = new CornerRadius(10),
-                    Padding = new Thickness(6, 2),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Child = new TextBlock(model.Environment.ToString())
-                    {
-                        FontSize = 10,
-                        Bold = true,
-                        Foreground = model.StatusColor
-                    }
-                }
-            );
-
-        var endpointBox = new Border
-        {
-            Background = Color.FromHex("#000000").WithAlpha(0.04f),
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1),
-            BorderBrush = Color.FromHex("#000000").WithAlpha(0.08f),
-            Padding = new Thickness(14),
-            Child = new StackPanel { Orientation = Orientation.Vertical, Spacing = 8 }
-                .Children(
-                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-                        .Children(
-                            new Border
-                            {
-                                Width = 12,
-                                Height = 12,
-                                CornerRadius = new CornerRadius(6),
-                                Background = model.StatusColor,
-                                VerticalAlignment = VerticalAlignment.Center
-                            },
-                            new TextBlock(model.ServiceName).Bold().FontSize(14).VerticalAlignment(VerticalAlignment.Center),
-                            new TextBlock($"https://{model.HostAddress}:{model.Port}").FontSize(12).Foreground(Color.FromHex("#6B7280")).VerticalAlignment(VerticalAlignment.Center)
-                        ),
-                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 }
-                        .Children(
-                            CreateBadge("TLS 1.3", model.EnableTls ? "🔒 Encrypted" : "⚠️ Insecure", model.EnableTls ? Color.FromHex("#059669") : Color.FromHex("#DC2626")),
-                            CreateBadge("Region", model.Region.ToString(), Color.FromHex("#2563EB")),
-                            CreateBadge("Log", model.LogLevel.ToString(), Color.FromHex("#D97706")),
-                            CreateBadge("Max Conns", $"{model.MaxConnections:N0}", Color.FromHex("#4B5563"))
-                        ),
-                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16 }
-                        .Children(
-                            new TextBlock($"⏱️ Timeout: {model.TimeoutSeconds:F1}s").FontSize(12),
-                            new TextBlock($"🎯 Target Cache: {(model.TargetCacheRatio * 100):F0}%").FontSize(12),
-                            new TextBlock($"🚀 Uptime: {model.Uptime}").FontSize(12).Foreground(Color.FromHex("#6B7280"))
-                        )
-                )
-        };
-
-        _previewContent.Add(header);
-        _previewContent.Add(endpointBox);
-    }
-
-    private void BuildParticlePreview(ParticleEmitterModel model)
-    {
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.Storm, 20, foreground: Color.FromHex("#FF9800")),
-                new TextBlock("Live Particle Simulation Dashboard").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
-                new Border
-                {
-                    Background = model.IsActive ? Color.FromHex("#10B981").WithAlpha(0.15f) : Color.FromHex("#9E9E9E").WithAlpha(0.15f),
-                    CornerRadius = new CornerRadius(10),
-                    Padding = new Thickness(6, 2),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Child = new TextBlock(model.IsActive ? "ACTIVE" : "PAUSED")
-                    {
-                        FontSize = 10,
-                        Bold = true,
-                        Foreground = model.IsActive ? Color.FromHex("#059669") : Color.FromHex("#6B7280")
-                    }
-                }
-            );
-
-        var previewBox = new Border
-        {
-            Background = Color.FromHex("#000000").WithAlpha(0.04f),
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1),
-            BorderBrush = Color.FromHex("#000000").WithAlpha(0.08f),
-            Padding = new Thickness(14),
-            Child = new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
-                .Children(
-                    new TextBlock(model.EmitterName).Bold().FontSize(14),
-                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, VerticalAlignment = VerticalAlignment.Center }
-                        .Children(
-                            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-                                .Children(
-                                    new TextBlock("Particle Tint:") { FontSize = 12, VerticalAlignment = VerticalAlignment.Center },
-                                    new Border { Width = 16, Height = 16, CornerRadius = new CornerRadius(4), Background = model.ParticleColor, VerticalAlignment = VerticalAlignment.Center },
-                                    new TextBlock(model.ParticleColor.ToString()) { FontSize = 11, VerticalAlignment = VerticalAlignment.Center }
-                                ),
-                            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-                                .Children(
-                                    new TextBlock("Trail Tint:") { FontSize = 12, VerticalAlignment = VerticalAlignment.Center },
-                                    new Border { Width = 16, Height = 16, CornerRadius = new CornerRadius(4), Background = model.TrailColor, VerticalAlignment = VerticalAlignment.Center },
-                                    new TextBlock(model.TrailColor.ToString()) { FontSize = 11, VerticalAlignment = VerticalAlignment.Center }
-                                )
-                        ),
-                    new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 }
-                        .Children(
-                            CreateBadge("Shape", model.Shape.ToString(), Color.FromHex("#8B5CF6")),
-                            CreateBadge("Collision", model.CollisionMode.ToString(), Color.FromHex("#EC4899")),
-                            CreateBadge("Rate", $"{model.EmissionRate} p/s", Color.FromHex("#10B981")),
-                            CreateBadge("FPS", $"{model.TargetFps} fps", Color.FromHex("#3B82F6")),
-                            CreateBadge("Gravity", $"{model.GravityForce:F2} m/s²", Color.FromHex("#6B7280"))
-                        )
-                )
-        };
-
-        _previewContent.Add(header);
-        _previewContent.Add(previewBox);
-    }
-
-    private static Border CreateBadge(string label, string value, Color accent)
-    {
-        return new Border
-        {
-            Background = accent.WithAlpha(0.12f),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(8, 3),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new TextBlock($"{label}:") { FontSize = 11, Foreground = accent.WithAlpha(0.85f), VerticalAlignment = VerticalAlignment.Center },
-                    new TextBlock(value) { FontSize = 11, Bold = true, Foreground = accent, VerticalAlignment = VerticalAlignment.Center }
-                )
-        };
-    }
-
-    private UIElement CreateEditorsReferenceCard()
-    {
-        var card = new Card(CardVariant.Outlined)
-            .Padding(16)
-            .CornerRadius(12);
-
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.Extension, 20, foreground: Color.FromHex("#8B5CF6")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Built-in Editors Reference Matrix").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center)
-            );
-
-        static Border CreateEditorRow(string typeName, string editorName, string description, Color badgeColor)
-        {
-            var badge = new Border
+        var shape = _vm.Shape;
+        var preview = new Border()
+            .Center()
+            .Bind(UIElement.WidthProperty, shape, s => (float)s.Width)
+            .Bind(UIElement.HeightProperty, shape, s => (float)s.Height)
+            .Bind(Border.CornerRadiusProperty, shape, s => new CornerRadius(s.Kind switch
             {
-                Background = badgeColor.WithAlpha(0.15f),
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(6, 2),
-                Width = 110,
-                Child = new TextBlock(typeName) { FontSize = 11, Bold = true, Foreground = badgeColor, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-            };
+                ShapeKind.Rectangle => 0,
+                ShapeKind.Rounded => 16,
+                _ => MathF.Min(s.Width, s.Height) / 2,
+            }))
+            .Bind(Border.BackgroundProperty, shape, s => s.Fill)
+            .Bind(Border.BorderBrushProperty, shape, s => s.Stroke)
+            .Bind(Border.BorderThicknessProperty, shape, s => new Thickness(s.StrokeWidth))
+            .BindOpacity(shape, s => s.Opacity)
+            .BindIsVisible(shape, s => s.IsVisible)
+            .Child(new TextBlock().TitleSmall().Center().Foreground(Color.White).BindText(shape, s => s.Name));
 
-            var editorLabel = new TextBlock(editorName).Bold().FontSize(12);
-            var desc = new TextBlock(description).FontSize(11).Foreground(Color.FromHex("#757575"));
-
-            var colStack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-                .Children(editorLabel, desc);
-
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                .Children(badge, colStack);
-
-            return new Border
-            {
-                Padding = new Thickness(4, 3),
-                Child = row
-            };
-        }
-
-        var list = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 }
-            .Children(
-                CreateEditorRow("string", "TextBox Editor", "Direct text editing with two-way binding & instant update", Color.FromHex("#1E88E5")),
-                CreateEditorRow("bool", "CheckBox Editor", "Material 3 interactive checkbox toggle", Color.FromHex("#10B981")),
-                CreateEditorRow("int / long / byte", "Integer Editor", "Culture-invariant integer parser with invalid input revert on LostFocus", Color.FromHex("#3B82F6")),
-                CreateEditorRow("float / double", "Floating-Point Editor", "Decimal/float parser supporting standard & thousands formats", Color.FromHex("#06B6D4")),
-                CreateEditorRow("Enum", "ComboBox Editor", "Auto-discovered enum names dropdown with zero reflection", Color.FromHex("#8B5CF6")),
-                CreateEditorRow("Color", "Swatch + Hex Editor", "Interactive 24×24 color preview swatch with live hex code editor", Color.FromHex("#EC4899")),
-                CreateEditorRow("IsReadOnly", "Dimmed Text Editor", "Non-editable dimmed display for getters without setters", Color.FromHex("#6B7280"))
-            );
-
-        return card.Child(new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
-            .Children(header, list));
+        return Ui.Demo("Shape preview",
+            new Border()
+                .Height(280)
+                .CornerRadius(12)
+                .ClipToBounds()
+                .Themed(Border.BackgroundProperty, c => c.SurfaceContainerLow)
+                .Child(preview),
+            Ui.Note("The shape implements INotifyPropertyChanged: the grid and the preview follow edits and code changes."));
     }
 
-    private UIElement CreateAuditLogCard()
+    private UIElement EventLog() =>
+        Ui.Demo("Events",
+            new Border()
+                .Padding(12, 8)
+                .MinHeight(120)
+                .CornerRadius(8)
+                .Themed(Border.BackgroundProperty, c => c.SurfaceContainerHigh)
+                .Child(new ItemsControl()
+                    .BindItemsSource(_vm, v => v.Events)
+                    .WithItemTemplate((string entry) => new TextBlock(entry)
+                        .FontFamily(Ui.MonospaceFont)
+                        .FontSize(12)
+                        .LineHeight(18)
+                        .TextWrapping()
+                        .Themed(TextBlock.ForegroundProperty, c => c.OnSurfaceVariant))),
+            Ui.Note("Try an empty service name, port 0, or an emitter rate above 5000."));
+
+    private UIElement CustomEditorSection() => Ui.Section("Custom editors",
+        "RegisterCustomEditor replaces the editor for a property type, or for the properties a predicate selects. " +
+        "Here every float is edited with a slider and the \"Rating\" property with stars.",
+        Ui.Columns(360,
+            new PropertyGrid()
+                .Height(340)
+                .IsToolbarVisible(false)
+                .SelectedObject(_vm.Preferences)
+                .RegisterCustomEditor<PropertyGrid, float>(SliderEditor)
+                .RegisterCustomEditor(context => context.Descriptor.Name == nameof(PreferencesModel.Rating), RatingEditor)
+                .OnPropertyValueChanged((_, e) => _vm.Log($"Preferences.{e.Property.Name} = {e.NewValue}")),
+            Ui.Code(
+                "grid.RegisterCustomEditor<PropertyGrid, float>(ctx =>\n" +
+                "{\n" +
+                "    var slider = new Slider()\n" +
+                "        .Range(0, 1)\n" +
+                "        .Value(ctx.GetValue<float>());\n" +
+                "    slider.OnValueChanged(v => ctx.UpdateValue(v));\n" +
+                "    ctx.ValueChanged += v => slider.Value = (float)v!;\n" +
+                "    return slider;\n" +
+                "});\n\n" +
+                "grid.RegisterCustomEditor(\n" +
+                "    ctx => ctx.Descriptor.Name == \"Rating\",\n" +
+                "    RatingEditor);")));
+
+    private static UIElement SliderEditor(PropertyEditorContext context)
     {
-        var card = new Card(CardVariant.Outlined)
-            .Padding(16)
-            .CornerRadius(12);
-
-        var clearBtn = new Button("Clear Log")
+        var slider = new Slider()
+            .Range(0, 1)
+            .ValueFormat("{0:0.00}")
+            .Value(context.GetValue<float>())
+            .IsEnabled(!context.IsReadOnly);
+        slider.OnValueChanged(value => context.UpdateValue(value));
+        context.ValueChanged += value =>
         {
-            Variant = ButtonVariant.Text,
-            Padding = new Thickness(8, 4),
-            CornerRadius = new CornerRadius(12),
-            Command = _viewModel.ClearLogCommand
+            if (value is float f)
+            {
+                slider.Value = f;
+            }
         };
-        clearBtn.Click += (s, e) => UpdateLogDisplay();
-
-        var headerGrid = new Grid()
-            .Columns(GridLength.Star, GridLength.Auto);
-
-        var headerTitle = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.History, 20, foreground: Color.FromHex("#F59E0B")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Property Change Audit Log").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center)
-            ).Column(0);
-
-        clearBtn.Column(1);
-        headerGrid.Children(headerTitle, clearBtn);
-
-        var logContainer = new Border
-        {
-            MinHeight = 90,
-            MaxHeight = 160,
-            Background = Color.FromHex("#000000").WithAlpha(0.04f),
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1),
-            BorderBrush = Color.FromHex("#000000").WithAlpha(0.08f),
-            Padding = new Thickness(10),
-            Child = new ScrollViewer { Content = _logListPanel }
-        };
-
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 8 }
-            .Children(headerGrid, _lastEditedText, logContainer);
-
-        return card.Child(stack);
+        return slider;
     }
 
-    private void UpdateLogDisplay()
+    private static UIElement RatingEditor(PropertyEditorContext context)
     {
-        _lastEditedText.Text = _viewModel.LastEditedInfo;
-        _logListPanel.Clear();
+        var stars = new Icon[5];
+        var row = new StackPanel().Orientation(Orientation.Horizontal).Spacing(2).VerticalAlignment(VerticalAlignment.Center);
 
-        if (_viewModel.ChangeLogs.Count == 0)
+        void Show(int rating)
         {
-            _logListPanel.Add(new TextBlock("No property modifications logged yet.")
+            for (int i = 0; i < stars.Length; i++)
             {
-                FontSize = 11,
-                Foreground = Color.FromHex("#9E9E9E")
-            });
-            return;
+                stars[i].IsFilled(i < rating);
+            }
         }
 
-        foreach (var log in _viewModel.ChangeLogs)
+        for (int i = 0; i < stars.Length; i++)
         {
-            _logListPanel.Add(new TextBlock(log)
-            {
-                FontSize = 11,
-                Foreground = Color.FromHex("#374151")
-            });
+            int value = i + 1;
+            stars[i] = new Icon(MaterialIconKind.Star, 22)
+                .Themed(Control.ForegroundProperty, c => c.Tertiary)
+                .OnPointerPressed((_, e) =>
+                {
+                    context.UpdateValue(value);
+                    e.Handled = true;
+                });
+            row.Add(stars[i]);
         }
+
+        Show(context.GetValue<int>());
+        context.ValueChanged += value => Show(value is int rating ? rating : 0);
+        return row;
     }
 }

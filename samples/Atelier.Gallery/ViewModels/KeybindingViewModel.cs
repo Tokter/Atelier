@@ -1,48 +1,35 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Windows.Input;
 using Atelier.Controls;
 using Atelier.Core.Events;
 using Atelier.Core.Keybinding;
-using Atelier.Core.Primitives;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Atelier.Gallery.ViewModels;
 
-public class KeybindingLogEntry
-{
-    public string Time { get; set; } = string.Empty;
-    public string Group { get; set; } = string.Empty;
-    public string Gesture { get; set; } = string.Empty;
-    public string Command { get; set; } = string.Empty;
-    public string Target { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
-}
-
 /// <summary>
-/// Demonstrates class-level [Keybinding] with a parameterless constructor implementing ICommand.
-/// Discovered and registered at compile time by Roslyn KeybindingGenerator.
+/// A command class with a [Keybinding] attribute: the source generator registers it (parameterless constructor) in the
+/// "Global" group, so F1 works anywhere in the window.
 /// </summary>
 [Keybinding(name: "ShowHelp", group: "Global", defaultKeybinding: "F1")]
 public class ShowShortcutsHelpCommand : AtelierCommand
 {
     public static event Action? HelpRequested;
 
-    public override void Execute(object? parameter)
-    {
-        HelpRequested?.Invoke();
-    }
+    public override void Execute(object? parameter) => HelpRequested?.Invoke();
 }
 
 /// <summary>
-/// Scoped ViewModel for the Rich Text Editor demo panel.
-/// Demonstrates [property: Keybinding] attributes on [RelayCommand] methods.
+/// The editor demo. Its commands are registered in the "Editor" group with [property: Keybinding] on [RelayCommand]
+/// methods; they run while the focus is inside the editor's KeybindingHandler.
 /// </summary>
 public partial class EditorScopeViewModel : ObservableObject
 {
+    private const string SampleText = "The quick brown fox jumps over the lazy dog.";
+
     [ObservableProperty]
-    private string _documentText = "The quick brown fox jumps over the lazy dog. Atelier provides declarative keyboard shortcuts with compile-time source generation.";
+    private string _documentText = SampleText;
 
     [ObservableProperty]
     private bool _isBold;
@@ -51,23 +38,16 @@ public partial class EditorScopeViewModel : ObservableObject
     private bool _isItalic;
 
     [ObservableProperty]
-    private bool _isUppercase;
-
-    [ObservableProperty]
     private int _saveCount;
 
-    [ObservableProperty]
-    private string _lastActionStatus = "Ready. Focus this editor and press Ctrl+S, Ctrl+B, Ctrl+I, Ctrl+K, or Ctrl+U.";
-
-    public event Action<string, string, string, string>? ActionLogged;
+    public event Action<string, string>? ActionLogged;
 
     [RelayCommand]
     [property: Keybinding("SaveDocument", "Editor", "Ctrl+S")]
     private void SaveDocument()
     {
         SaveCount++;
-        LastActionStatus = $"Document saved successfully (Save #{SaveCount}) at {DateTime.Now:HH:mm:ss}!";
-        ActionLogged?.Invoke("Editor", "Ctrl+S", "SaveDocument", nameof(EditorScopeViewModel));
+        ActionLogged?.Invoke("Ctrl+S", $"Saved (#{SaveCount})");
     }
 
     [RelayCommand]
@@ -75,8 +55,7 @@ public partial class EditorScopeViewModel : ObservableObject
     private void ToggleBold()
     {
         IsBold = !IsBold;
-        LastActionStatus = $"Bold formatting {(IsBold ? "ENABLED" : "disabled")}.";
-        ActionLogged?.Invoke("Editor", "Ctrl+B", "ToggleBold", nameof(EditorScopeViewModel));
+        ActionLogged?.Invoke("Ctrl+B", IsBold ? "Bold on" : "Bold off");
     }
 
     [RelayCommand]
@@ -84,85 +63,72 @@ public partial class EditorScopeViewModel : ObservableObject
     private void ToggleItalic()
     {
         IsItalic = !IsItalic;
-        LastActionStatus = $"Italic formatting {(IsItalic ? "ENABLED" : "disabled")}.";
-        ActionLogged?.Invoke("Editor", "Ctrl+I", "ToggleItalic", nameof(EditorScopeViewModel));
+        ActionLogged?.Invoke("Ctrl+I", IsItalic ? "Italic on" : "Italic off");
     }
 
     [RelayCommand]
-    [property: Keybinding("ClearDocument", "Editor", "Ctrl+K")]
+    [property: Keybinding("ClearDocument", "Editor", "Ctrl+Shift+K")]
     private void ClearDocument()
     {
         DocumentText = string.Empty;
-        LastActionStatus = "Document text cleared (Ctrl+K).";
-        ActionLogged?.Invoke("Editor", "Ctrl+K", "ClearDocument", nameof(EditorScopeViewModel));
+        ActionLogged?.Invoke("Ctrl+Shift+K", "Cleared the text");
     }
 
     [RelayCommand]
-    [property: Keybinding("ToggleCase", "Editor", "Ctrl+U")]
-    private void ToggleCase()
+    [property: Keybinding("UpperCase", "Editor", "Ctrl+K, Ctrl+U")]
+    private void UpperCase()
     {
-        IsUppercase = !IsUppercase;
-        if (!string.IsNullOrEmpty(DocumentText))
-        {
-            DocumentText = IsUppercase ? DocumentText.ToUpperInvariant() : DocumentText.ToLowerInvariant();
-        }
-        LastActionStatus = $"Case converted to {(IsUppercase ? "UPPERCASE" : "lowercase")}.";
-        ActionLogged?.Invoke("Editor", "Ctrl+U", "ToggleCase", nameof(EditorScopeViewModel));
+        DocumentText = DocumentText.ToUpperInvariant();
+        ActionLogged?.Invoke("Ctrl+K, Ctrl+U", "Converted to upper case (chord)");
+    }
+
+    [RelayCommand]
+    [property: Keybinding("LowerCase", "Editor", "Ctrl+K, Ctrl+L")]
+    private void LowerCase()
+    {
+        DocumentText = DocumentText.ToLowerInvariant();
+        ActionLogged?.Invoke("Ctrl+K, Ctrl+L", "Converted to lower case (chord)");
     }
 
     public void Reset()
     {
-        DocumentText = "The quick brown fox jumps over the lazy dog. Atelier provides declarative keyboard shortcuts with compile-time source generation.";
+        DocumentText = SampleText;
         IsBold = false;
         IsItalic = false;
-        IsUppercase = false;
         SaveCount = 0;
-        LastActionStatus = "Editor scope reset to initial state.";
     }
 }
 
 /// <summary>
-/// Scoped ViewModel for the Media Player demo panel.
-/// Demonstrates single-key and arrow-key gestures ([Space], [R], [M], [Left], [Right]).
+/// The media player demo: single keys ("Space", "R", "M", arrows) in the "Player" group. They only run while the player
+/// has the focus, so typing a space in the editor never toggles playback.
 /// </summary>
 public partial class PlayerScopeViewModel : ObservableObject
 {
     [ObservableProperty]
-    private bool _isPlaying;
-
-    [ObservableProperty]
-    private string _trackTitle = "Symphony No. 5 in C Minor, Op. 67";
-
-    [ObservableProperty]
-    private string _artist = "Ludwig van Beethoven";
-
-    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PositionDisplay), nameof(Progress))]
     private float _positionSeconds = 84f;
 
     [ObservableProperty]
-    private float _durationSeconds = 240f;
+    private bool _isPlaying;
 
     [ObservableProperty]
     private bool _isMuted;
 
-    [ObservableProperty]
-    private string _statusMessage = "Paused at 01:24. Focus this player and press Space, Left, Right, R, or M.";
+    public float DurationSeconds => 240f;
 
-    public string PositionDisplay => $"{TimeSpan.FromSeconds(PositionSeconds):mm\\:ss} / {TimeSpan.FromSeconds(DurationSeconds):mm\\:ss}";
+    public string PositionDisplay => $"{TimeSpan.FromSeconds(PositionSeconds):m\\:ss} / {TimeSpan.FromSeconds(DurationSeconds):m\\:ss}";
 
-    public float ProgressFraction => DurationSeconds > 0 ? Math.Clamp(PositionSeconds / DurationSeconds, 0f, 1f) : 0f;
+    public float Progress => PositionSeconds / DurationSeconds * 100f;
 
-    public event Action<string, string, string, string>? ActionLogged;
+    public event Action<string, string>? ActionLogged;
 
     [RelayCommand]
     [property: Keybinding("TogglePlay", "Player", "Space")]
     private void TogglePlay()
     {
         IsPlaying = !IsPlaying;
-        StatusMessage = IsPlaying ? "▶ Playing track..." : "⏸ Paused playback";
-        OnPropertyChanged(nameof(PositionDisplay));
-        OnPropertyChanged(nameof(ProgressFraction));
-        ActionLogged?.Invoke("Player", "Space", "TogglePlay", nameof(PlayerScopeViewModel));
+        ActionLogged?.Invoke("Space", IsPlaying ? "Play" : "Pause");
     }
 
     [RelayCommand]
@@ -171,10 +137,7 @@ public partial class PlayerScopeViewModel : ObservableObject
     {
         PositionSeconds = 0f;
         IsPlaying = false;
-        StatusMessage = "⏹ Stopped & reset track to start";
-        OnPropertyChanged(nameof(PositionDisplay));
-        OnPropertyChanged(nameof(ProgressFraction));
-        ActionLogged?.Invoke("Player", "R", "ResetTrack", nameof(PlayerScopeViewModel));
+        ActionLogged?.Invoke("R", "Back to the start");
     }
 
     [RelayCommand]
@@ -182,10 +145,7 @@ public partial class PlayerScopeViewModel : ObservableObject
     private void SeekBack()
     {
         PositionSeconds = MathF.Max(0f, PositionSeconds - 5f);
-        StatusMessage = $"⏪ Seek -5s ({TimeSpan.FromSeconds(PositionSeconds):mm\\:ss})";
-        OnPropertyChanged(nameof(PositionDisplay));
-        OnPropertyChanged(nameof(ProgressFraction));
-        ActionLogged?.Invoke("Player", "Left", "SeekBack", nameof(PlayerScopeViewModel));
+        ActionLogged?.Invoke("Left", "Back 5 s");
     }
 
     [RelayCommand]
@@ -193,10 +153,7 @@ public partial class PlayerScopeViewModel : ObservableObject
     private void SeekForward()
     {
         PositionSeconds = MathF.Min(DurationSeconds, PositionSeconds + 5f);
-        StatusMessage = $"⏩ Seek +5s ({TimeSpan.FromSeconds(PositionSeconds):mm\\:ss})";
-        OnPropertyChanged(nameof(PositionDisplay));
-        OnPropertyChanged(nameof(ProgressFraction));
-        ActionLogged?.Invoke("Player", "Right", "SeekForward", nameof(PlayerScopeViewModel));
+        ActionLogged?.Invoke("Right", "Forward 5 s");
     }
 
     [RelayCommand]
@@ -204,170 +161,94 @@ public partial class PlayerScopeViewModel : ObservableObject
     private void ToggleMute()
     {
         IsMuted = !IsMuted;
-        StatusMessage = IsMuted ? "🔇 Audio Muted" : "🔊 Audio Unmuted";
-        ActionLogged?.Invoke("Player", "M", "ToggleMute", nameof(PlayerScopeViewModel));
+        ActionLogged?.Invoke("M", IsMuted ? "Muted" : "Unmuted");
     }
 
     public void Reset()
     {
-        IsPlaying = false;
         PositionSeconds = 84f;
+        IsPlaying = false;
         IsMuted = false;
-        StatusMessage = "Player scope reset to initial state.";
-        OnPropertyChanged(nameof(PositionDisplay));
-        OnPropertyChanged(nameof(ProgressFraction));
     }
 }
 
-/// <summary>
-/// Main ViewModel for the Keybindings showcase gallery page.
-/// Manages child scopes (EditorScope, PlayerScope), global bubbling commands (F5, Ctrl+Shift+L),
-/// keystroke probe analysis, and live activity logging.
-/// </summary>
 public partial class KeybindingViewModel : PageViewModel
 {
-    [ObservableProperty]
-    private EditorScopeViewModel _editorScope;
+    public EditorScopeViewModel Editor { get; } = new();
+
+    public PlayerScopeViewModel Player { get; } = new();
+
+    /// <summary>Executed keybindings, newest first.</summary>
+    public ObservableCollection<string> Log { get; } = [];
 
     [ObservableProperty]
-    private PlayerScopeViewModel _playerScope;
+    private string _pendingChord = "none";
 
     [ObservableProperty]
-    private ObservableCollection<KeybindingLogEntry> _logs = new();
-
-    // Keystroke Probe State
-    [ObservableProperty]
-    private string _probeKey = "None";
+    private float _chordTimeoutSeconds = (float)KeybindingHandler.ChordTimeout.TotalSeconds;
 
     [ObservableProperty]
-    private string _probeModifiers = "None";
+    private string _probeGesture = "Click the box and press keys";
 
     [ObservableProperty]
-    private string _probeGesture = "Press any key in tester";
-
-    [ObservableProperty]
-    private string _probeScope = "Waiting for input";
-
-    [ObservableProperty]
-    private string _probeMatchedCommand = "None";
-
-    [ObservableProperty]
-    private string _helpBannerMessage = "Press F1 for keyboard shortcuts help, or F5 to reset all panels.";
+    private string _probeMatch = "—";
 
     public KeybindingViewModel()
     {
         PageTitle = "Keybindings";
         PageIcon = MaterialIconKind.Keyboard;
+        Keywords = "keybinding keyboard shortcut hotkey chord gesture keybindinghandler";
 
-        _editorScope = new EditorScopeViewModel();
-        _playerScope = new PlayerScopeViewModel();
+        Editor.ActionLogged += (gesture, action) => Add("Editor", gesture, action);
+        Player.ActionLogged += (gesture, action) => Add("Player", gesture, action);
+        ShowShortcutsHelpCommand.HelpRequested += () => Add("Global", "F1", "Help requested (command class)");
+        Add("Page", "—", "Ready: waiting for a shortcut");
+    }
 
-        _editorScope.ActionLogged += (group, gesture, cmd, target) => LogAction(group, gesture, cmd, target, "Handled (Local Scope)");
-        _playerScope.ActionLogged += (group, gesture, cmd, target) => LogAction(group, gesture, cmd, target, "Handled (Local Scope)");
+    // ChordTimeout is a static setting shared by all KeybindingHandlers.
+    partial void OnChordTimeoutSecondsChanged(float value) => KeybindingHandler.ChordTimeout = TimeSpan.FromSeconds(value);
 
-        ShowShortcutsHelpCommand.HelpRequested += () =>
-        {
-            HelpBannerMessage = $"[F1 Help] Editor: Ctrl+S (Save), Ctrl+B (Bold), Ctrl+I (Italic), Ctrl+K (Clear), Ctrl+U (Case) | Player: Space (Play/Pause), R (Reset), Left/Right (Seek), M (Mute) | Global: F5 (Reset All), Ctrl+Shift+L (Clear Logs) [{DateTime.Now:HH:mm:ss}]";
-            LogAction("Global", "F1", "ShowHelp", nameof(ShowShortcutsHelpCommand), "Handled (Class Keybinding)");
-        };
-
-        // Seed initial log
-        LogAction("System", "Init", "RegisterKeybindings", "GeneratedKeybindings", "Active & Listening");
+    [RelayCommand]
+    [property: Keybinding("ResetDemos", "Global", "F5")]
+    private void ResetDemos()
+    {
+        Editor.Reset();
+        Player.Reset();
+        Add("Global", "F5", "Reset the demos");
     }
 
     [RelayCommand]
-    [property: Keybinding("ResetAllDemos", "Global", "F5")]
-    private void ResetAllDemos()
+    [property: Keybinding("ClearLog", "Global", "Ctrl+Shift+L")]
+    private void ClearLog() => Log.Clear();
+
+    public void Add(string group, string gesture, string action)
     {
-        EditorScope.Reset();
-        PlayerScope.Reset();
-        HelpBannerMessage = "All demo panels have been reset to defaults (F5 pressed).";
-        LogAction("Global", "F5", "ResetAllDemos", nameof(KeybindingViewModel), "Handled (Global Bubble)");
-    }
-
-    [RelayCommand]
-    [property: Keybinding("ClearLogs", "Global", "Ctrl+Shift+L")]
-    private void ClearLogs()
-    {
-        Logs.Clear();
-        LogAction("Global", "Ctrl+Shift+L", "ClearLogs", nameof(KeybindingViewModel), "Logs Cleared");
-    }
-
-    public void LogAction(string group, string gesture, string command, string target, string status = "Success")
-    {
-        var entry = new KeybindingLogEntry
+        Log.Insert(0, $"{DateTime.Now:HH:mm:ss}  {group,-6}  {gesture,-14}  {action}");
+        while (Log.Count > 10)
         {
-            Time = DateTime.Now.ToString("HH:mm:ss"),
-            Group = group,
-            Gesture = gesture,
-            Command = command,
-            Target = target,
-            Status = status
-        };
-
-        if (Logs.Count >= 40)
-        {
-            Logs.RemoveAt(Logs.Count - 1);
-        }
-        Logs.Insert(0, entry);
-    }
-
-    public void UpdateProbe(Key key, ModifierKeys modifiers)
-    {
-        ProbeKey = key.ToString();
-        ProbeModifiers = modifiers == ModifierKeys.None ? "None" : modifiers.ToString();
-
-        var gesture = new KeybindingGesture(key, modifiers);
-        ProbeGesture = gesture.ToString();
-
-        // Check if any group matches
-        var editorMatch = KeybindingManager.FindKeybinding("Editor", key, modifiers);
-        var playerMatch = KeybindingManager.FindKeybinding("Player", key, modifiers);
-        var globalMatch = KeybindingManager.FindKeybinding("Global", key, modifiers);
-
-        if (editorMatch != null)
-        {
-            ProbeScope = "Editor Scope (Local)";
-            ProbeMatchedCommand = $"{editorMatch.Name} ({editorMatch.Keybinding})";
-        }
-        else if (playerMatch != null)
-        {
-            ProbeScope = "Player Scope (Local)";
-            ProbeMatchedCommand = $"{playerMatch.Name} ({playerMatch.Keybinding})";
-        }
-        else if (globalMatch != null)
-        {
-            ProbeScope = "Global Scope (Ancestral Bubble)";
-            ProbeMatchedCommand = $"{globalMatch.Name} ({globalMatch.Keybinding})";
-        }
-        else
-        {
-            ProbeScope = "Unhandled / Passthrough";
-            ProbeMatchedCommand = "None (will bubble to OS / Window)";
+            Log.RemoveAt(Log.Count - 1);
         }
     }
 
-    public void SimulateGesture(string group, Key key, ModifierKeys modifiers)
+    /// <summary>Shows which group, if any, has a keybinding for a key press.</summary>
+    public void Probe(Key key, ModifierKeys modifiers)
     {
-        UpdateProbe(key, modifiers);
-
-        object? target = group switch
+        var stroke = new KeybindingGesture(key, modifiers);
+        ProbeGesture = stroke.ToString();
+        foreach (string group in new[] { "Editor", "Player", "Global" })
         {
-            "Editor" => EditorScope,
-            "Player" => PlayerScope,
-            "Global" => this,
-            _ => null
-        };
-
-        bool executed = KeybindingManager.TryExecuteGesture(group, key, modifiers, target);
-        if (!executed && group != "Global")
-        {
-            // Bubble to global!
-            executed = KeybindingManager.TryExecuteGesture("Global", key, modifiers, this);
-            if (executed)
+            if (KeybindingManager.FindKeybinding(group, key, modifiers) is { } match)
             {
-                LogAction("Global", new KeybindingGesture(key, modifiers).ToString(), "BubbledToGlobal", nameof(KeybindingViewModel), "Bubbled Up Successfully");
+                ProbeMatch = $"{group}: {match.Name}";
+                return;
+            }
+
+            if (KeybindingManager.IsKeybindingPrefix(group, [stroke]))
+            {
+                ProbeMatch = $"{group}: starts a chord";
+                return;
             }
         }
+        ProbeMatch = "No keybinding (the key goes on to the focused control)";
     }
 }

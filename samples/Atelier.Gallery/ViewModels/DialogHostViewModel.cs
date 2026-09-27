@@ -1,5 +1,5 @@
 using System;
-using System.Threading.Tasks;
+using System.Collections.Generic;
 using Atelier.Controls;
 using Atelier.Core.Primitives;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -9,76 +9,106 @@ namespace Atelier.Gallery.ViewModels;
 
 public partial class DialogHostViewModel : PageViewModel
 {
-    [ObservableProperty]
-    private bool _isGlobalTarget = true;
+    private readonly List<string> _dialogEvents = [];
 
+    // Dialogs
     [ObservableProperty]
-    private bool _closeOnClickAway = true;
-
-    [ObservableProperty]
-    private float _overlayOpacity = 0.5f;
+    private string _lastResult = "No dialog closed yet";
 
     [ObservableProperty]
-    private int _localCardClickCount = 0;
+    private string _dialogEventTrail = "Open a dialog to see Opened → Closing → Closed";
 
     [ObservableProperty]
-    private string _interactionLog = "Ready. Select a dialog type and host scope to test modal hosting.";
+    private bool _closeOnEscape = true;
 
     [ObservableProperty]
-    private string _lastSubmittedFormResult = "No form submitted yet.";
+    private float _dialogElevation = 6;
 
     [ObservableProperty]
-    private bool _isLocalAutoSyncEnabled = true;
+    private string _projectName = string.Empty;
 
-    public string TargetHostName => IsGlobalTarget ? "Global App Window (RootHost)" : "Local Workspace Card (LocalGalleryHost)";
+    // Local dialog host
+    [ObservableProperty]
+    private bool _isLocalHostOpen;
 
-    public string TargetHostIdentifier => IsGlobalTarget ? "RootHost" : "LocalGalleryHost";
+    [ObservableProperty]
+    private bool _localCloseOnClickAway = true;
 
-    public Color CurrentOverlayColor => Color.FromArgb((byte)(OverlayOpacity * 255f), 0, 0, 0);
+    [ObservableProperty]
+    private float _localScrimOpacity = 0.32f;
+
+    [ObservableProperty]
+    private string _lastHostEvent = "No host events yet";
+
+    // Popups
+    [ObservableProperty]
+    private bool _isPlacementPopupOpen;
+
+    [ObservableProperty]
+    private PlacementMode _placement = PlacementMode.Bottom;
+
+    [ObservableProperty]
+    private float _horizontalOffset;
+
+    [ObservableProperty]
+    private float _verticalOffset = 4;
+
+    [ObservableProperty]
+    private bool _staysOpen;
+
+    [ObservableProperty]
+    private bool _matchTargetWidth;
+
+    [ObservableProperty]
+    private bool _showPopupBorder;
+
+    [ObservableProperty]
+    private float _popupElevation = 3;
+
+    [ObservableProperty]
+    private string _lastPopupEvent = "No popup events yet";
 
     public DialogHostViewModel()
     {
-        PageTitle = "Dialog Host";
+        PageTitle = "Popups & Dialogs";
         PageIcon = MaterialIconKind.WebAsset;
+        Keywords = "dialog dialoghost popup modal overlay flyout menu placement confirm alert";
     }
 
-    public void Log(string message)
-    {
-        string timestamp = DateTime.Now.ToString("HH:mm:ss");
-        InteractionLog = $"[{timestamp}] {message}";
-    }
+    public Color LocalScrimColor => Color.Black.WithAlpha(LocalScrimOpacity);
 
-    [RelayCommand]
-    private void IncrementLocalCardClicks()
-    {
-        LocalCardClickCount++;
-        Log($"Local card button clicked! Total clicks: {LocalCardClickCount}.");
-    }
+    partial void OnLocalScrimOpacityChanged(float value) => OnPropertyChanged(nameof(LocalScrimColor));
 
-    [RelayCommand]
-    private void SetOpacity25()
+    /// <summary>Records a dialog lifecycle event; the trail shows the events of the current dialog in order.</summary>
+    public void DialogEvent(string name, bool first = false)
     {
-        OverlayOpacity = 0.25f;
-        Log("Overlay scrim darkness set to 25% (Light).");
+        if (first)
+        {
+            _dialogEvents.Clear();
+        }
+        _dialogEvents.Add(name);
+        DialogEventTrail = string.Join(" → ", _dialogEvents);
     }
 
     [RelayCommand]
-    private void SetOpacity50()
-    {
-        OverlayOpacity = 0.50f;
-        Log("Overlay scrim darkness set to 50% (Standard MD3).");
-    }
+    private void ToggleLocalHost() => IsLocalHostOpen = !IsLocalHostOpen;
 
     [RelayCommand]
-    private void SetOpacity75()
-    {
-        OverlayOpacity = 0.75f;
-        Log("Overlay scrim darkness set to 75% (Deep Focus).");
-    }
+    private void TogglePlacementPopup() => IsPlacementPopupOpen = !IsPlacementPopupOpen;
 
     [RelayCommand]
-    private void ClearLog()
+    private void Reset()
     {
-        InteractionLog = "Log cleared.";
+        CloseOnEscape = true;
+        DialogElevation = 6;
+        LocalCloseOnClickAway = true;
+        LocalScrimOpacity = 0.32f;
+        Placement = PlacementMode.Bottom;
+        HorizontalOffset = 0;
+        VerticalOffset = 4;
+        StaysOpen = false;
+        MatchTargetWidth = false;
+        ShowPopupBorder = false;
+        PopupElevation = 3;
     }
 }
