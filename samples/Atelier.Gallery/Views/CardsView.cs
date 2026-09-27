@@ -1,441 +1,182 @@
-using System;
 using Atelier.Controls;
-using Atelier.Core.Events;
 using Atelier.Core.Primitives;
 using Atelier.Core.Tree;
+using Atelier.Gallery.Infrastructure;
+using Atelier.Gallery.ViewModels;
 using Atelier.Layout;
 using Atelier.Markup;
-using Atelier.Theming;
-using Atelier.Gallery.ViewModels;
 
 namespace Atelier.Gallery.Views;
 
-public class CardsView : Grid
+public class CardsView : GalleryPage
 {
-    private readonly CardsViewModel _viewModel;
-    private readonly ScrollViewer _scrollViewer;
-
-    public CardsView() : this(new CardsViewModel())
-    {
-    }
+    private readonly CardsViewModel _vm;
 
     public CardsView(CardsViewModel viewModel)
+        : base(MaterialIconKind.Dashboard, "Cards",
+            "Cards group related content and actions on a surface. The variant sets the look; elevation, corner radius, " +
+            "padding and colors can be changed per card. A Card is a Border, so everything shown here works on borders too.")
     {
-        _viewModel = viewModel;
-        DataContext = _viewModel;
+        _vm = viewModel;
 
-        this.Rows(GridLength.Auto, GridLength.Star);
-        this.RowSpacing(16);
+        Settings(new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
-        // 1. Master Controls & Quick Actions Banner (Fixed, Non-Scrolling Header)
-        this.Add(CreateMasterBanner().Row(0));
-
-        // 2. Scrollable Showcase Cards Container
-        var cardsStack = new StackPanel
-        {
-            Orientation = Orientation.Vertical,
-            Spacing = 16
-        }.Children(
-            CreateVariantsComparisonCard(),
-            CreateRichMediaCards(),
-            CreatePlaygroundCard()
-        );
-
-        cardsStack.Margin = new Thickness(0, 0, 10, 20);
-
-        _scrollViewer = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = cardsStack
-        }.Row(1);
-
-        this.Add(_scrollViewer);
+        Sections(VariantsSection(), CustomizationSection(), MediaSection(), InteractiveSection(), PlaygroundSection(), BorderSection());
     }
 
-    public override void OnPointerWheel(PointerWheelEventArgs e)
-    {
-        base.OnPointerWheel(e);
-        if (!e.Handled && _scrollViewer != null)
-        {
-            _scrollViewer.OnPointerWheel(e);
-        }
-    }
+    private UIElement VariantsSection() => Ui.Section("Variants",
+        "Material 3 defines three card styles. Outlined cards separate content with a border, elevated cards with a shadow " +
+        "and filled cards with a tinted surface.",
+        Ui.Columns(220,
+            VariantCard(CardVariant.Outlined, MaterialIconKind.CropSquare, "Outlined", "A surface with an outline and no shadow."),
+            VariantCard(CardVariant.Elevated, MaterialIconKind.Layers, "Elevated", "A low surface container with a shadow."),
+            VariantCard(CardVariant.Filled, MaterialIconKind.FormatColorFill, "Filled", "The highest surface container, no outline.")),
+        Ui.Code("new Card(CardVariant.Elevated).Child(content)   // 16 px padding and 12 px corners by default"));
 
-    private UIElement CreateMasterBanner()
-    {
-        var card = new Card(CardVariant.Filled)
-            .Padding(20)
-            .CornerRadius(14);
+    private static Card VariantCard(CardVariant variant, MaterialIconKind icon, string title, string text) =>
+        new Card(variant).Child(new StackPanel().Spacing(8).Children(
+            new Icon(icon, 24).HorizontalAlignment(HorizontalAlignment.Left).Themed(Control.ForegroundProperty, c => c.Primary),
+            new TextBlock(title).TitleMedium(),
+            new TextBlock(text).BodyMedium().Muted().TextWrapping()));
 
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
+    private UIElement CustomizationSection() => Ui.Section("Elevation, shape and color",
+        "Elevation adds a shadow to any variant. Corner radius, background, border brush and border thickness override the " +
+        "variant's values.",
+        Ui.Demo("Elevation",
+            Ui.Row(
+                SampleCard(CardVariant.Outlined, "Elevation 0"),
+                SampleCard(CardVariant.Outlined, "Elevation 1").Elevation(1),
+                SampleCard(CardVariant.Outlined, "Elevation 3").Elevation(3),
+                SampleCard(CardVariant.Outlined, "Elevation 6").Elevation(6))),
+        Ui.Demo("Corner radius",
+            Ui.Row(
+                SampleCard(CardVariant.Filled, "0 px").CornerRadius(0),
+                SampleCard(CardVariant.Filled, "12 px (default)"),
+                SampleCard(CardVariant.Filled, "28 px").CornerRadius(28),
+                SampleCard(CardVariant.Filled, "Per corner").CornerRadius(24, 4, 24, 4))),
+        Ui.Demo("Colors and borders",
+            Ui.Row(
+                SampleCard(CardVariant.Filled, "Primary container")
+                    .Themed(Border.BackgroundProperty, c => c.PrimaryContainer),
+                SampleCard(CardVariant.Filled, "Tertiary container")
+                    .Themed(Border.BackgroundProperty, c => c.TertiaryContainer),
+                SampleCard(CardVariant.Outlined, "Primary outline, 2 px")
+                    .BorderThickness(2)
+                    .Themed(Border.BorderBrushProperty, c => c.Primary),
+                SampleCard(CardVariant.Outlined, "Left accent bar")
+                    .BorderThickness(new Thickness(6, 1, 1, 1))
+                    .Themed(Border.BorderBrushProperty, c => c.Tertiary))));
 
-        // Header text
-        stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
-            .Children(
-                new TextBlock("Cards (Material Design 3)").TitleLarge(),
-                new TextBlock("Cards contain content and actions about a single subject. MD3 defines three core variants: Elevated, Filled, and Outlined.")
-                    .Subtext()
-            )
-        );
+    private static Card SampleCard(CardVariant variant, string text) =>
+        new Card(variant).Width(170).Height(88).Child(new TextBlock(text).BodyMedium().TextWrapping());
 
-        // Quick action row
-        var actionRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Button("Reset Playground")
-                    .Variant(ButtonVariant.Tonal)
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ResetPlaygroundCommand),
+    private UIElement MediaSection() => Ui.Section("Media and clipping",
+        "Cards clip their content to their rounded shape (ClipToBounds is on by default), so with no padding, images and " +
+        "headers can reach the edges.",
+        Ui.Columns(260,
+            MediaCard("Clipped (default)", "The image follows the rounded corners.", clip: true),
+            MediaCard("ClipToBounds(false)", "Without clipping, the image corners stick out.", clip: false),
+            new Card(CardVariant.Outlined).Padding(0).Child(new StackPanel().Children(
+                new Border()
+                    .Height(72)
+                    .Padding(16)
+                    .Themed(Border.BackgroundProperty, c => c.SecondaryContainer)
+                    .Child(new TextBlock("Header band").TitleMedium().VerticalAlignment(VerticalAlignment.Center)
+                        .Themed(TextBlock.ForegroundProperty, c => c.OnSecondaryContainer)),
+                new TextBlock("A colored header that follows the card's top corners.")
+                    .BodyMedium().Muted().TextWrapping().Margin(16)))));
 
-                new Button("Clear Counters")
-                    .Variant(ButtonVariant.Outlined)
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ClearInteractionsCommand)
-            );
-
-        stack.Add(actionRow);
-        card.Child = stack;
-        return card;
-    }
-
-    private UIElement CreateVariantsComparisonCard()
-    {
-        var grid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star, GridLength.Star)
-            .ColumnSpacing(16);
-
-        // 1. Elevated Card
-        var elevatedCard = new Card(CardVariant.Elevated)
-            .Elevation(2f)
-            .CornerRadius(12)
-            .Padding(18)
-            .MinHeight(200)
-            .Child(
-                new Grid()
-                    .Rows(GridLength.Auto, GridLength.Star, GridLength.Auto)
-                    .RowSpacing(14)
-                    .Children(
-                        new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                            .Children(
-                                new Icon(MaterialIconKind.Layers, 24) { Foreground = Color.FromHex("#6750A4"), VerticalAlignment = VerticalAlignment.Center },
-                                new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-                                    .Children(
-                                        new TextBlock("Elevated Card").TitleMedium(),
-                                        new TextBlock("SurfaceContainerLow • 2dp Shadow").Caption()
-                                    )
-                            ).Row(0),
-                        new TextBlock("Elevated cards have a subtle drop shadow and container fill for clear separation against flat surfaces and busy backgrounds.")
-                            .Subtext()
-                            .TextWrapping(TextWrapping.Wrap)
-                            .Row(1),
-                        new Button("Elevated Action")
-                            .Variant(ButtonVariant.Filled)
-                            .HorizontalAlignment(HorizontalAlignment.Left)
-                            .Row(2)
-                    )
-            ).Column(0);
-
-        // 2. Filled Card
-        var filledCard = new Card(CardVariant.Filled)
-            .CornerRadius(12)
-            .Padding(18)
-            .MinHeight(200)
-            .Child(
-                new Grid()
-                    .Rows(GridLength.Auto, GridLength.Star, GridLength.Auto)
-                    .RowSpacing(14)
-                    .Children(
-                        new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                            .Children(
-                                new Icon(MaterialIconKind.Dashboard, 24) { Foreground = Color.FromHex("#7D5260"), VerticalAlignment = VerticalAlignment.Center },
-                                new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-                                    .Children(
-                                        new TextBlock("Filled Card").TitleMedium(),
-                                        new TextBlock("SurfaceContainerHighest • No Shadow").Caption()
-                                    )
-                            ).Row(0),
-                        new TextBlock("Filled cards use distinct container fill color without casting a shadow, offering visual containment on light or dark pages.")
-                            .Subtext()
-                            .TextWrapping(TextWrapping.Wrap)
-                            .Row(1),
-                        new Button("Filled Action")
-                            .Variant(ButtonVariant.Tonal)
-                            .HorizontalAlignment(HorizontalAlignment.Left)
-                            .Row(2)
-                    )
-            ).Column(1);
-
-        // 3. Outlined Card
-        var outlinedCard = new Card(CardVariant.Outlined)
-            .CornerRadius(12)
-            .Padding(18)
-            .MinHeight(200)
-            .Child(
-                new Grid()
-                    .Rows(GridLength.Auto, GridLength.Star, GridLength.Auto)
-                    .RowSpacing(14)
-                    .Children(
-                        new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                            .Children(
-                                new Icon(MaterialIconKind.CropSquare, 24) { Foreground = Color.FromHex("#2E7D32"), VerticalAlignment = VerticalAlignment.Center },
-                                new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-                                    .Children(
-                                        new TextBlock("Outlined Card").TitleMedium(),
-                                        new TextBlock("Surface • 1dp OutlineVariant").Caption()
-                                    )
-                            ).Row(0),
-                        new TextBlock("Outlined cards feature a clean border outline on the standard surface color, providing boundary separation with minimal visual weight.")
-                            .Subtext()
-                            .TextWrapping(TextWrapping.Wrap)
-                            .Row(1),
-                        new Button("Outlined Action")
-                            .Variant(ButtonVariant.Outlined)
-                            .HorizontalAlignment(HorizontalAlignment.Left)
-                            .Row(2)
-                    )
-            ).Column(2);
-
-        grid.Add(elevatedCard);
-        grid.Add(filledCard);
-        grid.Add(outlinedCard);
-
-        return CreateSectionCard(
-            "Material Design 3 Card Variants",
-            "Direct side-by-side comparison of the three Material Design 3 card specifications.",
-            grid
-        );
-    }
-
-    private UIElement CreateRichMediaCards()
-    {
-        var grid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star)
-            .ColumnSpacing(16);
-
-        // Card 1: Product / Media Banner Card
-        var mediaCard = new Card(CardVariant.Filled)
-            .CornerRadius(14)
-            .Padding(20)
-            .MinHeight(220)
-            .Child(
-                new Grid()
-                    .Rows(GridLength.Auto, GridLength.Star, GridLength.Auto)
-                    .RowSpacing(14)
-                    .Children(
-                        new Card(CardVariant.Outlined)
-                            .Padding(12)
-                            .CornerRadius(8)
-                            .Child(
-                                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                                    .Children(
-                                        new Icon(MaterialIconKind.Palette, 28) { Foreground = Color.FromHex("#1E88E5"), VerticalAlignment = VerticalAlignment.Center },
-                                        new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-                                            .Children(
-                                                new TextBlock("FEATURED FRAMEWORK RELEASE").LabelSmall().Foreground(Color.FromHex("#1E88E5")),
-                                                new TextBlock("Atelier UI Studio v2.5").TitleMedium()
-                                            )
-                                    )
-                            ).Row(0),
-                        new TextBlock("High-performance cross-platform desktop UI framework with hardware-accelerated SkiaSharp rendering, sub-pixel animation, and complete Material Design 3 tokens.")
-                            .Subtext()
-                            .TextWrapping(TextWrapping.Wrap)
-                            .Row(1),
-                        new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                            .Children(
-                                new Button("Explore Studio")
-                                    .Variant(ButtonVariant.Filled)
-                                    .VerticalAlignment(VerticalAlignment.Center),
-                                new Button()
-                                    .Variant(ButtonVariant.Outlined)
-                                    .VerticalAlignment(VerticalAlignment.Center)
-                                    .Command(_viewModel.ToggleFavoriteCommand)
-                                    .Content(
-                                        new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-                                            .Children(
-                                                new Icon()
-                                                    .BindKind(_viewModel, x => x.FavoriteSelected ? MaterialIconKind.Bookmark : MaterialIconKind.BookmarkBorder)
-                                                    .BindForeground(_viewModel, x => x.FavoriteSelected ? Color.FromHex("#FFB300") : Color.FromHex("#757575")),
-                                                new TextBlock()
-                                                    .LabelMedium()
-                                                    .BindText(_viewModel, x => x.FavoriteSelected ? "Saved" : "Save")
-                                            )
-                                    )
-                            ).Row(2)
-                    )
-            ).Column(0);
-
-        // Card 2: Interactive Controls & Embedded Settings Card
-        var controlsCard = new Card(CardVariant.Elevated)
-            .Elevation(2f)
-            .CornerRadius(14)
-            .Padding(20)
-            .MinHeight(220)
-            .Child(
-                new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 }
-                    .Children(
-                        new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-                            .Children(
-                                new Icon(MaterialIconKind.Tune, 24) { Foreground = Color.FromHex("#E65100"), VerticalAlignment = VerticalAlignment.Center },
-                                new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-                                    .Children(
-                                        new TextBlock("Embedded Interactive Controls").TitleMedium(),
-                                        new TextBlock("Cards can host switches, text fields, and buttons.").Caption()
-                                    )
-                            ),
-                        new Switch("Card Notifications")
-                            .ShowThumbIcon()
-                            .BindIsChecked(_viewModel, x => x.NotificationsCardEnabled, (vm, v) => vm.NotificationsCardEnabled = v),
-
-                        new TextBox("Notes inside card...")
-                            .Variant(TextBoxVariant.Outlined)
-                            .Label("Card Annotation")
-                            .Placeholder("Enter notes..."),
-
-                        new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center }
-                            .Children(
-                                new Button("Tap Card Action")
-                                    .Variant(ButtonVariant.Tonal)
-                                    .VerticalAlignment(VerticalAlignment.Center)
-                                    .Command(_viewModel.CardClickCommand),
-
-                                new Card(CardVariant.Filled)
-                                    .Padding(10, 4)
-                                    .CornerRadius(6)
-                                    .VerticalAlignment(VerticalAlignment.Center)
-                                    .Child(
-                                        new TextBlock()
-                                            .LabelSmall()
-                                            .BindText(_viewModel, x => $"Interactions: {x.InteractiveCardClickCount} taps")
-                                    )
-                            )
-                    )
-            ).Column(1);
-
-        grid.Add(mediaCard);
-        grid.Add(controlsCard);
-
-        return CreateSectionCard(
-            "Rich Content & Interactive Cards",
-            "Cards hosting complex composite layouts, media headers, embedded inputs, and action buttons.",
-            grid
-        );
-    }
-
-    private UIElement CreatePlaygroundCard()
-    {
-        var grid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star)
-            .ColumnSpacing(20);
-
-        // Left Panel: Controls Customizer
-        var controlsStack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        // 1. Variant selection
-        controlsStack.Add(new TextBlock("Card Variant").TitleSmall());
-        var variantStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new RadioButton("Elevated")
-                    .GroupName("PlaygroundVariant")
-                    .BindIsChecked(_viewModel, x => x.PlaygroundVariant, (vm, v) => vm.PlaygroundVariant = v, CardVariant.Elevated),
-                new RadioButton("Filled")
-                    .GroupName("PlaygroundVariant")
-                    .BindIsChecked(_viewModel, x => x.PlaygroundVariant, (vm, v) => vm.PlaygroundVariant = v, CardVariant.Filled),
-                new RadioButton("Outlined")
-                    .GroupName("PlaygroundVariant")
-                    .BindIsChecked(_viewModel, x => x.PlaygroundVariant, (vm, v) => vm.PlaygroundVariant = v, CardVariant.Outlined)
-            );
-        controlsStack.Add(variantStack);
-
-        // 2. Elevation slider
-        controlsStack.Add(
-            new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
-                .Children(
-                    new TextBlock().LabelMedium().BindText(_viewModel, x => $"Elevation: {x.PlaygroundElevation:F0}dp"),
-                    new Slider()
-                        .Minimum(0f)
-                        .Maximum(8f)
-                        .BindValue(_viewModel, x => x.PlaygroundElevation, (vm, v) => vm.PlaygroundElevation = v)
-                )
-        );
-
-        // 3. Corner Radius slider
-        controlsStack.Add(
-            new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
-                .Children(
-                    new TextBlock().LabelMedium().BindText(_viewModel, x => $"Corner Radius: {x.PlaygroundCornerRadius:F0}dp"),
-                    new Slider()
-                        .Minimum(0f)
-                        .Maximum(28f)
-                        .BindValue(_viewModel, x => x.PlaygroundCornerRadius, (vm, v) => vm.PlaygroundCornerRadius = v)
-                )
-        );
-
-        // 4. Padding slider
-        controlsStack.Add(
-            new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
-                .Children(
-                    new TextBlock().LabelMedium().BindText(_viewModel, x => $"Padding: {x.PlaygroundPadding:F0}dp"),
-                    new Slider()
-                        .Minimum(8f)
-                        .Maximum(36f)
-                        .BindValue(_viewModel, x => x.PlaygroundPadding, (vm, v) => vm.PlaygroundPadding = v)
-                )
-        );
-
-        // Right Panel: Live Card Preview
-        var previewCard = new Card()
-            .BindVariant(_viewModel, x => x.PlaygroundVariant)
-            .BindElevation(_viewModel, x => x.PlaygroundElevation)
-            .BindCornerRadius(_viewModel, x => x.PlaygroundCornerRadius)
-            .BindPadding(_viewModel, x => x.PlaygroundPadding)
-            .VerticalAlignment(VerticalAlignment.Center)
-            .Child(
-                new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
-                    .Children(
-                        new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-                            .Children(
-                                new Icon(MaterialIconKind.AutoAwesome, 22) { Foreground = Color.FromHex("#6750A4"), VerticalAlignment = VerticalAlignment.Center },
-                                new TextBlock("Live Card Preview").TitleMedium()
-                            ),
-                        new TextBlock()
-                            .Caption()
-                            .BindText(_viewModel, x => $"Variant: {x.PlaygroundVariant}  |  Elevation: {x.PlaygroundElevation:F0}dp"),
-                        new TextBlock()
-                            .Caption()
-                            .BindText(_viewModel, x => $"Corner Radius: {x.PlaygroundCornerRadius:F0}dp  |  Padding: {x.PlaygroundPadding:F0}dp"),
-                        new Button("Interactive Preview Action")
-                            .Variant(ButtonVariant.Filled)
-                            .HorizontalAlignment(HorizontalAlignment.Left)
-                    )
-            );
-
-        grid.Add(controlsStack.Column(0));
-        grid.Add(previewCard.Column(1));
-
-        return CreateSectionCard(
-            "Live Interactive Card Playground",
-            "Dynamically modify card variant, elevation, corner radius, and padding in real-time.",
-            grid
-        );
-    }
-
-    private static UIElement CreateSectionCard(string title, string description, UIElement content)
-    {
-        var card = new Card(CardVariant.Outlined)
-            .Padding(20)
-            .CornerRadius(12);
-
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-            .Children(
+    private static Card MediaCard(string title, string text, bool clip) =>
+        new Card(CardVariant.Elevated).Padding(0).CornerRadius(24).ClipToBounds(clip).Child(new StackPanel().Children(
+            new Image().Source(SampleImages.Logo).Stretch(Stretch.UniformToFill).Height(120),
+            new StackPanel().Spacing(4).Margin(16).Children(
                 new TextBlock(title).TitleMedium(),
-                new TextBlock(description).Subtext()
-            )
-        );
+                new TextBlock(text).BodyMedium().Muted().TextWrapping())));
 
-        stack.Add(content);
-        card.Child = stack;
-        return card;
-    }
+    private UIElement InteractiveSection() => Ui.Section("Interactive cards",
+        "Cards are regular elements: handle pointer events to make the whole card clickable, or place buttons inside for " +
+        "explicit actions.",
+        Ui.Columns(300,
+            Ui.Demo("Whole card clickable (pointer events)",
+                new Card(CardVariant.Filled)
+                    .OnPointerPressed((_, _) => _vm.CardClickCommand.Execute(null))
+                    .OnPointerEntered((_, _) => _vm.HoverState = "Pointer over the card")
+                    .OnPointerExited((_, _) => _vm.HoverState = "Pointer outside")
+                    .Child(new StackPanel().Spacing(8).Children(
+                        new StackPanel().Orientation(Orientation.Horizontal).Spacing(12).Children(
+                            new Icon(MaterialIconKind.TouchApp, 28).Themed(Control.ForegroundProperty, c => c.Primary),
+                            new TextBlock("Click anywhere on this card").TitleMedium().VerticalAlignment(VerticalAlignment.Center)),
+                        Ui.Row(
+                            Ui.Readout(_vm, v => $"Clicks = {v.CardClicks}"),
+                            Ui.Readout(_vm, v => v.HoverState))))),
+
+            Ui.Demo("Card with actions",
+                new Card(CardVariant.Outlined).Child(new StackPanel().Spacing(12).Children(
+                    new TextBlock("Mountain cabin").TitleMedium(),
+                    new TextBlock("Two nights, breakfast included. Free cancellation until Friday.").BodyMedium().Muted().TextWrapping(),
+                    Ui.Row(
+                        new Button("Book").Command(_vm.CardClickCommand),
+                        new Button()
+                            .Variant(ButtonVariant.Text)
+                            .Command(_vm.ToggleFavoriteCommand)
+                            .Content(new StackPanel().Orientation(Orientation.Horizontal).Spacing(8).Children(
+                                new Icon(MaterialIconKind.Favorite, 18)
+                                    .VerticalAlignment(VerticalAlignment.Center)
+                                    .BindFill(_vm, v => v.IsFavorite ? 1f : 0f),
+                                new TextBlock().VerticalAlignment(VerticalAlignment.Center)
+                                    .BindText(_vm, v => v.IsFavorite ? "Saved" : "Save")))))))));
+
+    private UIElement PlaygroundSection() => Ui.Section("Playground",
+        "Change the card's properties; the preview is bound to the same view model values.",
+        Ui.Columns(300,
+            Ui.Stack(
+                Ui.Labeled("Variant", Ui.Row(
+                    VariantOption("Outlined", CardVariant.Outlined),
+                    VariantOption("Elevated", CardVariant.Elevated),
+                    VariantOption("Filled", CardVariant.Filled))),
+                Ui.SliderSetting("Elevation", _vm, v => v.Elevation, (v, x) => v.Elevation = x, 0, 12),
+                Ui.SliderSetting("Corner radius", _vm, v => v.CornerRadius, (v, x) => v.CornerRadius = x, 0, 40),
+                Ui.SliderSetting("Padding", _vm, v => v.Padding, (v, x) => v.Padding = x, 0, 48)),
+            new Border().Padding(24).Child(
+                new Card()
+                    .BindVariant(_vm, v => v.Variant)
+                    .BindElevation(_vm, v => v.Elevation)
+                    .BindCornerRadius(_vm, v => v.CornerRadius)
+                    .BindPadding(_vm, v => v.Padding)
+                    .VerticalAlignment(VerticalAlignment.Center)
+                    .Child(new StackPanel().Spacing(8).Children(
+                        new TextBlock("Preview").TitleLarge(),
+                        new TextBlock("This card follows the settings on the left.").BodyMedium().Muted().TextWrapping(),
+                        Ui.Readout(_vm, v => $"{v.Variant}, elevation {v.Elevation:0}, radius {v.CornerRadius:0}, padding {v.Padding:0}"))))),
+        Ui.Code("new Card()\n" +
+                "    .BindVariant(vm, v => v.Variant)\n" +
+                "    .BindElevation(vm, v => v.Elevation)\n" +
+                "    .BindCornerRadius(vm, v => v.CornerRadius)   // float: the same radius on all corners\n" +
+                "    .BindPadding(vm, v => v.Padding)"));
+
+    private RadioButton VariantOption(string text, CardVariant variant) =>
+        new RadioButton(text).GroupName("card-variant").BindIsChecked(_vm, v => v.Variant, (v, x) => v.Variant = x, variant);
+
+    private static UIElement BorderSection() => Ui.Section("Border",
+        "The plain Border draws exactly what you set: background, border brush, a thickness per side, a radius per corner, " +
+        "padding and a shadow through Elevation. It has no theme style of its own.",
+        Ui.Row(
+            DemoBorder("Background + radius")
+                .CornerRadius(12)
+                .Themed(Border.BackgroundProperty, c => c.SurfaceContainerHighest),
+            DemoBorder("Bottom border only")
+                .BorderThickness(new Thickness(0, 0, 0, 3))
+                .Themed(Border.BorderBrushProperty, c => c.Primary),
+            DemoBorder("Stroke + per-corner radius")
+                .Stroke(ThemeColors.Current.Outline, 1.5f)
+                .CornerRadius(0, 20, 0, 20)
+                .Themed(Border.BorderBrushProperty, c => c.Outline),
+            DemoBorder("Elevation 4")
+                .CornerRadius(8)
+                .Elevation(4)
+                .Themed(Border.BackgroundProperty, c => c.SurfaceContainerLow)),
+        Ui.Code("new Border()\n    .Padding(16).CornerRadius(0, 20, 0, 20)\n    .Stroke(color, 1.5f)          // BorderBrush + BorderThickness\n    .Child(content)"));
+
+    private static Border DemoBorder(string text) =>
+        new Border().Padding(16).Width(170).Height(80).Child(new TextBlock(text).BodyMedium().TextWrapping());
 }

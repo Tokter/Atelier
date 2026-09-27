@@ -1,5 +1,5 @@
+using System;
 using Atelier.Controls;
-using Atelier.Core.Primitives;
 using Atelier.Theming.Material;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -8,37 +8,58 @@ namespace Atelier.Gallery.ViewModels;
 
 public partial class TypographyViewModel : PageViewModel
 {
-    public static readonly string[] AvailableFonts =
+    public const string DefaultSampleText =
+        "The quick brown fox jumps over the lazy dog. Good typography makes text easy to read, at every size.";
+
+    public const string DefaultFontLabel = "Default";
+
+    public static readonly string[] Fonts = [DefaultFontLabel, "Segoe UI", "Arial", "Georgia", "Times New Roman", "Consolas", "Verdana"];
+
+    /// <summary>The style keys the playground offers; the first entry means "no style".</summary>
+    public static readonly string[] StyleKeys =
     [
-        "Segoe UI",
-        "Arial",
-        "Georgia",
-        "Consolas",
-        "Courier New",
-        "Trebuchet MS",
-        "Verdana"
+        "None",
+        MaterialTypography.DisplaySmallKey,
+        MaterialTypography.HeadlineMediumKey,
+        MaterialTypography.TitleLargeKey,
+        MaterialTypography.TitleMediumKey,
+        MaterialTypography.BodyLargeKey,
+        MaterialTypography.BodyMediumKey,
+        MaterialTypography.LabelLargeKey,
+        MaterialTypography.Heading1Key,
+        MaterialTypography.SubtextKey,
     ];
 
     [ObservableProperty]
-    private string _sampleText = "The quick brown fox jumps over the lazy dog. Design is not just what it looks like and feels like — design is how it works.";
+    private string _sampleText = DefaultSampleText;
+
+    [ObservableProperty]
+    private string _styleKey = MaterialTypography.HeadlineMediumKey;
+
+    // Local values override the style's values; while off, the style decides.
+    [ObservableProperty]
+    private bool _overrideSizeAndWeight;
 
     [ObservableProperty]
     private float _fontSize = 24f;
 
     [ObservableProperty]
-    private string _fontFamily = "Segoe UI";
+    private float _fontWeight = 400f;
 
     [ObservableProperty]
-    private bool _isBold = false;
+    private string _fontFamily = DefaultFontLabel;
 
     [ObservableProperty]
-    private bool _isItalic = false;
+    private bool _isBold;
 
     [ObservableProperty]
-    private bool _isMuted = false;
+    private bool _isItalic;
 
     [ObservableProperty]
-    private Color _selectedColor = Color.Transparent;
+    private bool _isMuted;
+
+    [ObservableProperty]
+    private ColorRole _colorRole = ColorRole.Default;
 
     [ObservableProperty]
     private TextAlignment _textAlignment = TextAlignment.Left;
@@ -47,69 +68,58 @@ public partial class TypographyViewModel : PageViewModel
     private bool _isWrapping = true;
 
     [ObservableProperty]
-    private string _activePresetName = "Custom";
+    private TextTrimming _trimming = TextTrimming.CharacterEllipsis;
 
     [ObservableProperty]
-    private string _selectedStyleKey = MaterialTypography.Heading1Key;
+    private float _maxLines;
 
-    public TextWrapping TextWrapping => IsWrapping ? TextWrapping.Wrap : TextWrapping.NoWrap;
+    [ObservableProperty]
+    private float _lineHeight;
 
     public TypographyViewModel()
     {
         PageIcon = MaterialIconKind.TextFields;
         PageTitle = "Typography";
-        ApplyPreset(MaterialTypography.Heading1Key);
+        Keywords = "textblock text font type scale typography weight bold italic wrap trimming ellipsis line height";
     }
 
-    partial void OnIsWrappingChanged(bool value)
+    /// <summary>The style key to apply, or <c>null</c> for none.</summary>
+    public string? EffectiveStyleKey => StyleKey == StyleKeys[0] ? null : StyleKey;
+
+    /// <summary>The font family to apply, or <c>null</c> for the default font.</summary>
+    public string? EffectiveFontFamily => FontFamily == DefaultFontLabel ? null : FontFamily;
+
+    public Atelier.Core.Primitives.FontWeight EffectiveFontWeight => new((int)Math.Round(Math.Clamp(FontWeight, 100f, 900f) / 100f) * 100);
+
+    partial void OnStyleKeyChanged(string value) => OnPropertyChanged(nameof(EffectiveStyleKey));
+
+    partial void OnFontFamilyChanged(string value) => OnPropertyChanged(nameof(EffectiveFontFamily));
+
+    partial void OnFontWeightChanged(float value) => OnPropertyChanged(nameof(EffectiveFontWeight));
+
+    [RelayCommand]
+    private void ToggleBold() => IsBold = !IsBold;
+
+    [RelayCommand]
+    private void ToggleItalic() => IsItalic = !IsItalic;
+
+    [RelayCommand]
+    private void Reset()
     {
-        OnPropertyChanged(nameof(TextWrapping));
-    }
-
-    [RelayCommand]
-    public void ToggleBold() => IsBold = !IsBold;
-
-    [RelayCommand]
-    public void ToggleItalic() => IsItalic = !IsItalic;
-
-    [RelayCommand]
-    public void ToggleMuted() => IsMuted = !IsMuted;
-
-    [RelayCommand]
-    public void ToggleWrapping() => IsWrapping = !IsWrapping;
-
-    [RelayCommand]
-    public void ApplyPreset(string preset)
-    {
-        SelectedStyleKey = preset;
-        ActivePresetName = preset;
+        SampleText = DefaultSampleText;
+        StyleKey = MaterialTypography.HeadlineMediumKey;
+        OverrideSizeAndWeight = false;
+        FontSize = 24f;
+        FontWeight = 400f;
+        FontFamily = DefaultFontLabel;
+        IsBold = false;
         IsItalic = false;
-
-        // Dynamically resolve properties from the registered Style in MaterialTypography / StyleManager.GlobalStyles
-        var style = MaterialTypography.GetRegisteredStyle(preset);
-        if (style != null)
-        {
-            foreach (var setter in style.Setters)
-            {
-                if (setter.Property == TextBlock.FontSizeProperty && setter.Value is float fs)
-                    FontSize = fs;
-                else if (setter.Property == TextBlock.BoldProperty && setter.Value is bool b)
-                    IsBold = b;
-                else if (setter.Property == TextBlock.MutedProperty && setter.Value is bool m)
-                    IsMuted = m;
-            }
-        }
-    }
-
-    [RelayCommand]
-    public void ResetPlayground()
-    {
-        SampleText = "The quick brown fox jumps over the lazy dog. Design is not just what it looks like and feels like — design is how it works.";
-        FontFamily = "Segoe UI";
-        IsItalic = false;
+        IsMuted = false;
+        ColorRole = ColorRole.Default;
         TextAlignment = TextAlignment.Left;
         IsWrapping = true;
-        SelectedColor = Color.Transparent;
-        ApplyPreset(MaterialTypography.Heading1Key);
+        Trimming = TextTrimming.CharacterEllipsis;
+        MaxLines = 0;
+        LineHeight = 0;
     }
 }

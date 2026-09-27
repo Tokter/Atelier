@@ -1,4 +1,3 @@
-using System;
 using Atelier.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -7,63 +6,49 @@ namespace Atelier.Gallery.ViewModels;
 
 public partial class CardsViewModel : PageViewModel
 {
-    // Interactive card state
     [ObservableProperty]
-    private int _interactiveCardClickCount = 0;
+    private int _cardClicks;
 
     [ObservableProperty]
-    private bool _favoriteSelected = false;
+    private bool _isFavorite;
 
     [ObservableProperty]
-    private bool _notificationsCardEnabled = true;
+    private string _hoverState = "Pointer outside";
 
-    // Live Card Playground properties
+    // Playground
     [ObservableProperty]
-    private CardVariant _playgroundVariant = CardVariant.Elevated;
-
-    [ObservableProperty]
-    private float _playgroundElevation = 2f;
+    private CardVariant _variant = CardVariant.Elevated;
 
     [ObservableProperty]
-    private float _playgroundCornerRadius = 16f;
+    private float _elevation = 1f;
 
     [ObservableProperty]
-    private float _playgroundPadding = 20f;
+    private float _cornerRadius = 12f;
+
+    [ObservableProperty]
+    private float _padding = 16f;
 
     public CardsViewModel()
     {
         PageIcon = MaterialIconKind.Dashboard;
         PageTitle = "Cards";
+        Keywords = "card border elevation shadow outlined filled elevated container surface";
     }
 
     [RelayCommand]
-    private void CardClick()
-    {
-        InteractiveCardClickCount++;
-    }
+    private void CardClick() => CardClicks++;
 
     [RelayCommand]
-    private void ToggleFavorite()
-    {
-        FavoriteSelected = !FavoriteSelected;
-    }
+    private void ToggleFavorite() => IsFavorite = !IsFavorite;
 
     [RelayCommand]
-    private void ResetPlayground()
+    private void Reset()
     {
-        PlaygroundVariant = CardVariant.Elevated;
-        PlaygroundElevation = 2f;
-        PlaygroundCornerRadius = 16f;
-        PlaygroundPadding = 20f;
-        InteractiveCardClickCount = 0;
-        FavoriteSelected = false;
-        NotificationsCardEnabled = true;
-    }
-
-    [RelayCommand]
-    private void ClearInteractions()
-    {
-        InteractiveCardClickCount = 0;
-        FavoriteSelected = false;
+        Variant = CardVariant.Elevated;
+        Elevation = 1f;
+        CornerRadius = 12f;
+        Padding = 16f;
+        CardClicks = 0;
+        IsFavorite = false;
     }
 }

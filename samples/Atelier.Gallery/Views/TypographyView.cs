@@ -1,718 +1,277 @@
 using System;
-using System.Collections.Generic;
+using System.ComponentModel;
 using Atelier.Controls;
-using Atelier.Core.Events;
 using Atelier.Core.Primitives;
 using Atelier.Core.Tree;
+using Atelier.Gallery.Infrastructure;
+using Atelier.Gallery.ViewModels;
 using Atelier.Layout;
 using Atelier.Markup;
 using Atelier.Theming.Material;
-using Atelier.Gallery.ViewModels;
 
 namespace Atelier.Gallery.Views;
 
-public class TypographyView : Grid
+public class TypographyView : GalleryPage
 {
-    private readonly TypographyViewModel _viewModel;
-    private readonly ScrollViewer _scrollViewer;
+    private const string Pangram = "The quick brown fox jumps over the lazy dog.";
+    private const string LongText = "Typography is the art of arranging type to make written language legible, readable and appealing when displayed.";
 
-    public TypographyView() : this(new TypographyViewModel())
-    {
-    }
+    private readonly TypographyViewModel _vm;
 
     public TypographyView(TypographyViewModel viewModel)
+        : base(MaterialIconKind.TextFields, "Typography",
+            "TextBlock shows text with the Material 3 type scale or your own font settings: size, family, weight, style, " +
+            "color, alignment, wrapping, trimming and line height.")
     {
-        _viewModel = viewModel;
-        DataContext = _viewModel;
+        _vm = viewModel;
 
-        this.Rows(GridLength.Auto, GridLength.Star);
-        this.RowSpacing(16);
+        Settings(
+            new Button("Toggle bold").Variant(ButtonVariant.Tonal).Command(_vm.ToggleBoldCommand),
+            new Button("Toggle italic").Variant(ButtonVariant.Tonal).Command(_vm.ToggleItalicCommand),
+            new Button("Reset").Variant(ButtonVariant.Outlined).Command(_vm.ResetCommand));
 
-        // 1. Fixed Header Master Banner
-        this.Add(CreateMasterBanner().Row(0));
-
-        // 2. Scrollable Showcase Content
-        var contentStack = new StackPanel
-        {
-            Orientation = Orientation.Vertical,
-            Spacing = 16
-        }.Children(
-            CreatePlaygroundSection(),
-            CreateMd3ScaleSection(),
-            CreateTextBlockFeaturesSection(),
-            CreateCompositionSection()
-        );
-
-        contentStack.Margin = new Thickness(0, 0, 10, 20);
-
-        _scrollViewer = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = contentStack
-        }.Row(1);
-
-        this.Add(_scrollViewer);
+        Sections(PlaygroundSection(), TypeScaleSection(), FontSection(), StyleAndColorSection(), LayoutSection());
     }
 
-    public override void OnPointerWheel(PointerWheelEventArgs e)
+    #region Playground
+
+    private UIElement PlaygroundSection()
     {
-        base.OnPointerWheel(e);
-        if (!e.Handled && _scrollViewer != null)
-        {
-            _scrollViewer.OnPointerWheel(e);
-        }
+        var preview = new TextBlock()
+            .BindText(_vm, v => v.SampleText)
+            .BindStyleKey(_vm, v => v.EffectiveStyleKey)
+            .BindFontFamily(_vm, v => v.EffectiveFontFamily)
+            .BindBold(_vm, v => v.IsBold)
+            .BindItalic(_vm, v => v.IsItalic)
+            .BindMuted(_vm, v => v.IsMuted)
+            .BindTextAlignment(_vm, v => v.TextAlignment)
+            .BindTextWrapping(_vm, v => v.IsWrapping ? TextWrapping.Wrap : TextWrapping.NoWrap)
+            .Bind(TextBlock.TextTrimmingProperty, _vm, v => v.Trimming)
+            .Bind(TextBlock.MaxLinesProperty, _vm, v => (int)MathF.Round(v.MaxLines))
+            .Bind(TextBlock.LineHeightProperty, _vm, v => MathF.Round(v.LineHeight))
+            // "Theme default" clears the local color, so the text keeps the theme's text color.
+            .BindColorRole(TextBlock.ForegroundProperty, _vm, nameof(TypographyViewModel.ColorRole), v => v.ColorRole);
+        FollowSizeOverride(preview);
+
+        return Ui.Section("Playground",
+            "Pick a type scale style, then override its values locally: local values win over the style, and switching the " +
+            "override off lets the style decide again.",
+            Ui.Columns(340,
+                Ui.Stack(
+                    new TextBox().Label("Sample text").BindText(_vm, v => v.SampleText, (v, text) => v.SampleText = text),
+                    Ui.Columns(160,
+                        Ui.Labeled("Style", new ComboBox()
+                            .ItemsSource(TypographyViewModel.StyleKeys)
+                            .BindSelectedItem(_vm, v => v.StyleKey, (v, key) => v.StyleKey = key ?? TypographyViewModel.StyleKeys[0])),
+                        Ui.Labeled("Font family", new ComboBox()
+                            .ItemsSource(TypographyViewModel.Fonts)
+                            .BindSelectedItem(_vm, v => v.FontFamily, (v, font) => v.FontFamily = font ?? TypographyViewModel.DefaultFontLabel))),
+                    new Switch("Override size and weight").BindIsChecked(_vm, v => v.OverrideSizeAndWeight, (v, on) => v.OverrideSizeAndWeight = on),
+                    Ui.Columns(160,
+                        Ui.SliderSetting("Font size", _vm, v => v.FontSize, (v, x) => v.FontSize = x, 10, 72),
+                        Ui.SliderSetting("Font weight", _vm, v => v.FontWeight, (v, x) => v.FontWeight = x, 100, 900, step: 100))
+                        .BindIsEnabled(_vm, v => v.OverrideSizeAndWeight),
+                    Ui.Row(
+                        new CheckBox("Bold").BindIsChecked(_vm, v => v.IsBold, (v, on) => v.IsBold = on),
+                        new CheckBox("Italic").BindIsChecked(_vm, v => v.IsItalic, (v, on) => v.IsItalic = on),
+                        new CheckBox("Muted").BindIsChecked(_vm, v => v.IsMuted, (v, on) => v.IsMuted = on),
+                        new CheckBox("Wrap").BindIsChecked(_vm, v => v.IsWrapping, (v, on) => v.IsWrapping = on)),
+                    Ui.Labeled("Color", Ui.Row(Array.ConvertAll(Enum.GetValues<ColorRole>(), role =>
+                        (UIElement)new RadioButton(ColorRoleBinding.DisplayName(role)).GroupName("type-color")
+                            .BindIsChecked(_vm, v => v.ColorRole, (v, r) => v.ColorRole = r, role)))),
+                    Ui.Labeled("Alignment", Ui.Row(Array.ConvertAll(Enum.GetValues<TextAlignment>(), alignment =>
+                        (UIElement)new RadioButton(alignment.ToString()).GroupName("type-align")
+                            .BindIsChecked(_vm, v => v.TextAlignment, (v, a) => v.TextAlignment = a, alignment)))),
+                    Ui.Labeled("Trimming", Ui.Row(Array.ConvertAll(Enum.GetValues<TextTrimming>(), trimming =>
+                        (UIElement)new RadioButton(trimming.ToString()).GroupName("type-trim")
+                            .BindIsChecked(_vm, v => v.Trimming, (v, t) => v.Trimming = t, trimming)))),
+                    Ui.Columns(160,
+                        Ui.SliderSetting("Max lines (0 = no limit)", _vm, v => v.MaxLines, (v, x) => v.MaxLines = x, 0, 5, step: 1),
+                        Ui.SliderSetting("Line height (0 = font)", _vm, v => v.LineHeight, (v, x) => v.LineHeight = x, 0, 80))),
+                Ui.Stack(
+                    new Border()
+                        .Padding(24)
+                        .MinHeight(240)
+                        .CornerRadius(16)
+                        .ClipToBounds()
+                        .Themed(Border.BackgroundProperty, c => c.SurfaceContainerLow)
+                        .Child(preview),
+                    Ui.Readout(_vm, v => $"StyleKey = {v.EffectiveStyleKey ?? "none"}, " +
+                                         (v.OverrideSizeAndWeight ? $"FontSize = {v.FontSize:0}, FontWeight = {v.EffectiveFontWeight}" : "size and weight from the style")))));
     }
 
-    #region Master Header Banner
-
-    private UIElement CreateMasterBanner()
+    // Size and weight are local values only while overriding; otherwise they're cleared so the style applies.
+    private void FollowSizeOverride(TextBlock text)
     {
-        var card = new Card(CardVariant.Filled)
-            .Padding(20)
-            .CornerRadius(14);
-
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        // Header text
-        stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
-            .Children(
-                new TextBlock("Typography & Text Styling").TitleLarge(),
-                new TextBlock("Material Design 3 typography type scale (Display, Headline, Title, Body, Label), common headings & subtext styles, and rich TextBlock styling with Bold, Italic, FontFamily, Muted, and colors.")
-                    .Subtext()
-            )
-        );
-
-        // Action row
-        var actionRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Button("Toggle Bold")
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ToggleBoldCommand)
-                    .BindVariant(_viewModel, vm => vm.IsBold ? ButtonVariant.Filled : ButtonVariant.Outlined),
-
-                new Button("Toggle Italic")
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ToggleItalicCommand)
-                    .BindVariant(_viewModel, vm => vm.IsItalic ? ButtonVariant.Filled : ButtonVariant.Outlined),
-
-                new Button("Toggle Muted")
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ToggleMutedCommand)
-                    .BindVariant(_viewModel, vm => vm.IsMuted ? ButtonVariant.Filled : ButtonVariant.Outlined),
-
-                new Button("Reset All")
-                    .Variant(ButtonVariant.Tonal)
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ResetPlaygroundCommand)
-            );
-
-        stack.Add(actionRow);
-        card.Child = stack;
-        return card;
-    }
-
-    #endregion
-
-    #region Section 1: Live Interactive Typography Playground
-
-    private UIElement CreatePlaygroundSection()
-    {
-        var grid = new Grid()
-            .Columns(new GridLength(1.1f, GridUnitType.Star), new GridLength(1.0f, GridUnitType.Star))
-            .ColumnSpacing(16);
-
-        // --- Left Column: Live Preview Card ---
-        var previewCard = new Card(CardVariant.Filled)
-            .Padding(20)
-            .CornerRadius(14);
-
-        var previewStack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        var previewHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.Visibility, 20, foreground: Color.FromHex("#3B82F6")),
-                new TextBlock("Live Typography Preview").TitleSmall()
-            );
-
-        // Sub-preview 1: Pure Style-Driven Preview (Bound directly to StyleKey)
-        var styleHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.Style, 16, foreground: Color.FromHex("#10B981")),
-                new TextBlock("1. Material Design 3 Style Resolution (Pure StyleKey)").TitleSmall()
-            );
-
-        var stylePreviewBox = new Card(CardVariant.Outlined)
-            .Padding(16)
-            .CornerRadius(10);
-
-        var styleDrivenTextBlock = new TextBlock()
-            .BindStyleKey(_viewModel, vm => vm.SelectedStyleKey)
-            .BindText(_viewModel, vm => vm.SampleText)
-            .BindFontFamily(_viewModel, vm => vm.FontFamily)
-            .BindItalic(_viewModel, vm => vm.IsItalic)
-            .BindTextAlignment(_viewModel, vm => vm.TextAlignment)
-            .BindTextWrapping(_viewModel, vm => vm.TextWrapping);
-
-        stylePreviewBox.Child = styleDrivenTextBlock;
-
-        var styleBadgeText = new TextBlock()
-            .Caption();
-
-        void UpdateStyleBadge()
+        void Apply()
         {
-            var style = MaterialTypography.GetRegisteredStyle(_viewModel.SelectedStyleKey);
-            float fs = 0f;
-            bool bold = false;
-            bool muted = false;
-            if (style != null)
+            if (_vm.OverrideSizeAndWeight)
             {
-                foreach (var setter in style.Setters)
-                {
-                    if (setter.Property == TextBlock.FontSizeProperty && setter.Value is float f) fs = f;
-                    else if (setter.Property == TextBlock.BoldProperty && setter.Value is bool b) bold = b;
-                    else if (setter.Property == TextBlock.MutedProperty && setter.Value is bool m) muted = m;
-                }
+                text.FontSize = _vm.FontSize;
+                text.FontWeight = _vm.EffectiveFontWeight;
             }
-            string weight = bold ? "Bold" : "Regular";
-            string muteStr = muted ? ", Muted" : "";
-            styleBadgeText.Text = $"StyleKey: \"{_viewModel.SelectedStyleKey}\" (Resolved from StyleManager.GlobalStyles • {fs:F0}pt, {weight}{muteStr})";
-        }
-
-        UpdateStyleBadge();
-
-        var styleSpecsCard = new Card(CardVariant.Filled)
-            .Padding(8, 8)
-            .CornerRadius(6)
-            .Child(styleBadgeText);
-
-        // Sub-preview 2: Interactive Overrides Preview (Demonstrates 4-Tier Precedence)
-        var overrideHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.Tune, 16, foreground: Color.FromHex("#F59E0B")),
-                new TextBlock("2. Interactive Local Overrides (4-Tier Precedence)").TitleSmall()
-            );
-
-        var overridePreviewBox = new Card(CardVariant.Outlined)
-            .Padding(16)
-            .CornerRadius(10);
-
-        var overrideTextBlock = new TextBlock()
-            .BindStyleKey(_viewModel, vm => vm.SelectedStyleKey)
-            .BindText(_viewModel, vm => vm.SampleText)
-            .BindFontSize(_viewModel, vm => vm.FontSize)
-            .BindFontFamily(_viewModel, vm => vm.FontFamily)
-            .BindBold(_viewModel, vm => vm.IsBold)
-            .BindItalic(_viewModel, vm => vm.IsItalic)
-            .BindMuted(_viewModel, vm => vm.IsMuted)
-            .BindForeground(_viewModel, vm => vm.SelectedColor)
-            .BindTextAlignment(_viewModel, vm => vm.TextAlignment)
-            .BindTextWrapping(_viewModel, vm => vm.TextWrapping);
-
-        overridePreviewBox.Child = overrideTextBlock;
-
-        // Status badge readout
-        var specsText = new TextBlock()
-            .Caption();
-
-        void UpdateSpecs()
-        {
-            string slant = _viewModel.IsItalic ? "Italic" : "Upright";
-            string weight = _viewModel.IsBold ? "Bold" : "Regular";
-            string muted = _viewModel.IsMuted ? "Muted" : "Normal";
-            string align = _viewModel.TextAlignment.ToString();
-            string wrap = _viewModel.IsWrapping ? "Wrap" : "NoWrap";
-            string color = _viewModel.SelectedColor == Color.Transparent ? "Theme Default" : "Custom";
-            specsText.Text = $"Interactive: {_viewModel.FontFamily} | {_viewModel.FontSize:F0}pt | {weight}, {slant} | {muted} | Color: {color} | Align: {align} | {wrap}";
-        }
-
-        UpdateSpecs();
-        _viewModel.PropertyChanged += (s, e) =>
-        {
-            UpdateStyleBadge();
-            UpdateSpecs();
-        };
-
-        var specsCard = new Card(CardVariant.Filled)
-            .Padding(8, 8)
-            .CornerRadius(6)
-            .Child(specsText);
-
-        previewStack.Children(
-            previewHeader,
-            overrideHeader,
-            overridePreviewBox,
-            specsCard,
-            styleHeader,
-            stylePreviewBox,
-            styleSpecsCard
-        );
-        previewCard.Child = previewStack;
-        grid.Add(previewCard.Column(0));
-
-        // --- Right Column: Interactive Controls ---
-        var controlsCard = new Card(CardVariant.Outlined)
-            .Padding(20)
-            .CornerRadius(14);
-
-        var controlsStack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        // 1. Sample Text Input
-        var textLabel = new TextBlock("Sample Text").LabelMedium();
-        var sampleInput = new TextBox()
-            .LeadingIconKind(MaterialIconKind.Edit)
-            .Placeholder("Type sample text here...")
-            .BindText(_viewModel, vm => vm.SampleText, (vm, v) => vm.SampleText = v);
-
-        // 2. Preset Buttons Row
-        var presetLabel = new TextBlock("Material 3 Style Presets").LabelMedium();
-        var presetWrap = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalSpacing = 6, VerticalSpacing = 6 };
-
-        void AddPresetButton(string label, string key)
-        {
-            var btn = new Button(label)
-                .Variant(ButtonVariant.Outlined);
-            btn.Click += (s, e) => _viewModel.ApplyPreset(key);
-            presetWrap.Add(btn);
-        }
-
-        AddPresetButton("Heading 1 (32pt)", MaterialTypography.Heading1Key);
-        AddPresetButton("Heading 2 (28pt)", MaterialTypography.Heading2Key);
-        AddPresetButton("Heading 3 (24pt)", MaterialTypography.Heading3Key);
-        AddPresetButton("Title Large (22pt)", MaterialTypography.TitleLargeKey);
-        AddPresetButton("Normal Text (14pt)", MaterialTypography.NormalTextKey);
-        AddPresetButton("Subtext (12pt)", MaterialTypography.SubtextKey);
-        AddPresetButton("Display Large (57pt)", MaterialTypography.DisplayLargeKey);
-
-        // 3. Font Size Slider (10 to 60pt)
-        var sizeHeader = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
-        var sizeLabel = new TextBlock("Font Size:").LabelMedium();
-        var sizeValueText = new TextBlock($"{_viewModel.FontSize:F0}pt").LabelMedium().Foreground(Color.FromHex("#3B82F6"));
-        sizeHeader.Children(sizeLabel, sizeValueText);
-
-        var sizeSlider = new Slider { Minimum = 10, Maximum = 60, Value = _viewModel.FontSize };
-        sizeSlider.ValueChanged += (s, v) =>
-        {
-            _viewModel.FontSize = v;
-            sizeValueText.Text = $"{v:F0}pt";
-        };
-        _viewModel.PropertyChanged += (s, e) =>
-        {
-            if (e.PropertyName == nameof(TypographyViewModel.FontSize))
+            else
             {
-                sizeSlider.Value = _viewModel.FontSize;
-                sizeValueText.Text = $"{_viewModel.FontSize:F0}pt";
+                text.ClearValue(TextBlock.FontSizeProperty);
+                text.ClearValue(TextBlock.FontWeightProperty);
             }
-        };
-
-        // 4. Font Family Selector
-        var fontLabel = new TextBlock("Font Family").LabelMedium();
-        var fontWrap = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalSpacing = 6, VerticalSpacing = 6 };
-
-        foreach (var font in TypographyViewModel.AvailableFonts)
-        {
-            string f = font;
-            var btn = new Button(f)
-                .Variant(ButtonVariant.Outlined);
-            btn.Click += (s, e) => _viewModel.FontFamily = f;
-            fontWrap.Add(btn);
         }
 
-        // 5. Switches (Bold, Italic, Muted, Word Wrap)
-        var switchesRow = new WrapPanel { Orientation = Orientation.Horizontal, HorizontalSpacing = 14, VerticalSpacing = 8 };
-
-        var boldSwitch = new Switch("Bold")
-            .BindIsChecked(_viewModel, vm => vm.IsBold, (vm, v) => vm.IsBold = v);
-
-        var italicSwitch = new Switch("Italic")
-            .BindIsChecked(_viewModel, vm => vm.IsItalic, (vm, v) => vm.IsItalic = v);
-
-        var mutedSwitch = new Switch("Muted")
-            .BindIsChecked(_viewModel, vm => vm.IsMuted, (vm, v) => vm.IsMuted = v);
-
-        var wrapSwitch = new Switch("Word Wrap")
-            .BindIsChecked(_viewModel, vm => vm.IsWrapping, (vm, v) => vm.IsWrapping = v);
-
-        switchesRow.Children(boldSwitch, italicSwitch, mutedSwitch, wrapSwitch);
-
-        // 6. Text Alignment Row
-        var alignLabel = new TextBlock("Alignment").LabelMedium();
-        var alignRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-
-        void AddAlignButton(string label, TextAlignment alignment)
+        void OnChanged(object? sender, PropertyChangedEventArgs e)
         {
-            var btn = new Button(label)
-                .Variant(ButtonVariant.Outlined);
-            btn.Click += (s, e) => _viewModel.TextAlignment = alignment;
-            alignRow.Add(btn);
+            if (e.PropertyName is nameof(TypographyViewModel.OverrideSizeAndWeight) or nameof(TypographyViewModel.FontSize)
+                or nameof(TypographyViewModel.FontWeight))
+            {
+                Apply();
+            }
         }
 
-        AddAlignButton("Left", TextAlignment.Left);
-        AddAlignButton("Center", TextAlignment.Center);
-        AddAlignButton("Right", TextAlignment.Right);
-
-        // 7. Color Swatches Row
-        var colorLabel = new TextBlock("Foreground Color").LabelMedium();
-        var colorRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-
-        void AddColorButton(string name, Color color)
-        {
-            var btn = new Button(name)
-                .Variant(ButtonVariant.Filled);
-            btn.Click += (s, e) => _viewModel.SelectedColor = color;
-            colorRow.Add(btn);
-        }
-
-        AddColorButton("Theme Default", Color.Transparent);
-        AddColorButton("Primary", Color.FromHex("#3B82F6"));
-        AddColorButton("Emerald", Color.FromHex("#10B981"));
-        AddColorButton("Amber", Color.FromHex("#F59E0B"));
-        AddColorButton("Rose", Color.FromHex("#E11D48"));
-        AddColorButton("Purple", Color.FromHex("#8B5CF6"));
-
-        controlsStack.Children(
-            textLabel, sampleInput,
-            presetLabel, presetWrap,
-            sizeHeader, sizeSlider,
-            fontLabel, fontWrap,
-            switchesRow,
-            alignLabel, alignRow,
-            colorLabel, colorRow
-        );
-
-        controlsCard.Child = controlsStack;
-        grid.Add(controlsCard.Column(1));
-
-        return CreateSectionCard(
-            "Interactive Typography Playground",
-            "Experiment with font sizes, weights, slants, alignments, font families, and color tokens in real-time.",
-            grid
-        );
+        Apply();
+        text.OnAttachedToVisualTree(() => { _vm.PropertyChanged += OnChanged; Apply(); });
+        text.OnDetachedFromVisualTree(() => _vm.PropertyChanged -= OnChanged);
     }
 
     #endregion
 
-    #region Section 2: Material Design 3 Type Scale & Common Headings
+    #region Type scale
 
-    private static UIElement CreateMd3ScaleSection()
-    {
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 12 };
+    private static UIElement TypeScaleSection() => Ui.Section("Type scale",
+        "The Material 3 type scale as keyed styles. Apply one with its method (e.g. .TitleLarge()) or with " +
+        "StyleKey(MaterialTypography.TitleLargeKey). Sizes are font size / line height in pixels.",
+        ScaleGroup("Display",
+            ScaleRow(new TextBlock("Display Large").DisplayLarge(), "DisplayLarge", MaterialTypescale.DisplayLarge),
+            ScaleRow(new TextBlock("Display Medium").DisplayMedium(), "DisplayMedium", MaterialTypescale.DisplayMedium),
+            ScaleRow(new TextBlock("Display Small").DisplaySmall(), "DisplaySmall", MaterialTypescale.DisplaySmall)),
+        ScaleGroup("Headline",
+            ScaleRow(new TextBlock("Headline Large").HeadlineLarge(), "HeadlineLarge", MaterialTypescale.HeadlineLarge),
+            ScaleRow(new TextBlock("Headline Medium").HeadlineMedium(), "HeadlineMedium", MaterialTypescale.HeadlineMedium),
+            ScaleRow(new TextBlock("Headline Small").HeadlineSmall(), "HeadlineSmall", MaterialTypescale.HeadlineSmall)),
+        ScaleGroup("Title",
+            ScaleRow(new TextBlock("Title Large").TitleLarge(), "TitleLarge", MaterialTypescale.TitleLarge),
+            ScaleRow(new TextBlock("Title Medium").TitleMedium(), "TitleMedium", MaterialTypescale.TitleMedium),
+            ScaleRow(new TextBlock("Title Small").TitleSmall(), "TitleSmall", MaterialTypescale.TitleSmall)),
+        ScaleGroup("Body",
+            ScaleRow(new TextBlock("Body Large: " + Pangram).BodyLarge().TextWrapping(), "BodyLarge", MaterialTypescale.BodyLarge),
+            ScaleRow(new TextBlock("Body Medium: " + Pangram).BodyMedium().TextWrapping(), "BodyMedium", MaterialTypescale.BodyMedium),
+            ScaleRow(new TextBlock("Body Small: " + Pangram).BodySmall().TextWrapping(), "BodySmall", MaterialTypescale.BodySmall)),
+        ScaleGroup("Label",
+            ScaleRow(new TextBlock("Label Large").LabelLarge(), "LabelLarge", MaterialTypescale.LabelLarge),
+            ScaleRow(new TextBlock("Label Medium").LabelMedium(), "LabelMedium", MaterialTypescale.LabelMedium),
+            ScaleRow(new TextBlock("Label Small").LabelSmall(), "LabelSmall", MaterialTypescale.LabelSmall)),
+        ScaleGroup("Aliases",
+            AliasRow(new TextBlock("Heading 1").Heading1(), "Heading1", "Headline Large, bold"),
+            AliasRow(new TextBlock("Heading 2").Heading2(), "Heading2", "Headline Medium, bold"),
+            AliasRow(new TextBlock("Heading 3").Heading3(), "Heading3", "Headline Small, bold"),
+            AliasRow(new TextBlock("Normal text").NormalText(), "NormalText", "Body Medium"),
+            AliasRow(new TextBlock("Subtext").Subtext(), "Subtext", "Body Small, muted"),
+            AliasRow(new TextBlock("Caption").Caption(), "Caption", "11 px, muted")));
 
-        stack.Add(CreateTypeScaleRow(
-            "Display Large",
-            "57pt • Regular • Line-Height 64",
-            new TextBlock("Display Large").DisplayLarge(),
-            "DisplayLargeKey • 57pt"
-        ));
+    private static UIElement ScaleGroup(string title, params UIElement[] rows) => Ui.Demo(title, Ui.Stack(rows));
 
-        stack.Add(CreateTypeScaleRow(
-            "Display Medium",
-            "45pt • Regular • Line-Height 52",
-            new TextBlock("Display Medium").DisplayMedium(),
-            "DisplayMediumKey • 45pt"
-        ));
+    private static UIElement ScaleRow(TextBlock sample, string key, MaterialTextStyle style) =>
+        Row(sample, key, $"{style.Size:0}/{style.LineHeight:0} · weight {style.Weight}");
 
-        stack.Add(CreateTypeScaleRow(
-            "Display Small",
-            "36pt • Regular • Line-Height 44",
-            new TextBlock("Display Small").DisplaySmall(),
-            "DisplaySmallKey • 36pt"
-        ));
+    private static UIElement AliasRow(TextBlock sample, string key, string description) => Row(sample, key, description);
 
-        stack.Add(CreateTypeScaleRow(
-            "Headline Large / Heading 1",
-            "32pt • Bold • Primary Heading",
-            new TextBlock("Heading 1 / Headline Large").Heading1(),
-            "Heading1Key / HeadlineLargeKey • 32pt"
-        ));
-
-        stack.Add(CreateTypeScaleRow(
-            "Headline Medium / Heading 2",
-            "28pt • Bold • Secondary Heading",
-            new TextBlock("Heading 2 / Headline Medium").Heading2(),
-            "Heading2Key / HeadlineMediumKey • 28pt"
-        ));
-
-        stack.Add(CreateTypeScaleRow(
-            "Headline Small / Heading 3",
-            "24pt • Bold • Section Heading",
-            new TextBlock("Heading 3 / Headline Small").Heading3(),
-            "Heading3Key / HeadlineSmallKey • 24pt"
-        ));
-
-        stack.Add(CreateTypeScaleRow(
-            "Title Large",
-            "22pt • Bold • Component Title",
-            new TextBlock("Title Large").TitleLarge(),
-            "TitleLargeKey • 22pt"
-        ));
-
-        stack.Add(CreateTypeScaleRow(
-            "Title Medium",
-            "16pt • Bold • Card Subhead",
-            new TextBlock("Title Medium").TitleMedium(),
-            "TitleMediumKey • 16pt"
-        ));
-
-        stack.Add(CreateTypeScaleRow(
-            "Title Small",
-            "14pt • Bold • Compact Title",
-            new TextBlock("Title Small").TitleSmall(),
-            "TitleSmallKey • 14pt"
-        ));
-
-        stack.Add(CreateTypeScaleRow(
-            "Body Large",
-            "16pt • Regular • Editorial Copy",
-            new TextBlock("Body Large provides comfortable reading for long-form articles, paragraphs, and reading flows.").BodyLarge(),
-            "BodyLargeKey • 16pt"
-        ));
-
-        stack.Add(CreateTypeScaleRow(
-            "Body Medium / Normal Text",
-            "14pt • Regular • Default Application Body",
-            new TextBlock("Normal Text / Body Medium is the primary readable text style for user interfaces, descriptions, and list items.").NormalText(),
-            "NormalTextKey / BodyMediumKey • 14pt"
-        ));
-
-        stack.Add(CreateTypeScaleRow(
-            "Body Small / Subtext",
-            "12pt • Muted • Secondary Footnote & Caption",
-            new TextBlock("Subtext / Body Small is used for auxiliary labels, timestamps, metadata, and helper text.").Subtext(),
-            "SubtextKey / BodySmallKey • 12pt"
-        ));
-
-        stack.Add(CreateTypeScaleRow(
-            "Caption",
-            "11pt • Muted • Legal & Compact Disclaimers",
-            new TextBlock("Caption style for fine print, disclaimers, and badge annotations.").Caption(),
-            "CaptionKey • 11pt"
-        ));
-
-        return CreateSectionCard(
-            "Material Design 3 Type Scale & Common Headings",
-            "Standardized typography styles available globally via Atelier.Theming.Material. Compatible with StyleKey and fluent extensions.",
-            stack
-        );
-    }
-
-    private static UIElement CreateTypeScaleRow(string name, string specs, UIElement sample, string badge)
-    {
-        var card = new Card(CardVariant.Filled)
-            .Padding(16, 14)
-            .CornerRadius(10);
-
-        var grid = new Grid()
-            .Columns(new GridLength(220, GridUnitType.Pixel), GridLength.Star, GridLength.Auto)
-            .ColumnSpacing(16);
-
-        // Metadata column
-        var metaStack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-            .Children(
-                new TextBlock(name).TitleSmall(),
-                new TextBlock(specs).Caption()
-            );
-
-        // Badge column
-        var badgeCard = new Card(CardVariant.Outlined)
-            .Padding(8, 4)
-            .CornerRadius(6)
-            .VerticalAlignment(VerticalAlignment.Center)
-            .Child(new TextBlock(badge).Caption());
-
-        grid.Add(metaStack.Column(0));
-        grid.Add(sample.Column(1).VerticalAlignment(VerticalAlignment.Center));
-        grid.Add(badgeCard.Column(2));
-
-        card.Child = grid;
-        return card;
-    }
+    // The sample on the left, its method name and metrics on the right; stacks when narrow.
+    private static UIElement Row(TextBlock sample, string key, string details) =>
+        Ui.Columns(300,
+            sample.VerticalAlignment(VerticalAlignment.Center),
+            new StackPanel().Spacing(2).VerticalAlignment(VerticalAlignment.Center).Children(
+                new TextBlock($".{key}()").FontFamily(Ui.MonospaceFont).FontSize(13).Themed(TextBlock.ForegroundProperty, c => c.Primary),
+                new TextBlock(details).BodySmall().Muted()));
 
     #endregion
 
-    #region Section 3: TextBlock Feature Demonstrations
+    #region Fonts, styles and colors
 
-    private static UIElement CreateTextBlockFeaturesSection()
-    {
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 16 };
+    private static UIElement FontSection() => Ui.Section("Font weight and family",
+        "FontWeight takes any OpenType weight from Thin (100) to Black (900); fonts without that weight use the closest " +
+        "one. FontFamily selects an installed font by name.",
+        Ui.Columns(300,
+            Ui.Demo("Weights",
+                WeightRow(FontWeight.Thin, "Thin"),
+                WeightRow(FontWeight.ExtraLight, "Extra light"),
+                WeightRow(FontWeight.Light, "Light"),
+                WeightRow(FontWeight.Normal, "Normal"),
+                WeightRow(FontWeight.Medium, "Medium"),
+                WeightRow(FontWeight.SemiBold, "Semibold"),
+                WeightRow(FontWeight.Bold, "Bold"),
+                WeightRow(FontWeight.ExtraBold, "Extra bold"),
+                WeightRow(FontWeight.Black, "Black")),
+            Ui.Demo("Families",
+                FamilyRow("Segoe UI"),
+                FamilyRow("Arial"),
+                FamilyRow("Georgia"),
+                FamilyRow("Times New Roman"),
+                FamilyRow("Consolas"),
+                FamilyRow("Verdana"),
+                FamilyRow("Trebuchet MS"))));
 
-        // 1. Weight & Slant Matrix (Regular, Bold, Italic, Bold Italic)
-        var fontVariantsHeader = new TextBlock("Font Slants & Weight Combinations").TitleSmall();
-        var fontVariantsGrid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star, GridLength.Star, GridLength.Star)
-            .ColumnSpacing(10);
+    private static TextBlock WeightRow(FontWeight weight, string name) =>
+        new TextBlock($"{name} ({weight.Value})").FontSize(20).FontWeight(weight);
 
-        fontVariantsGrid.Add(CreateFeatureCard("Regular", new TextBlock("Typography in Atelier").FontSize(15)).Column(0));
-        fontVariantsGrid.Add(CreateFeatureCard("Bold", new TextBlock("Typography in Atelier").FontSize(15).Bold()).Column(1));
-        fontVariantsGrid.Add(CreateFeatureCard("Italic", new TextBlock("Typography in Atelier").FontSize(15).Italic()).Column(2));
-        fontVariantsGrid.Add(CreateFeatureCard("Bold Italic", new TextBlock("Typography in Atelier").FontSize(15).Bold().Italic()).Column(3));
+    private static TextBlock FamilyRow(string family) =>
+        new TextBlock($"{family}: {Pangram}").FontFamily(family).FontSize(16).TextTrimming();
 
-        // 2. Font Families Showcase
-        var familiesHeader = new TextBlock("Font Family Rendering").TitleSmall();
-        var familiesGrid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star, GridLength.Star)
-            .ColumnSpacing(10)
-            .Rows(GridLength.Auto, GridLength.Auto)
-            .RowSpacing(10);
-
-        familiesGrid.Add(CreateFeatureCard("Segoe UI (Sans)", new TextBlock("Clean modern UI text").FontFamily("Segoe UI").FontSize(15)).Column(0).Row(0));
-        familiesGrid.Add(CreateFeatureCard("Arial (Sans)", new TextBlock("Clean modern UI text").FontFamily("Arial").FontSize(15)).Column(1).Row(0));
-        familiesGrid.Add(CreateFeatureCard("Georgia (Serif)", new TextBlock("Elegant editorial serif").FontFamily("Georgia").FontSize(15)).Column(2).Row(0));
-        familiesGrid.Add(CreateFeatureCard("Consolas (Monospace)", new TextBlock("Code & monospace 0123").FontFamily("Consolas").FontSize(14)).Column(0).Row(1));
-        familiesGrid.Add(CreateFeatureCard("Trebuchet MS (Geometric)", new TextBlock("Dynamic geometric sans").FontFamily("Trebuchet MS").FontSize(15)).Column(1).Row(1));
-        familiesGrid.Add(CreateFeatureCard("Verdana (Legible)", new TextBlock("High readability text").FontFamily("Verdana").FontSize(14)).Column(2).Row(1));
-
-        // 3. Color & Emphasis
-        var colorsHeader = new TextBlock("Color Tokens & Semantic Emphasis").TitleSmall();
-        var colorsGrid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star, GridLength.Star, GridLength.Star)
-            .ColumnSpacing(10);
-
-        colorsGrid.Add(CreateFeatureCard("Standard", new TextBlock("Default OnSurface text").FontSize(13)).Column(0));
-        colorsGrid.Add(CreateFeatureCard("Muted / Secondary", new TextBlock("De-emphasized text").FontSize(13).Muted()).Column(1));
-        colorsGrid.Add(CreateFeatureCard("Primary Accent", new TextBlock("Primary colored text").FontSize(13).Bold().Foreground(Color.FromHex("#3B82F6"))).Column(2));
-        colorsGrid.Add(CreateFeatureCard("Alert / Error", new TextBlock("Important error warning").FontSize(13).Bold().Foreground(Color.FromHex("#EF4444"))).Column(3));
-
-        // 4. Multi-Line Text Wrapping & Alignment
-        var wrapHeader = new TextBlock("Text Wrapping & Multi-Line Alignment").TitleSmall();
-        var wrapGrid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star, GridLength.Star)
-            .ColumnSpacing(10);
-
-        var leftText = new TextBlock("Left aligned multi-line paragraph. Text flows naturally with uniform left margin.")
-            .FontSize(12)
-            .TextAlignment(TextAlignment.Left)
-            .TextWrapping(TextWrapping.Wrap);
-
-        var centerText = new TextBlock("Center aligned paragraph. Every line is balanced horizontally around the center axis.")
-            .FontSize(12)
-            .TextAlignment(TextAlignment.Center)
-            .TextWrapping(TextWrapping.Wrap);
-
-        var rightText = new TextBlock("Right aligned paragraph. Used for numeric data, right-to-left indicators, and captions.")
-            .FontSize(12)
-            .TextAlignment(TextAlignment.Right)
-            .TextWrapping(TextWrapping.Wrap);
-
-        wrapGrid.Add(CreateFeatureCard("Align: Left", leftText).Column(0));
-        wrapGrid.Add(CreateFeatureCard("Align: Center", centerText).Column(1));
-        wrapGrid.Add(CreateFeatureCard("Align: Right", rightText).Column(2));
-
-        stack.Children(
-            fontVariantsHeader, fontVariantsGrid,
-            familiesHeader, familiesGrid,
-            colorsHeader, colorsGrid,
-            wrapHeader, wrapGrid
-        );
-
-        return CreateSectionCard(
-            "TextBlock Core Capabilities",
-            "Demonstration of Bold, Italic, FontFamily, Muted, Foreground colors, TextAlignment, and responsive TextWrapping.",
-            stack
-        );
-    }
-
-    private static UIElement CreateFeatureCard(string title, UIElement content)
-    {
-        var card = new Card(CardVariant.Filled)
-            .Padding(14)
-            .CornerRadius(8);
-
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 8 }
-            .Children(
-                new TextBlock(title).LabelSmall().Foreground(Color.FromHex("#3B82F6")),
-                content
-            );
-
-        card.Child = stack;
-        return card;
-    }
+    private static UIElement StyleAndColorSection() => Ui.Section("Style and color",
+        "Bold, Italic and Muted are shortcuts. Text without a Foreground of its own inherits the color of its container " +
+        "(a filled button's label, for example) or uses the theme's text color.",
+        Ui.Demo("Style",
+            Ui.Row(
+                new TextBlock("Regular").FontSize(18),
+                new TextBlock("Bold").FontSize(18).Bold(),
+                new TextBlock("Italic").FontSize(18).Italic(),
+                new TextBlock("Bold italic").FontSize(18).Bold().Italic(),
+                new TextBlock("Muted").FontSize(18).Muted())),
+        Ui.Demo("Theme colors",
+            Ui.Row(
+                new TextBlock("On surface").FontSize(18),
+                new TextBlock("Primary").FontSize(18).Themed(TextBlock.ForegroundProperty, c => c.Primary),
+                new TextBlock("Secondary").FontSize(18).Themed(TextBlock.ForegroundProperty, c => c.Secondary),
+                new TextBlock("Tertiary").FontSize(18).Themed(TextBlock.ForegroundProperty, c => c.Tertiary),
+                new TextBlock("Error").FontSize(18).Themed(TextBlock.ForegroundProperty, c => c.Error),
+                new Border().Padding(12, 6).CornerRadius(8)
+                    .Themed(Border.BackgroundProperty, c => c.InverseSurface)
+                    .Child(new TextBlock("Inverse").FontSize(18).Themed(TextBlock.ForegroundProperty, c => c.InverseOnSurface)))),
+        Ui.Demo("Inherited from the container",
+            Ui.Row(
+                new Button().Content(new TextBlock("Label in a filled button")),
+                new Button().Variant(ButtonVariant.Tonal).Content(new TextBlock("Tonal")),
+                new Button().Variant(ButtonVariant.Text).Content(new TextBlock("Text")))));
 
     #endregion
 
-    #region Section 4: Content Composition Pattern
+    #region Layout
 
-    private static UIElement CreateCompositionSection()
-    {
-        var articleCard = new Card(CardVariant.Filled)
-            .Padding(24)
-            .CornerRadius(14);
+    private static UIElement LayoutSection() => Ui.Section("Alignment, wrapping and trimming",
+        "TextAlignment aligns lines within the block's width. TextWrapping breaks long lines at word boundaries; " +
+        "TextTrimming ends text that doesn't fit with an ellipsis, and MaxLines limits wrapped text.",
+        Ui.Columns(220,
+            Box("TextAlignment.Left", new TextBlock(LongText).TextWrapping().TextAlignment(TextAlignment.Left)),
+            Box("TextAlignment.Center", new TextBlock(LongText).TextWrapping().TextAlignment(TextAlignment.Center)),
+            Box("TextAlignment.Right", new TextBlock(LongText).TextWrapping().TextAlignment(TextAlignment.Right))),
+        Ui.Columns(220,
+            Box("NoWrap (default), no trimming", new TextBlock(LongText)),
+            Box("TextTrimming.CharacterEllipsis", new TextBlock(LongText).TextTrimming(TextTrimming.CharacterEllipsis)),
+            Box("TextTrimming.WordEllipsis", new TextBlock(LongText).TextTrimming(TextTrimming.WordEllipsis))),
+        Ui.Columns(220,
+            Box("Wrap + MaxLines(2) + trimming", new TextBlock(LongText).TextWrapping().MaxLines(2).TextTrimming()),
+            Box("LineHeight(16)", new TextBlock(LongText).TextWrapping().LineHeight(16)),
+            Box("LineHeight(28)", new TextBlock(LongText).TextWrapping().LineHeight(28))),
+        Ui.Code("new TextBlock(text).TextWrapping().MaxLines(2).TextTrimming()   // wraps, then ends line 2 with \"…\""));
 
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        // Overline / Tag
-        var overline = new TextBlock("MATERIAL DESIGN 3 • ARCHITECTURE")
-            .LabelSmall()
-            .Foreground(Color.FromHex("#3B82F6"));
-
-        // Headline 1
-        var headline = new TextBlock("Harmonious Typography in Cross-Platform UI Frameworks")
-            .Heading1();
-
-        // Byline / Subtext with Italic
-        var bylineRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.AccountCircle, 18, foreground: Color.FromHex("#6B7280")),
-                new TextBlock("By Google DeepMind Engineering").Subtext().Italic(),
-                new TextBlock("•").Subtext(),
-                new TextBlock("Updated September 2026").Subtext()
-            );
-
-        // Body paragraph 1
-        var body1 = new TextBlock("Typography provides the visual foundation of any user interface. By combining a calibrated type scale with variable font axes and precise typographic hierarchy, applications achieve immediate clarity, aesthetic harmony, and seamless readability across all display densities.")
-            .NormalText()
-            .TextWrapping(TextWrapping.Wrap);
-
-        // Pullquote Card with Left Accent Border
-        var quoteCard = new Card(CardVariant.Outlined)
-            .Padding(16, 12)
-            .CornerRadius(8);
-
-        var quoteText = new TextBlock("\"Good typography is like glass: it allows the content to shine through with effortless clarity, while subtle adjustments in weight and grade create depth without distraction.\"")
-            .BodyMedium()
-            .Italic()
-            .TextWrapping(TextWrapping.Wrap);
-
-        quoteCard.Child = quoteText;
-
-        // Body paragraph 2
-        var body2 = new TextBlock("Atelier's styling system resolves Material Design 3 type scales globally while honoring local property overrides. Controls like TextBlock support fluent chainability, reactive two-way data bindings, and hardware-accelerated Skia font caching.")
-            .NormalText()
-            .TextWrapping(TextWrapping.Wrap);
-
-        // Footnote / Disclaimer
-        var footnote = new TextBlock("Note: Material Design 3 type scales are automatically registered into StyleManager.GlobalStyles whenever a MaterialTheme is initialized.")
-            .Caption();
-
-        stack.Children(overline, headline, bylineRow, body1, quoteCard, body2, footnote);
-        articleCard.Child = stack;
-
-        return CreateSectionCard(
-            "Real-World Content Composition",
-            "An editorial layout demonstrating how Overline, Heading1, Subtext, NormalText, Italic pullquotes, and Captions harmonize together.",
-            articleCard
-        );
-    }
+    // A labeled, outlined box that makes the text block's width visible.
+    private static UIElement Box(string label, TextBlock text) =>
+        new StackPanel().Spacing(6).Children(
+            new TextBlock(label).LabelMedium().Muted(),
+            new Border()
+                .Padding(12)
+                .CornerRadius(8)
+                .BorderThickness(1)
+                .ClipToBounds()
+                .Themed(Border.BorderBrushProperty, c => c.OutlineVariant)
+                .Child(text.BodyMedium()));
 
     #endregion
-
-    private static UIElement CreateSectionCard(string title, string description, UIElement content)
-    {
-        var card = new Card(CardVariant.Outlined)
-            .Padding(20)
-            .CornerRadius(12);
-
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-            .Children(
-                new TextBlock(title).TitleMedium(),
-                new TextBlock(description).Subtext()
-            )
-        );
-
-        stack.Add(content);
-        card.Child = stack;
-        return card;
-    }
 }
