@@ -462,6 +462,37 @@ public abstract class UIElement : VisualNode
     /// </summary>
     public bool IsHitTestVisible { get => GetValue(IsHitTestVisibleProperty); set => SetValue(IsHitTestVisibleProperty, value); }
 
+    /// <summary>
+    /// Scrolls every scrolling ancestor (see <see cref="IScrollHost"/>), innermost first, so the whole element is
+    /// visible, as far as the scroll ranges allow. Moving the keyboard focus with Tab does this for the new focus.
+    /// </summary>
+    /// <remarks>Uses the current layout: call it after the element has been laid out.</remarks>
+    public void BringIntoView() => BringIntoView(new Rect(0, 0, Bounds.Width, Bounds.Height));
+
+    /// <summary>
+    /// Scrolls every scrolling ancestor (see <see cref="IScrollHost"/>), innermost first, so that
+    /// <paramref name="rect"/> (in this element's coordinates) is visible, e.g. a text box's caret.
+    /// </summary>
+    /// <param name="rect">The part of the element to show, in its own coordinates.</param>
+    public void BringIntoView(Rect rect)
+    {
+        VerifyTreeAccess();
+        for (var node = Parent; node != null; node = node.Parent)
+        {
+            if (node is IScrollHost host)
+            {
+                // Each host re-arranges its content right away, so the next (outer) host sees the new position.
+                host.MakeVisible(this, rect);
+            }
+
+            // A popup's content is placed in window coordinates: scrolling the popup's owner wouldn't reveal it.
+            if (node is UIElement { IsOverlayElement: true })
+            {
+                break;
+            }
+        }
+    }
+
     /// <summary>Identifies the <see cref="Cursor"/> bindable property.</summary>
     public static readonly BindableProperty<CursorType> CursorProperty =
         BindableProperty.Register<UIElement, CursorType>(nameof(Cursor), CursorType.Default);

@@ -26,6 +26,12 @@ public static class ScrollViewerMarkup
     public static T ScrollBarVisibility<T>(this T scrollViewer, ScrollBarVisibility horizontal, ScrollBarVisibility vertical) where T : ScrollViewer =>
         scrollViewer.HorizontalScrollBarVisibility(horizontal).VerticalScrollBarVisibility(vertical);
 
+    /// <summary>
+    /// Sets whether scrolling an element into view (e.g. the keyboard focus) animates smoothly (the default) or jumps.
+    /// </summary>
+    public static T IsScrollAnimationEnabled<T>(this T scrollViewer, bool isEnabled = true) where T : ScrollViewer =>
+        scrollViewer.Set(ScrollViewer.IsScrollAnimationEnabledProperty, isEnabled);
+
     /// <summary>Handles <see cref="ScrollViewer.ScrollChanged"/>, raised when the scroll offset, viewport or content size changes.</summary>
     public static T OnScrollChanged<T>(this T scrollViewer, EventHandler<ScrollChangedEventArgs> handler) where T : ScrollViewer
     {

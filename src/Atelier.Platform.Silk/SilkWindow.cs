@@ -1376,7 +1376,7 @@ public class SilkWindow : IDisposable, IHostWindow
     private IKeyboard? _repeatingKeyboard;
     private ulong _nextRepeatTime;
     private const int InitialKeyRepeatDelayMs = 450;
-    private const int KeyRepeatIntervalMs = 35;
+    private const int KeyRepeatIntervalMs = 100;
 
     private static bool IsRepeatingKey(SilkKey key) => key switch
     {
@@ -1390,6 +1390,7 @@ public class SilkWindow : IDisposable, IHostWindow
         SilkKey.End => true,
         SilkKey.PageUp => true,
         SilkKey.PageDown => true,
+        SilkKey.Tab => true,
         _ => false
     };
 
@@ -1411,7 +1412,12 @@ public class SilkWindow : IDisposable, IHostWindow
             _nextRepeatTime = now + KeyRepeatIntervalMs;
 
             var atelierKey = MapKey(_repeatingKey);
-            if (atelierKey != Core.Events.Key.None)
+            if (atelierKey == Core.Events.Key.Tab)
+            {
+                if (_rootElement != null)
+                    CycleFocus(_repeatingKeyboard);
+            }
+            else if (atelierKey != Core.Events.Key.None)
             {
                 var keyEventArgs = new KeyEventArgs(atelierKey, _repeatingKeyCode, GetModifiers(_repeatingKeyboard), isDown: true, isRepeat: true);
                 if (!PopupManager.HandleKeyDown(keyEventArgs, _rootElement))
@@ -1422,25 +1428,21 @@ public class SilkWindow : IDisposable, IHostWindow
         }
     }
 
+    // Tab moves the focus forward, Shift+Tab back. Shift is read each time, so it can change while Tab is held.
+    private void CycleFocus(IKeyboard keyboard)
+    {
+        bool shift = keyboard.IsKeyPressed(SilkKey.ShiftLeft) || keyboard.IsKeyPressed(SilkKey.ShiftRight);
+        if (shift)
+            FocusManager.FocusPrevious(_rootElement!);
+        else
+            FocusManager.FocusNext(_rootElement!);
+        _needsRender = true;
+    }
+
     private void OnKeyDown(IKeyboard keyboard, SilkKey key, int keyCode)
     {
         _needsRender = true; // discrete input usually changes something on screen
         var atelierKey = MapKey(key);
-
-        // Tab focus cycling
-        if (atelierKey == Core.Events.Key.Tab && _rootElement != null)
-        {
-            bool shift = keyboard.IsKeyPressed(SilkKey.ShiftLeft) || keyboard.IsKeyPressed(SilkKey.ShiftRight);
-            if (shift)
-            {
-                FocusManager.FocusPrevious(_rootElement);
-            }
-            else
-            {
-                FocusManager.FocusNext(_rootElement);
-            }
-            return;
-        }
 
         if (IsRepeatingKey(key))
         {
@@ -1448,6 +1450,12 @@ public class SilkWindow : IDisposable, IHostWindow
             _repeatingKeyCode = keyCode;
             _repeatingKeyboard = keyboard;
             _nextRepeatTime = (ulong)Environment.TickCount64 + InitialKeyRepeatDelayMs;
+        }
+
+        if (atelierKey == Core.Events.Key.Tab && _rootElement != null)
+        {
+            CycleFocus(keyboard);
+            return;
         }
 
         var keyEventArgs = new KeyEventArgs(atelierKey, keyCode, GetModifiers(keyboard), true);

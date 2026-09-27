@@ -428,6 +428,9 @@ public static class FocusManager
         s_focusables.Clear();
 
         SetFocus(target);
+
+        // Scroll the new focus into view, so tabbing through a long page never focuses something out of sight.
+        target.BringIntoView();
         return true;
     }
 

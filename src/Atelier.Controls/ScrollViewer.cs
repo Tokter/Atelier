@@ -96,7 +96,7 @@ public sealed class ScrollChangedEventArgs : EventArgs
 /// Home/End to the start/end. Keys that don't move the content are left unhandled so outer viewers can scroll.
 /// </para>
 /// </remarks>
-public class ScrollViewer : ContentControl
+public class ScrollViewer : ContentControl, IScrollHost
 {
     /// <summary>Identifies the <see cref="ScrollOffsetX"/> bindable property.</summary>
     public static readonly BindableProperty<float> ScrollOffsetXProperty =
@@ -348,6 +348,167 @@ public class ScrollViewer : ContentControl
     /// <param name="offset">The requested offset; <see cref="float.PositiveInfinity"/> means the end.</param>
     public void ScrollToVerticalOffset(float offset) => ScrollOffsetY = offset;
 
+    /// <summary>The space kept between an element scrolled into view and the viewport edge, so its focus ring shows.</summary>
+    public const float BringIntoViewMargin = 8f;
+
+    /// <summary>
+    /// Scrolls, if needed, so that <paramref name="element"/> (a descendant) is visible, scrolling as little as
+    /// possible. To also scroll outer scroll viewers, use <see cref="UIElement.BringIntoView()"/>.
+    /// </summary>
+    /// <param name="element">The descendant to show; other elements are ignored.</param>
+    public void ScrollIntoView(UIElement element) =>
+        ScrollIntoView(element, new Rect(0, 0, element.Bounds.Width, element.Bounds.Height));
+
+    /// <summary>
+    /// Scrolls, if needed, so that <paramref name="rect"/> of <paramref name="element"/> (a descendant, in its own
+    /// coordinates) is visible, keeping <see cref="BringIntoViewMargin"/> to the edge. When it is larger than the
+    /// viewport, its top (left) edge is kept visible.
+    /// </summary>
+    public void ScrollIntoView(UIElement element, Rect rect)
+    {
+        if (!IsDescendant(element))
+        {
+            return;
+        }
+
+        // The element's rectangle in this viewer's coordinates (its content is arranged at -offset).
+        var transform = element.GetTransformToAncestor(this);
+        var a = System.Numerics.Vector2.Transform(new System.Numerics.Vector2(rect.X, rect.Y), transform);
+        var b = System.Numerics.Vector2.Transform(new System.Numerics.Vector2(rect.Right, rect.Bottom), transform);
+        float left = Math.Min(a.X, b.X) - BringIntoViewMargin, right = Math.Max(a.X, b.X) + BringIntoViewMargin;
+        float top = Math.Min(a.Y, b.Y) - BringIntoViewMargin, bottom = Math.Max(a.Y, b.Y) + BringIntoViewMargin;
+
+        float viewWidth = Viewport.Width > 0 ? Viewport.Width : Bounds.Width;
+        float viewHeight = Viewport.Height > 0 ? Viewport.Height : Bounds.Height;
+
+        float targetX = ScrollOffsetX, targetY = ScrollOffsetY;
+        if (CanScrollVertically)
+        {
+            if (top < 0)
+            {
+                targetY += top;
+            }
+            else if (bottom > viewHeight)
+            {
+                targetY += Math.Min(bottom - viewHeight, top);
+            }
+        }
+
+        if (CanScrollHorizontally)
+        {
+            if (left < 0)
+            {
+                targetX += left;
+            }
+            else if (right > viewWidth)
+            {
+                targetX += Math.Min(right - viewWidth, left);
+            }
+        }
+
+        ScrollTo(targetX, targetY, IsScrollAnimationEnabled);
+    }
+
+    #region Scroll animation
+
+    /// <summary>Identifies the <see cref="IsScrollAnimationEnabled"/> property.</summary>
+    public static readonly BindableProperty<bool> IsScrollAnimationEnabledProperty =
+        BindableProperty.Register<ScrollViewer, bool>(nameof(IsScrollAnimationEnabled), true);
+
+    /// <summary>
+    /// Gets or sets whether <see cref="ScrollIntoView(UIElement, Rect)"/> (and so bringing the keyboard focus into view)
+    /// scrolls smoothly over <see cref="ScrollAnimationDuration"/> instead of jumping. The default is <c>true</c>;
+    /// without an animation clock (see <see cref="SetGlobalAnimationClock"/>) scrolling always jumps.
+    /// </summary>
+    public bool IsScrollAnimationEnabled
+    {
+        get => GetValue(IsScrollAnimationEnabledProperty);
+        set => SetValue(IsScrollAnimationEnabledProperty, value);
+    }
+
+    /// <summary>The duration of a smooth scroll.</summary>
+    public static readonly TimeSpan ScrollAnimationDuration = TimeSpan.FromMilliseconds(200);
+
+    private FloatAnimation? _scrollAnimation;
+    private bool _isAnimatingScroll;
+
+    /// <summary>Gets whether a smooth scroll is running.</summary>
+    public bool IsScrollAnimating => _scrollAnimation != null;
+
+    /// <summary>
+    /// Scrolls to the given offsets (clamped to the scroll range), smoothly over <see cref="ScrollAnimationDuration"/>
+    /// when <paramref name="animate"/> is set and an animation clock is available, otherwise at once.
+    /// </summary>
+    /// <remarks>
+    /// The offsets reach their target values immediately and the content then animates there, so code that reads the
+    /// layout right after the call (like scrolling an outer viewer to the same element) sees the final positions.
+    /// Scrolling by other means during the animation stops it.
+    /// </remarks>
+    public void ScrollTo(float offsetX, float offsetY, bool animate = true)
+    {
+        _scrollAnimation?.Stop();
+        _scrollAnimation = null;
+
+        float fromX = ScrollOffsetX, fromY = ScrollOffsetY;
+        ScrollOffsetX = offsetX;
+        ScrollOffsetY = offsetY;
+        float toX = ScrollOffsetX, toY = ScrollOffsetY; // after clamping
+
+        if (!animate || _clock == null || (fromX == toX && fromY == toY))
+        {
+            return;
+        }
+
+        SetOffsetsFromAnimation(fromX, fromY);
+        FloatAnimation? animation = null;
+        animation = new FloatAnimation(0f, 1f, ScrollAnimationDuration, t =>
+        {
+            if (_scrollAnimation == animation)
+            {
+                SetOffsetsFromAnimation(fromX + (toX - fromX) * t, fromY + (toY - fromY) * t);
+            }
+        }, Easing.EaseOutCubic, () =>
+        {
+            if (_scrollAnimation == animation)
+            {
+                _scrollAnimation = null;
+            }
+        });
+        _scrollAnimation = animation;
+        _clock.Add(animation);
+    }
+
+    private void SetOffsetsFromAnimation(float x, float y)
+    {
+        _isAnimatingScroll = true;
+        try
+        {
+            ScrollOffsetX = x;
+            ScrollOffsetY = y;
+        }
+        finally
+        {
+            _isAnimatingScroll = false;
+        }
+    }
+
+    #endregion
+
+    /// <inheritdoc/>
+    void IScrollHost.MakeVisible(UIElement element, Rect rect) => ScrollIntoView(element, rect);
+
+    private bool IsDescendant(UIElement element)
+    {
+        for (var node = element.Parent; node != null; node = node.Parent)
+        {
+            if (node == this)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>Sets <see cref="ScrollOffsetX"/>; the value is clamped to the scrollable range.</summary>
     /// <param name="offset">The requested offset; <see cref="float.PositiveInfinity"/> means the end.</param>
     public void ScrollToHorizontalOffset(float offset) => ScrollOffsetX = offset;
@@ -366,6 +527,13 @@ public class ScrollViewer : ContentControl
         if (_isArranging)
         {
             return; // ArrangeOverride positions the content and raises ScrollChanged itself.
+        }
+
+        // Any other scroll (wheel, scroll bar, keys, code) takes over from a running scroll animation.
+        if (_scrollAnimation != null && !_isAnimatingScroll)
+        {
+            _scrollAnimation.Stop();
+            _scrollAnimation = null;
         }
 
         UpdateChildArrange();
