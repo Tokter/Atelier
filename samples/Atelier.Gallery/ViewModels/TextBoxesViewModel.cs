@@ -1,118 +1,99 @@
-using System;
+using System.ComponentModel.DataAnnotations;
 using Atelier.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Atelier.Gallery.ViewModels;
 
+/// <summary>
+/// A sign-up form validated with data annotations. Text fields bound to it show the validation errors
+/// (INotifyDataErrorInfo) in place of their supporting text.
+/// </summary>
+public partial class SignUpForm : ObservableValidator
+{
+    [ObservableProperty]
+    [NotifyDataErrorInfo]
+    [Required(ErrorMessage = "Enter your name")]
+    private string _fullName = "Alex Morgan";
+
+    [ObservableProperty]
+    [NotifyDataErrorInfo]
+    [Required(ErrorMessage = "Enter your email address")]
+    [RegularExpression(@"^[^@\s]+@[^@\s]+\.[^@\s]+$", ErrorMessage = "Enter an address like name@example.com")]
+    private string _email = "alex@atelier";
+
+    [ObservableProperty]
+    [NotifyDataErrorInfo]
+    [MinLength(8, ErrorMessage = "Use at least 8 characters")]
+    private string _password = "secret";
+
+    public SignUpForm() => ValidateAllProperties();
+
+    public void Validate() => ValidateAllProperties();
+
+    public void Reset()
+    {
+        FullName = "Alex Morgan";
+        Email = "alex@atelier";
+        Password = "secret";
+    }
+}
+
 public partial class TextBoxesViewModel : PageViewModel
 {
-    // Master interactive enable/disable toggle
-    [ObservableProperty]
-    private bool _interactiveControlsEnabled = true;
-
-    // Outlined Fields
-    [ObservableProperty]
-    private string _outlinedUsername = "";
+    public const int BioMaxLength = 80;
 
     [ObservableProperty]
-    private string _outlinedEmail = "alex.morgan@atelier.design";
+    private bool _controlsEnabled = true;
 
     [ObservableProperty]
-    private string _outlinedSearch = "";
+    private bool _useFilledVariant;
+
+    // Two-way binding: updates on every keystroke vs. when the field loses focus.
+    [ObservableProperty]
+    private string _liveText = "Type here";
 
     [ObservableProperty]
-    private string _outlinedRepo = "";
+    private string _lostFocusText = "Commits on focus loss";
 
     [ObservableProperty]
-    private string _outlinedPhone = "+1 (555) 019-2834";
+    [NotifyPropertyChangedFor(nameof(BioCounter))]
+    private string _bio = "UI framework enthusiast.";
 
     [ObservableProperty]
-    private string _outlinedSecurityKey = "SuperSecretPass!";
-
-    // Filled Fields
-    [ObservableProperty]
-    private string _filledOrganization = "";
+    private string _lastTextChanged = "Type in the field to see TextChanged";
 
     [ObservableProperty]
-    private string _filledEnvironment = "Production Cluster Alpha";
-
-    [ObservableProperty]
-    private string _filledApiToken = "";
-
-    [ObservableProperty]
-    private string _filledBranch = "";
-
-    [ObservableProperty]
-    private string _filledLocation = "San Francisco, CA";
-
-    [ObservableProperty]
-    private string _filledInbox = "contact@atelier.design";
-
-    // Two-Way MVVM Binding Card Fields
-    [ObservableProperty]
-    private string _username = "alex.morgan";
-
-    [ObservableProperty]
-    private string _email = "alex.morgan@atelier.design";
-
-    [ObservableProperty]
-    private string _phone = "+1 (555) 019-2834";
-
-    [ObservableProperty]
-    private string _bio = "UI framework enthusiast and designer.";
+    private string _submitResult = "Fix the errors and submit";
 
     public TextBoxesViewModel()
     {
         PageIcon = MaterialIconKind.Edit;
         PageTitle = "Text Fields";
+        Keywords = "textbox text field input password label placeholder validation form";
+    }
+
+    public SignUpForm Form { get; } = new();
+
+    public string BioCounter => $"{Bio.Length} / {BioMaxLength}";
+
+    [RelayCommand]
+    private void Submit()
+    {
+        Form.Validate();
+        SubmitResult = Form.HasErrors ? "Please fix the fields marked in red" : $"Submitted: {Form.FullName} <{Form.Email}>";
     }
 
     [RelayCommand]
-    private void ResetDefaults()
+    private void Reset()
     {
-        InteractiveControlsEnabled = true;
-
-        OutlinedUsername = "";
-        OutlinedEmail = "alex.morgan@atelier.design";
-        OutlinedSearch = "";
-        OutlinedRepo = "";
-        OutlinedPhone = "+1 (555) 019-2834";
-        OutlinedSecurityKey = "SuperSecretPass!";
-
-        FilledOrganization = "";
-        FilledEnvironment = "Production Cluster Alpha";
-        FilledApiToken = "";
-        FilledBranch = "";
-        FilledLocation = "San Francisco, CA";
-        FilledInbox = "contact@atelier.design";
-
-        Username = "alex.morgan";
-        Email = "alex.morgan@atelier.design";
-        Phone = "+1 (555) 019-2834";
-        Bio = "UI framework enthusiast and designer.";
-    }
-
-    [RelayCommand]
-    private void ClearAll()
-    {
-        OutlinedUsername = "";
-        OutlinedEmail = "";
-        OutlinedSearch = "";
-        OutlinedRepo = "";
-        OutlinedPhone = "";
-        OutlinedSecurityKey = "";
-
-        FilledOrganization = "";
-        FilledEnvironment = "";
-        FilledApiToken = "";
-        FilledBranch = "";
-        FilledLocation = "";
-        FilledInbox = "";
-
-        Username = "";
-        Email = "";
-        Phone = "";
-        Bio = "";
+        ControlsEnabled = true;
+        UseFilledVariant = false;
+        LiveText = "Type here";
+        LostFocusText = "Commits on focus loss";
+        Bio = "UI framework enthusiast.";
+        LastTextChanged = "Type in the field to see TextChanged";
+        SubmitResult = "Fix the errors and submit";
+        Form.Reset();
     }
 }

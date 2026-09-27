@@ -1,397 +1,108 @@
-using System;
 using Atelier.Controls;
-using Atelier.Core.Events;
 using Atelier.Core.Primitives;
+using Atelier.Core.Properties;
 using Atelier.Core.Tree;
+using Atelier.Gallery.Infrastructure;
+using Atelier.Gallery.ViewModels;
 using Atelier.Layout;
 using Atelier.Markup;
-using Atelier.Theming;
-using Atelier.Gallery.ViewModels;
 
 namespace Atelier.Gallery.Views;
 
-public class TextBoxesView : Grid
+public class TextBoxesView : GalleryPage
 {
-    private readonly TextBoxesViewModel _viewModel;
-    private readonly ScrollViewer _scrollViewer;
-
-    public TextBoxesView() : this(new TextBoxesViewModel())
-    {
-    }
+    private readonly TextBoxesViewModel _vm;
 
     public TextBoxesView(TextBoxesViewModel viewModel)
+        : base(MaterialIconKind.Edit, "Text Fields",
+            "Text fields let users enter and edit text. They come in outlined and filled variants, with a floating label, " +
+            "placeholder, leading icon, supporting text and validation errors.")
     {
-        _viewModel = viewModel;
-        DataContext = _viewModel;
+        _vm = viewModel;
 
-        this.Rows(GridLength.Auto, GridLength.Star);
-        this.RowSpacing(16);
+        Settings(
+            new Switch("Controls enabled").ShowThumbIcon().BindIsChecked(_vm, v => v.ControlsEnabled, (v, on) => v.ControlsEnabled = on),
+            new Switch("Filled variant").BindIsChecked(_vm, v => v.UseFilledVariant, (v, on) => v.UseFilledVariant = on),
+            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
-        // 1. Master Controls & Interactive Toggle Banner (Fixed, Non-Scrolling Header)
-        this.Add(CreateMasterBanner().Row(0));
+        SectionsPanel.BindIsEnabled(_vm, v => v.ControlsEnabled);
 
-        // 2. Scrollable Showcase Cards Container
-        var cardsStack = new StackPanel
-        {
-            Orientation = Orientation.Vertical,
-            Spacing = 16
-        }.Children(
-            CreateOutlinedCard(),
-            CreateFilledCard(),
-            CreateDataBindingCard()
-        );
-
-        cardsStack.Margin = new Thickness(0, 0, 10, 20);
-
-        _scrollViewer = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = cardsStack
-        }.Row(1);
-
-        this.Add(_scrollViewer);
+        Sections(AnatomySection(), InputOptionsSection(), BindingSection(), FormSection());
     }
 
-    public override void OnPointerWheel(PointerWheelEventArgs e)
-    {
-        base.OnPointerWheel(e);
-        if (!e.Handled && _scrollViewer != null)
-        {
-            _scrollViewer.OnPointerWheel(e);
-        }
-    }
+    private UIElement AnatomySection() => Ui.Section("Anatomy and states",
+        "The label rests inside the empty field and floats above it on focus or when there is text. The placeholder " +
+        "appears once the label has floated. Use the header switch to see the filled variant.",
+        Ui.Columns(260,
+            Field().Label("Label only"),
+            Field().Label("With placeholder").Placeholder("e.g. Acme Corp"),
+            Field("Pre-filled value").Label("With text"),
+            Field().Label("Search").LeadingIconKind(MaterialIconKind.Search).Placeholder("Type a keyword"),
+            Field().Label("Phone").LeadingIconKind(MaterialIconKind.Phone).SupportingText("Include the country code"),
+            Field().Placeholder("No label, placeholder only")),
+        Ui.Demo("Read-only and disabled",
+            Ui.Columns(260,
+                Field("Can be selected and copied").Label("Read-only").IsReadOnly(),
+                Field().Label("Disabled").Placeholder("Can't be edited").IsEnabled(false),
+                Field("Protected value").Label("Disabled with text").IsEnabled(false))));
 
-    private UIElement CreateMasterBanner()
-    {
-        var card = new Card(CardVariant.Filled)
-        {
-            Padding = new Thickness(20),
-            CornerRadius = new CornerRadius(14)
-        };
+    private UIElement InputOptionsSection() => Ui.Section("Input options",
+        "Limit the length, mask passwords and align the text. Ctrl+Z and Ctrl+Y undo and redo; UndoLimit sets how many " +
+        "steps are kept (100 by default).",
+        Ui.Columns(260,
+            Ui.Demo("Maximum length",
+                Field().Label("Short bio")
+                    .MaxLength(TextBoxesViewModel.BioMaxLength)
+                    .BindText(_vm, v => v.Bio, (v, text) => v.Bio = text)
+                    .BindSupportingText(_vm, v => v.BioCounter)),
+            Ui.Demo("Password",
+                Field("hunter2hunter2").Label("Password").LeadingIconKind(MaterialIconKind.Lock).PasswordChar()
+                    .SupportingText("Copy and cut are disabled")),
+            Ui.Demo("Text alignment",
+                Field("Centered").Label("Center").TextAlignment(TextAlignment.Center),
+                Field("1,234.56").Label("Amount (right)").TextAlignment(TextAlignment.Right)),
+            Ui.Demo("Undo and caret",
+                Field("Edit me, then press Ctrl+Z").Label("Undo limit 3").UndoLimit(3),
+                Field("A wider caret").Label("Caret width 3").CaretWidth(3))));
 
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
+    private UIElement BindingSection() => Ui.Section("Binding and events",
+        "Text binds two-way. By default the source is updated on every change; with UpdateSourceTrigger.LostFocus only " +
+        "when the field loses focus. TextChanged fires on every change.",
+        Ui.Columns(300,
+            Ui.Demo("On every change",
+                Field().Label("Live").BindText(_vm, v => v.LiveText, (v, text) => v.LiveText = text),
+                Ui.Readout(_vm, v => $"LiveText = \"{v.LiveText}\"")),
+            Ui.Demo("On focus loss",
+                Field().Label("Deferred").BindText(_vm, v => v.LostFocusText, (v, text) => v.LostFocusText = text, UpdateSourceTrigger.LostFocus),
+                Ui.Readout(_vm, v => $"LostFocusText = \"{v.LostFocusText}\"")),
+            Ui.Demo("TextChanged event",
+                Field().Label("Events").OnTextChanged(text => _vm.LastTextChanged = $"TextChanged → \"{text}\" ({text.Length} chars)"),
+                Ui.Readout(_vm, v => v.LastTextChanged))),
+        Ui.Code("new TextBox().Label(\"Deferred\")\n" +
+                "    .BindText(vm, v => v.Name, (v, text) => v.Name = text, UpdateSourceTrigger.LostFocus)"));
 
-        // Header text
-        stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 4 }
-            .Children(
-                new TextBlock("Text Fields (Material Design 3)").TitleLarge(),
-                new TextBlock("Demonstrating Outlined and Filled text boxes with animated floating labels, leading icons, supporting text, and live data-binding.")
-                    .Subtext()
-            )
-        );
+    private UIElement FormSection() => Ui.Section("Validation",
+        "When the bound object implements INotifyDataErrorInfo (here an ObservableValidator with data annotations), the " +
+        "field shows its error in place of the supporting text.",
+        Ui.Columns(260,
+            Field().Label("Full name").LeadingIconKind(MaterialIconKind.Person)
+                .BindText(_vm.Form, f => f.FullName, (f, text) => f.FullName = text),
+            Field().Label("Email").LeadingIconKind(MaterialIconKind.Mail).SupportingText("We never share your email")
+                .BindText(_vm.Form, f => f.Email, (f, text) => f.Email = text),
+            Field().Label("Password").LeadingIconKind(MaterialIconKind.Key).PasswordChar().SupportingText("At least 8 characters")
+                .BindText(_vm.Form, f => f.Password, (f, text) => f.Password = text)),
+        Ui.Row(
+            new Button("Create account").Command(_vm.SubmitCommand),
+            Ui.Readout(_vm, v => v.SubmitResult)),
+        Ui.Code("[ObservableProperty, NotifyDataErrorInfo]\n[MinLength(8, ErrorMessage = \"Use at least 8 characters\")]\n" +
+                "private string _password;\n\n" +
+                "new TextBox().Label(\"Password\").PasswordChar()\n    .BindText(form, f => f.Password, (f, text) => f.Password = text)"));
 
-        // Interactive master toggle row
-        var toggleRow = new WrapPanel { HorizontalSpacing = 20, VerticalSpacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Switch("Interactive Controls Enabled")
-                    .ShowThumbIcon()
-                    .BindIsChecked(_viewModel, x => x.InteractiveControlsEnabled, (vm, v) => vm.InteractiveControlsEnabled = v),
-
-                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-                    .Children(
-                        new Icon(MaterialIconKind.CheckCircle, 18)
-                            .VerticalAlignment(VerticalAlignment.Center)
-                            .BindKind(_viewModel, x => x.InteractiveControlsEnabled ? MaterialIconKind.CheckCircle : MaterialIconKind.Cancel)
-                            .BindForeground(_viewModel, x => x.InteractiveControlsEnabled ? Color.FromHex("#4CAF50") : Color.FromHex("#E53935")),
-
-                        new TextBlock()
-                            .LabelMedium()
-                            .VerticalAlignment(VerticalAlignment.Center)
-                            .BindText(_viewModel, x => x.InteractiveControlsEnabled
-                                ? "Controls are ENABLED (interactive)"
-                                : "Controls are DISABLED (test state)")
-                    ),
-
-                new Button("Reset to Defaults")
-                    .Variant(ButtonVariant.Tonal)
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ResetDefaultsCommand),
-
-                new Button("Clear All Fields")
-                    .Variant(ButtonVariant.Outlined)
-                    .VerticalAlignment(VerticalAlignment.Center)
-                    .Command(_viewModel.ClearAllCommand)
-            );
-
-        stack.Add(toggleRow);
-        card.Child = stack;
-        return card;
-    }
-
-    private UIElement CreateOutlinedCard()
-    {
-        var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        children.Add(new TextBlock("Standard, Leading Icon & Supporting Text Configurations").TitleSmall());
-
-        var grid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star)
-            .Rows(GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto)
-            .RowSpacing(14)
-            .ColumnSpacing(20)
-            .Children(
-                // Row 0: Basic Outlined Empty vs Populated
-                new TextBox()
-                    .Variant(TextBoxVariant.Outlined)
-                    .Label("Username")
-                    .Placeholder("Enter account username")
-                    .BindText(_viewModel, x => x.OutlinedUsername, (vm, v) => vm.OutlinedUsername = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(0),
-
-                new TextBox()
-                    .Variant(TextBoxVariant.Outlined)
-                    .Label("Email Address")
-                    .BindText(_viewModel, x => x.OutlinedEmail, (vm, v) => vm.OutlinedEmail = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(1),
-
-                // Row 1: Leading Icon & Supporting Text
-                new TextBox()
-                    .Variant(TextBoxVariant.Outlined)
-                    .Label("Search Symbols")
-                    .LeadingIconKind(MaterialIconKind.Search)
-                    .Placeholder("Type symbol or keyword...")
-                    .BindText(_viewModel, x => x.OutlinedSearch, (vm, v) => vm.OutlinedSearch = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(1).Column(0),
-
-                new TextBox()
-                    .Variant(TextBoxVariant.Outlined)
-                    .Label("Repository Name")
-                    .SupportingText("Visible to members of this organization")
-                    .Placeholder("my-awesome-repo")
-                    .BindText(_viewModel, x => x.OutlinedRepo, (vm, v) => vm.OutlinedRepo = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(1).Column(1),
-
-                // Row 2: Combined Leading Icon + Supporting Text
-                new TextBox()
-                    .Variant(TextBoxVariant.Outlined)
-                    .Label("Mobile Number")
-                    .LeadingIconKind(MaterialIconKind.Phone)
-                    .SupportingText("Include country code (e.g. +1)")
-                    .BindText(_viewModel, x => x.OutlinedPhone, (vm, v) => vm.OutlinedPhone = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(2).Column(0),
-
-                new TextBox()
-                    .Variant(TextBoxVariant.Outlined)
-                    .Label("Account Security Key")
-                    .LeadingIconKind(MaterialIconKind.Lock)
-                    .SupportingText("Minimum 8 characters with symbols")
-                    .BindText(_viewModel, x => x.OutlinedSecurityKey, (vm, v) => vm.OutlinedSecurityKey = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(2).Column(1),
-
-                // Row 3: Disabled States
-                new TextBox()
-                    .Variant(TextBoxVariant.Outlined)
-                    .Label("Disabled Empty")
-                    .Placeholder("Cannot enter text")
-                    .IsEnabled(false)
-                    .Row(3).Column(0),
-
-                new TextBox("Protected system configuration")
-                    .Variant(TextBoxVariant.Outlined)
-                    .Label("Disabled Populated")
-                    .IsEnabled(false)
-                    .Row(3).Column(1)
-            );
-
-        children.Add(grid);
-
-        return CreateCard(
-            "Outlined Text Fields",
-            "Outlined fields feature a border around the entire container with a transparent background. When focused or populated, the label smoothly animates into the top border notch.",
-            children
-        );
-    }
-
-    private UIElement CreateFilledCard()
-    {
-        var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        children.Add(new TextBlock("Container Background & Active Underline Indicator").TitleSmall());
-
-        var grid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star)
-            .Rows(GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Auto)
-            .RowSpacing(14)
-            .ColumnSpacing(20)
-            .Children(
-                // Row 0: Basic Filled Empty vs Populated
-                new TextBox()
-                    .Variant(TextBoxVariant.Filled)
-                    .Label("Organization")
-                    .Placeholder("e.g. Acme Corp")
-                    .BindText(_viewModel, x => x.FilledOrganization, (vm, v) => vm.FilledOrganization = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(0),
-
-                new TextBox()
-                    .Variant(TextBoxVariant.Filled)
-                    .Label("Environment Name")
-                    .BindText(_viewModel, x => x.FilledEnvironment, (vm, v) => vm.FilledEnvironment = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(1),
-
-                // Row 1: Leading Icon & Supporting Text
-                new TextBox()
-                    .Variant(TextBoxVariant.Filled)
-                    .Label("API Bearer Token")
-                    .LeadingIconKind(MaterialIconKind.Key)
-                    .Placeholder("Paste OAuth or bearer token...")
-                    .BindText(_viewModel, x => x.FilledApiToken, (vm, v) => vm.FilledApiToken = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(1).Column(0),
-
-                new TextBox()
-                    .Variant(TextBoxVariant.Filled)
-                    .Label("Deployment Branch")
-                    .SupportingText("Target branch for continuous deployment")
-                    .Placeholder("main")
-                    .BindText(_viewModel, x => x.FilledBranch, (vm, v) => vm.FilledBranch = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(1).Column(1),
-
-                // Row 2: Combined Leading Icon + Supporting Text
-                new TextBox()
-                    .Variant(TextBoxVariant.Filled)
-                    .Label("Primary Office")
-                    .LeadingIconKind(MaterialIconKind.LocationOn)
-                    .SupportingText("Headquarters campus location")
-                    .BindText(_viewModel, x => x.FilledLocation, (vm, v) => vm.FilledLocation = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(2).Column(0),
-
-                new TextBox()
-                    .Variant(TextBoxVariant.Filled)
-                    .Label("Inquiry Inbox")
-                    .LeadingIconKind(MaterialIconKind.Mail)
-                    .SupportingText("Monitored during standard business hours")
-                    .BindText(_viewModel, x => x.FilledInbox, (vm, v) => vm.FilledInbox = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(2).Column(1),
-
-                // Row 3: Disabled States
-                new TextBox()
-                    .Variant(TextBoxVariant.Filled)
-                    .Label("Disabled Empty")
-                    .Placeholder("Read-only access")
-                    .IsEnabled(false)
-                    .Row(3).Column(0),
-
-                new TextBox("Cluster ID: 9821-XCA-09")
-                    .Variant(TextBoxVariant.Filled)
-                    .Label("Disabled Populated")
-                    .IsEnabled(false)
-                    .Row(3).Column(1)
-            );
-
-        children.Add(grid);
-
-        return CreateCard(
-            "Filled Text Fields",
-            "Filled text fields have a colored container fill and an underline active indicator that brightens to Primary color upon focus, with rounded top corners (4dp).",
-            children
-        );
-    }
-
-    private UIElement CreateDataBindingCard()
-    {
-        var children = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        children.Add(new TextBlock("Two-Way MVVM Property Binding & Live Feedback").TitleSmall());
-
-        var grid = new Grid()
-            .Columns(GridLength.Star, GridLength.Star)
-            .Rows(GridLength.Auto, GridLength.Auto)
-            .RowSpacing(14)
-            .ColumnSpacing(20)
-            .Children(
-                new TextBox()
-                    .Variant(TextBoxVariant.Outlined)
-                    .Label("Username")
-                    .LeadingIconKind(MaterialIconKind.Person)
-                    .BindText(_viewModel, x => x.Username, (vm, v) => vm.Username = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(0),
-
-                new TextBox()
-                    .Variant(TextBoxVariant.Outlined)
-                    .Label("Email Address")
-                    .LeadingIconKind(MaterialIconKind.Email)
-                    .BindText(_viewModel, x => x.Email, (vm, v) => vm.Email = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(0).Column(1),
-
-                new TextBox()
-                    .Variant(TextBoxVariant.Filled)
-                    .Label("Direct Contact")
-                    .LeadingIconKind(MaterialIconKind.Phone)
-                    .BindText(_viewModel, x => x.Phone, (vm, v) => vm.Phone = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(1).Column(0),
-
-                new TextBox()
-                    .Variant(TextBoxVariant.Filled)
-                    .Label("Biography")
-                    .SupportingText("Short professional summary")
-                    .BindText(_viewModel, x => x.Bio, (vm, v) => vm.Bio = v)
-                    .BindIsEnabled(_viewModel, x => x.InteractiveControlsEnabled)
-                    .Row(1).Column(1)
-            );
-
-        children.Add(grid);
-
-        // Live Preview card displaying ViewModel values in real-time
-        var previewCard = new Card(CardVariant.Filled)
-        {
-            Padding = new Thickness(16, 12),
-            CornerRadius = new CornerRadius(8)
-        }.Child(
-            new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 }
-                .Children(
-                    new TextBlock("Live ViewModel State").LabelMedium(),
-                    new TextBlock()
-                        .Caption()
-                        .BindText(_viewModel, x => $"Username: \"{x.Username}\"  |  Email: \"{x.Email}\""),
-                    new TextBlock()
-                        .Caption()
-                        .BindText(_viewModel, x => $"Phone: \"{x.Phone}\"  |  Bio: \"{x.Bio}\"")
-                )
-        );
-
-        children.Add(previewCard);
-
-        return CreateCard(
-            "Two-Way Data Binding",
-            "Text boxes bound two-way update the ViewModel as you type and immediately reflect programmatic updates.",
-            children
-        );
-    }
-
-    private static UIElement CreateCard(string title, string description, UIElement content)
-    {
-        var card = new Card(CardVariant.Outlined)
-        {
-            Padding = new Thickness(20),
-            CornerRadius = new CornerRadius(12)
-        };
-
-        var stack = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 };
-
-        stack.Add(new StackPanel { Orientation = Orientation.Vertical, Spacing = 2 }
-            .Children(
-                new TextBlock(title).TitleMedium(),
-                new TextBlock(description).Subtext()
-            )
-        );
-
-        stack.Add(content);
-        card.Child = stack;
-        return card;
-    }
+    // Every field on the page follows the header's "Filled variant" switch. Fields are top-aligned: a stretched text
+    // field grows its container to the height of its column row.
+    private TextBox Field(string? text = null) =>
+        new TextBox()
+            .Text(text)
+            .VerticalAlignment(VerticalAlignment.Top)
+            .Bind(TextBox.VariantProperty, _vm, v => v.UseFilledVariant ? TextBoxVariant.Filled : TextBoxVariant.Outlined);
 }
