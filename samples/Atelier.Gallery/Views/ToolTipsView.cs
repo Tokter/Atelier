@@ -105,7 +105,7 @@ public class ToolTipsView : GalleryPage
                     new TextBlock("Hover the info icon, then click an action").BodyMedium()),
                 Ui.Readout(_vm, v => v.LastAction)),
 
-            Ui.Demo("Custom element, bound to the page's view model",
+            Ui.Demo("Custom element, bound to the page's view model",   
                 new Button("Ada Lovelace")
                     .Variant(ButtonVariant.Tonal)
                     .HorizontalAlignment(HorizontalAlignment.Left)
