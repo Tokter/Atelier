@@ -1,198 +1,169 @@
-using System;
+using System.Collections.ObjectModel;
 using Atelier.Controls;
-using Atelier.Layout;
+using Atelier.Core.Primitives;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
 namespace Atelier.Gallery.ViewModels;
 
-public enum LayoutTab
-{
-    All,
-    StackPanel,
-    DockPanel,
-    Grid,
-    WrapPanel,
-    Canvas,
-    Border
-}
-
-public enum GridPreset
-{
-    Uniform3x3,
-    AppShell,
-    SpanningMatrix
-}
-
 public partial class LayoutViewModel : PageViewModel
 {
+    // StackPanel
     [ObservableProperty]
-    private LayoutTab _activeTab = LayoutTab.All;
-
-    #region StackPanel State
-
-    [ObservableProperty]
-    private Orientation _stackOrientation = Orientation.Horizontal;
+    private bool _stackVertical;
 
     [ObservableProperty]
-    private float _stackSpacing = 12f;
+    private float _stackSpacing = 12;
+
+    public ObservableCollection<string> StackItems { get; } = ["Item 1", "Item 2", "Item 3"];
+
+    // WrapPanel
+    [ObservableProperty]
+    private bool _wrapVertical;
 
     [ObservableProperty]
-    private int _stackItemCount = 4;
+    private bool _wrapUniformItems;
 
-    #endregion
+    [ObservableProperty]
+    private float _wrapHorizontalSpacing = 8;
 
-    #region DockPanel State
+    [ObservableProperty]
+    private float _wrapVerticalSpacing = 8;
 
+    [ObservableProperty]
+    private float _wrapWidth = 360;
+
+    // DockPanel
     [ObservableProperty]
     private bool _lastChildFill = true;
 
     [ObservableProperty]
-    private bool _showRightDock = true;
-
-    #endregion
-
-    #region Grid State
+    private bool _showRightPanel = true;
 
     [ObservableProperty]
-    private GridPreset _selectedGridPreset = GridPreset.Uniform3x3;
+    private float _dockSpacing = 8;
+
+    // Grid
+    [ObservableProperty]
+    private float _gridColumnSpacing = 8;
 
     [ObservableProperty]
-    private float _gridRowSpacing = 8f;
+    private float _gridRowSpacing = 8;
+
+    // UniformGrid
+    [ObservableProperty]
+    private float _uniformColumns = 4;
 
     [ObservableProperty]
-    private float _gridColumnSpacing = 8f;
+    private float _uniformFirstColumn;
 
-    #endregion
-
-    #region WrapPanel State
+    // Canvas
+    [ObservableProperty]
+    private float _canvasX = 40;
 
     [ObservableProperty]
-    private Orientation _wrapOrientation = Orientation.Horizontal;
+    private float _canvasY = 30;
+
+    // Border
+    [ObservableProperty]
+    private float _borderCornerRadius = 16;
 
     [ObservableProperty]
-    private float _wrapContainerWidth = 420f;
+    private float _borderThickness = 2;
 
     [ObservableProperty]
-    private float _wrapSpacing = 8f;
+    private float _borderElevation = 3;
 
     [ObservableProperty]
-    private bool _wrapUniformItems = false;
+    private float _borderPadding = 16;
 
-    #endregion
-
-    #region Canvas State
+    // ScrollViewer
+    [ObservableProperty]
+    private ScrollBarVisibility _horizontalScrolling = ScrollBarVisibility.Auto;
 
     [ObservableProperty]
-    private float _canvasItemX = 60f;
+    private ScrollBarVisibility _verticalScrolling = ScrollBarVisibility.Auto;
 
     [ObservableProperty]
-    private float _canvasItemY = 40f;
+    private string _scrollInfo = "Scroll the area to see ScrollChanged";
 
-    #endregion
-
-    #region Border State
+    // Alignment and sizing
+    [ObservableProperty]
+    private HorizontalAlignment _childHorizontalAlignment = HorizontalAlignment.Center;
 
     [ObservableProperty]
-    private float _borderCornerRadius = 16f;
+    private VerticalAlignment _childVerticalAlignment = VerticalAlignment.Center;
 
     [ObservableProperty]
-    private float _borderThickness = 2f;
+    private float _childMargin = 8;
+
+    // Visibility and rendering
+    [ObservableProperty]
+    private Visibility _middleVisibility = Visibility.Visible;
 
     [ObservableProperty]
-    private float _borderElevation = 6f;
+    private bool _clipChildren = true;
 
     [ObservableProperty]
-    private float _borderPadding = 16f;
-
-    #endregion
-
-    public event Action? RequestLayoutRefresh;
+    private float _blockOpacity = 0.6f;
 
     public LayoutViewModel()
     {
         PageTitle = "Layout Panels";
         PageIcon = MaterialIconKind.Dashboard;
+        Keywords = "stackpanel wrappanel dockpanel grid uniformgrid canvas border scrollviewer alignment margin visibility clip opacity layout";
     }
 
     [RelayCommand]
-    public void SetTab(LayoutTab tab)
+    private void AddStackItem()
     {
-        ActiveTab = tab;
-        RequestLayoutRefresh?.Invoke();
-    }
-
-    [RelayCommand]
-    public void ToggleStackOrientation()
-    {
-        StackOrientation = StackOrientation == Orientation.Horizontal
-            ? Orientation.Vertical
-            : Orientation.Horizontal;
-        RequestLayoutRefresh?.Invoke();
-    }
-
-    [RelayCommand]
-    public void AddStackItem()
-    {
-        if (StackItemCount < 8)
+        if (StackItems.Count < 8)
         {
-            StackItemCount++;
-            RequestLayoutRefresh?.Invoke();
+            StackItems.Add($"Item {StackItems.Count + 1}");
         }
     }
 
     [RelayCommand]
-    public void RemoveStackItem()
+    private void RemoveStackItem()
     {
-        if (StackItemCount > 1)
+        if (StackItems.Count > 1)
         {
-            StackItemCount--;
-            RequestLayoutRefresh?.Invoke();
+            StackItems.RemoveAt(StackItems.Count - 1);
         }
     }
 
     [RelayCommand]
-    public void ToggleLastChildFill()
+    private void Reset()
     {
-        LastChildFill = !LastChildFill;
-        RequestLayoutRefresh?.Invoke();
-    }
-
-    [RelayCommand]
-    public void ToggleRightDock()
-    {
-        ShowRightDock = !ShowRightDock;
-        RequestLayoutRefresh?.Invoke();
-    }
-
-    [RelayCommand]
-    public void SetGridPreset(GridPreset preset)
-    {
-        SelectedGridPreset = preset;
-        RequestLayoutRefresh?.Invoke();
-    }
-
-    [RelayCommand]
-    public void ToggleWrapOrientation()
-    {
-        WrapOrientation = WrapOrientation == Orientation.Horizontal
-            ? Orientation.Vertical
-            : Orientation.Horizontal;
-        RequestLayoutRefresh?.Invoke();
-    }
-
-    [RelayCommand]
-    public void ToggleWrapUniform()
-    {
-        WrapUniformItems = !WrapUniformItems;
-        RequestLayoutRefresh?.Invoke();
-    }
-
-    [RelayCommand]
-    public void ResetCanvasPosition()
-    {
-        CanvasItemX = 60f;
-        CanvasItemY = 40f;
-        RequestLayoutRefresh?.Invoke();
+        StackVertical = false;
+        StackSpacing = 12;
+        while (StackItems.Count > 3) StackItems.RemoveAt(StackItems.Count - 1);
+        while (StackItems.Count < 3) StackItems.Add($"Item {StackItems.Count + 1}");
+        WrapVertical = false;
+        WrapUniformItems = false;
+        WrapHorizontalSpacing = 8;
+        WrapVerticalSpacing = 8;
+        WrapWidth = 360;
+        LastChildFill = true;
+        ShowRightPanel = true;
+        DockSpacing = 8;
+        GridColumnSpacing = 8;
+        GridRowSpacing = 8;
+        UniformColumns = 4;
+        UniformFirstColumn = 0;
+        CanvasX = 40;
+        CanvasY = 30;
+        BorderCornerRadius = 16;
+        BorderThickness = 2;
+        BorderElevation = 3;
+        BorderPadding = 16;
+        HorizontalScrolling = ScrollBarVisibility.Auto;
+        VerticalScrolling = ScrollBarVisibility.Auto;
+        ChildHorizontalAlignment = HorizontalAlignment.Center;
+        ChildVerticalAlignment = VerticalAlignment.Center;
+        ChildMargin = 8;
+        MiddleVisibility = Visibility.Visible;
+        ClipChildren = true;
+        BlockOpacity = 0.6f;
     }
 }

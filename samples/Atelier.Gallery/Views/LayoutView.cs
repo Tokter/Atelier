@@ -1,1148 +1,335 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using Atelier.Controls;
 using Atelier.Core.Primitives;
 using Atelier.Core.Tree;
+using Atelier.Gallery.Infrastructure;
 using Atelier.Gallery.ViewModels;
 using Atelier.Layout;
 using Atelier.Markup;
-using Atelier.Theming;
-using Atelier.Theming.Material;
 
 namespace Atelier.Gallery.Views;
 
-public class LayoutView : Grid
+public class LayoutView : GalleryPage
 {
-    private readonly LayoutViewModel _viewModel;
-
-    // Filter Tab Buttons
-    private readonly Dictionary<LayoutTab, Button> _tabButtons = new();
-
-    // Section Cards
-    private UIElement? _stackCard;
-    private UIElement? _dockCard;
-    private UIElement? _gridCard;
-    private UIElement? _wrapCard;
-    private UIElement? _canvasCard;
-    private UIElement? _borderCard;
-
-    // Dynamic Viewports
-    private StackPanel? _liveStackPanel;
-    private TextBlock? _stackInfoText;
-
-    private DockPanel? _liveDockPanel;
-    private Border? _dockRightPanel;
-    private Button? _btnLastChildFill;
-    private Button? _btnToggleRightDock;
-    private TextBlock? _dockInfoText;
-
-    private Border? _gridContainer;
-    private Button? _btnGridUniform;
-    private Button? _btnGridAppShell;
-    private Button? _btnGridSpanning;
-    private TextBlock? _gridSpacingLabel;
-
-    private Border? _wrapWrapper;
-    private WrapPanel? _liveWrapPanel;
-    private TextBlock? _wrapWidthLabel;
-    private Button? _btnWrapOrientation;
-    private Button? _btnWrapUniform;
-
-    private Canvas? _liveCanvas;
-    private Border? _movableCanvasItem;
-    private TextBlock? _canvasCoordText;
-
-    private Border? _liveBorder;
-    private TextBlock? _borderMetricsText;
-
-    public LayoutView() : this(new LayoutViewModel())
-    {
-    }
+    private readonly LayoutViewModel _vm;
 
     public LayoutView(LayoutViewModel viewModel)
+        : base(MaterialIconKind.Dashboard, "Layout Panels",
+            "Panels arrange their children: in a line, wrapping, docked to edges, in a grid or at fixed positions. Every " +
+            "element also has alignment, margin, size limits, visibility, clipping and opacity.")
     {
-        _viewModel = viewModel;
-        DataContext = _viewModel;
+        _vm = viewModel;
 
-        this.Rows(GridLength.Auto, GridLength.Star);
-        this.RowSpacing(16);
+        Settings(new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
-        // 1. Master Controls Banner
-        this.Add(CreateMasterBanner().Row(0));
-
-        // 2. Scrollable Showcase Content
-        var scrollViewer = new ScrollViewer();
-        var contentStack = new StackPanel
-        {
-            Orientation = Orientation.Vertical,
-            Spacing = 16
-        };
-
-        _stackCard = CreateStackPanelCard();
-        _dockCard = CreateDockPanelCard();
-        _gridCard = CreateGridCard();
-        _wrapCard = CreateWrapPanelCard();
-        _canvasCard = CreateCanvasCard();
-        _borderCard = CreateBorderCard();
-
-        contentStack.Add(_stackCard);
-        contentStack.Add(_dockCard);
-        contentStack.Add(_gridCard);
-        contentStack.Add(_wrapCard);
-        contentStack.Add(_canvasCard);
-        contentStack.Add(_borderCard);
-
-        scrollViewer.Content = contentStack;
-        this.Add(scrollViewer.Row(1));
-
-        // 3. Hook refresh requests
-        _viewModel.RequestLayoutRefresh += () =>
-        {
-            UpdateTabVisibility();
-            RefreshLiveViewports();
-        };
-
-        UpdateTabVisibility();
-        RefreshLiveViewports();
+        Sections(
+            StackPanelSection(),
+            WrapPanelSection(),
+            DockPanelSection(),
+            GridSection(),
+            UniformGridSection(),
+            CanvasSection(),
+            BorderSection(),
+            ScrollViewerSection(),
+            AlignmentSection(),
+            VisibilitySection());
     }
 
-    private UIElement CreateMasterBanner()
+    private UIElement StackPanelSection()
     {
-        var card = new Card(CardVariant.Filled)
-            .Padding(20)
-            .CornerRadius(14);
+        var stack = new StackPanel()
+            .Bind(StackPanel.OrientationProperty, _vm, v => v.StackVertical ? Orientation.Vertical : Orientation.Horizontal)
+            .Bind(StackPanel.SpacingProperty, _vm, v => v.StackSpacing);
 
-        var titleStack = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.Dashboard, 26, foreground: Color.FromHex("#1E88E5")) { VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock("Layout Systems & Panels").TitleLarge().Bold().VerticalAlignment(VerticalAlignment.Center),
-                new Border
-                {
-                    Background = Color.FromHex("#1E88E5").WithAlpha(0.12f),
-                    CornerRadius = new CornerRadius(12),
-                    Padding = new Thickness(8, 3),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Child = new TextBlock("Core Layout Architecture")
-                    {
-                        FontSize = 11,
-                        Bold = true,
-                        Foreground = Color.FromHex("#1E88E5")
-                    }
-                }
-            );
-
-        var descText = new TextBlock("Explore Atelier's suite of high-performance layout containers: StackPanel for linear flow, DockPanel for edge pinning, Grid for multi-cell proportional alignment, WrapPanel for responsive flow, Canvas for absolute coordinates, and Border for decorated containers.")
-            .BodyMedium()
-            .Foreground(Color.FromHex("#757575"));
-
-        // Tab Selector Chips
-        var tabsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
-
-        void AddTabBtn(LayoutTab tab, string label, MaterialIconKind icon)
+        // The items live in the view model; the panel mirrors the collection while it is displayed.
+        void Rebuild(object? sender, EventArgs e)
         {
-            var btn = new Button
+            stack.Clear();
+            for (int i = 0; i < _vm.StackItems.Count; i++)
             {
-                Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-                    .Children(
-                        new Icon(icon, 16) { VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock(label) { FontSize = 12, VerticalAlignment = VerticalAlignment.Center }
-                    ),
-                Padding = new Thickness(12, 6),
-                CornerRadius = new CornerRadius(16),
-                Variant = _viewModel.ActiveTab == tab ? ButtonVariant.Filled : ButtonVariant.Outlined
-            };
-            btn.Click += (s, e) =>
-            {
-                _viewModel.SetTab(tab);
-                UpdateTabButtonVisuals();
-            };
-            _tabButtons[tab] = btn;
-            tabsRow.Add(btn);
-        }
-
-        AddTabBtn(LayoutTab.All, "All Panels", MaterialIconKind.ViewQuilt);
-        AddTabBtn(LayoutTab.StackPanel, "StackPanel", MaterialIconKind.ViewStream);
-        AddTabBtn(LayoutTab.DockPanel, "DockPanel", MaterialIconKind.Dock);
-        AddTabBtn(LayoutTab.Grid, "Grid", MaterialIconKind.GridView);
-        AddTabBtn(LayoutTab.WrapPanel, "WrapPanel", MaterialIconKind.WrapText);
-        AddTabBtn(LayoutTab.Canvas, "Canvas", MaterialIconKind.Brush);
-        AddTabBtn(LayoutTab.Border, "Border & Card", MaterialIconKind.CropFree);
-
-        return card.Child(new StackPanel { Orientation = Orientation.Vertical, Spacing = 14 }
-            .Children(titleStack, descText, tabsRow));
-    }
-
-    private void UpdateTabButtonVisuals()
-    {
-        foreach (var kvp in _tabButtons)
-        {
-            kvp.Value.Variant = _viewModel.ActiveTab == kvp.Key ? ButtonVariant.Filled : ButtonVariant.Outlined;
-        }
-    }
-
-    private void UpdateTabVisibility()
-    {
-        UpdateTabButtonVisuals();
-
-        void SetVis(UIElement? elem, bool visible)
-        {
-            if (elem != null)
-            {
-                elem.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                stack.Add(Block(_vm.StackItems[i], i));
             }
         }
 
-        bool showAll = _viewModel.ActiveTab == LayoutTab.All;
-        SetVis(_stackCard, showAll || _viewModel.ActiveTab == LayoutTab.StackPanel);
-        SetVis(_dockCard, showAll || _viewModel.ActiveTab == LayoutTab.DockPanel);
-        SetVis(_gridCard, showAll || _viewModel.ActiveTab == LayoutTab.Grid);
-        SetVis(_wrapCard, showAll || _viewModel.ActiveTab == LayoutTab.WrapPanel);
-        SetVis(_canvasCard, showAll || _viewModel.ActiveTab == LayoutTab.Canvas);
-        SetVis(_borderCard, showAll || _viewModel.ActiveTab == LayoutTab.Border);
+        void OnItemsChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e) => Rebuild(sender, e);
+        Rebuild(null, EventArgs.Empty);
+        stack.OnAttachedToVisualTree(() => { _vm.StackItems.CollectionChanged += OnItemsChanged; Rebuild(null, EventArgs.Empty); });
+        stack.OnDetachedFromVisualTree(() => _vm.StackItems.CollectionChanged -= OnItemsChanged);
+
+        return Ui.Section("StackPanel",
+            "Arranges children in a single line, horizontally or vertically, with an optional gap between them.",
+            Ui.Row(
+                new Switch("Vertical").BindIsChecked(_vm, v => v.StackVertical, (v, on) => v.StackVertical = on),
+                Ui.SliderSetting("Spacing", _vm, v => v.StackSpacing, (v, x) => v.StackSpacing = x, 0, 32),
+                new Button("Add item").Variant(ButtonVariant.Outlined).Command(_vm.AddStackItemCommand),
+                new Button("Remove item").Variant(ButtonVariant.Outlined).Command(_vm.RemoveStackItemCommand)),
+            Stage(stack),
+            Ui.Readout(_vm, v => $"Orientation = {(v.StackVertical ? "Vertical" : "Horizontal")}, Spacing = {v.StackSpacing:0}, Children = {v.StackItems.Count}"));
     }
 
-    #region 1. StackPanel Card
-
-    private UIElement CreateStackPanelCard()
+    private UIElement WrapPanelSection()
     {
-        var card = new Card(CardVariant.Outlined)
-            .Padding(18)
-            .CornerRadius(12);
+        var words = new[] { "Layout", "Grid", "Dock", "Canvas", "Wrap", "Stack", "Border", "Scroll", "Align", "Margin", "Padding", "Visibility" };
+        var wrap = new WrapPanel()
+            .Bind(WrapPanel.OrientationProperty, _vm, v => v.WrapVertical ? Orientation.Vertical : Orientation.Horizontal)
+            .Bind(WrapPanel.HorizontalSpacingProperty, _vm, v => v.WrapHorizontalSpacing)
+            .Bind(WrapPanel.VerticalSpacingProperty, _vm, v => v.WrapVerticalSpacing)
+            .Bind(WrapPanel.ItemWidthProperty, _vm, v => v.WrapUniformItems ? 96f : float.NaN)
+            .Bind(WrapPanel.ItemHeightProperty, _vm, v => v.WrapUniformItems ? 40f : float.NaN)
+            .Bind(UIElement.WidthProperty, _vm, v => v.WrapWidth)
+            .Bind(UIElement.HeightProperty, _vm, v => v.WrapVertical ? 180f : float.NaN)
+            .HorizontalAlignment(HorizontalAlignment.Left)
+            .Children(words.Select((w, i) => (UIElement)Block(w, i)).ToArray());
 
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
+        return Ui.Section("WrapPanel",
+            "Places children in a line and continues on the next line when there is no more room. With an item width and " +
+            "height, all children get the same size, like tiles.",
+            Ui.Row(
+                new Switch("Vertical").BindIsChecked(_vm, v => v.WrapVertical, (v, on) => v.WrapVertical = on),
+                new Switch("Uniform items (96×40)").BindIsChecked(_vm, v => v.WrapUniformItems, (v, on) => v.WrapUniformItems = on)),
+            Ui.Row(
+                Ui.SliderSetting("Panel width", _vm, v => v.WrapWidth, (v, x) => v.WrapWidth = x, 200, 480),
+                Ui.SliderSetting("Horizontal spacing", _vm, v => v.WrapHorizontalSpacing, (v, x) => v.WrapHorizontalSpacing = x, 0, 24),
+                Ui.SliderSetting("Vertical spacing", _vm, v => v.WrapVerticalSpacing, (v, x) => v.WrapVerticalSpacing = x, 0, 24)),
+            Stage(wrap),
+            Ui.Code("new WrapPanel().Spacing(8, 8).ItemWidth(96).ItemHeight(40).Children(...)"));
+    }
+
+    private UIElement DockPanelSection()
+    {
+        var dock = new DockPanel()
+            .Height(240)
+            .Bind(DockPanel.LastChildFillProperty, _vm, v => v.LastChildFill)
+            .Bind(DockPanel.HorizontalSpacingProperty, _vm, v => v.DockSpacing)
+            .Bind(DockPanel.VerticalSpacingProperty, _vm, v => v.DockSpacing)
             .Children(
-                new Icon(MaterialIconKind.ViewStream, 20, foreground: Color.FromHex("#1E88E5")),
-                new TextBlock("StackPanel — Linear Flow & Spacing").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
-                new Border
-                {
-                    Background = Color.FromHex("#1E88E5").WithAlpha(0.12f),
-                    CornerRadius = new CornerRadius(8),
-                    Padding = new Thickness(6, 2),
-                    Child = new TextBlock("Orientation • Spacing") { FontSize = 10, Bold = true, Foreground = Color.FromHex("#1E88E5") }
-                }
-            );
+                Block("Top", 0).Dock(Dock.Top),
+                Block("Bottom", 0).Dock(Dock.Bottom),
+                Block("Left", 1).Width(110).Dock(Dock.Left),
+                Block("Right", 1).Width(110).Dock(Dock.Right).BindIsVisible(_vm, v => v.ShowRightPanel),
+                Block("Fill (last child)", 2));
 
-        var desc = new TextBlock("Arranges child elements sequentially in a single line, vertically or horizontally. Supports configurable inter-element spacing and flexible alignment.") { TextWrapping = TextWrapping.Wrap }
-            .FontSize(12).Foreground(Color.FromHex("#757575"));
-
-        // Controls
-        var btnOrientation = new Button("Toggle Orientation")
-        {
-            Variant = ButtonVariant.Tonal,
-            Padding = new Thickness(10, 5),
-            CornerRadius = new CornerRadius(14),
-            Command = _viewModel.ToggleStackOrientationCommand,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var btnAdd = new Button("+ Add Item")
-        {
-            Variant = ButtonVariant.Outlined,
-            Padding = new Thickness(10, 5),
-            CornerRadius = new CornerRadius(14),
-            Command = _viewModel.AddStackItemCommand,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var btnRemove = new Button("- Remove Item")
-        {
-            Variant = ButtonVariant.Outlined,
-            Padding = new Thickness(10, 5),
-            CornerRadius = new CornerRadius(14),
-            Command = _viewModel.RemoveStackItemCommand,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var spacingSlider = new Slider { Minimum = 0, Maximum = 32, Value = _viewModel.StackSpacing, Width = 130, VerticalAlignment = VerticalAlignment.Center };
-        var spacingLabel = new TextBlock($"Spacing: {_viewModel.StackSpacing:F0}px") { FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
-        spacingSlider.ValueChanged += (s, v) =>
-        {
-            _viewModel.StackSpacing = v;
-            spacingLabel.Text = $"Spacing: {v:F0}px";
-            RefreshStackPanel();
-        };
-
-        var controlsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(btnOrientation, btnAdd, btnRemove, spacingSlider, spacingLabel);
-
-        // Viewport
-        _liveStackPanel = new StackPanel
-        {
-            Orientation = _viewModel.StackOrientation,
-            Spacing = _viewModel.StackSpacing,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        var viewport = new Border
-        {
-            
-            Background = Color.FromHex("#000000").WithAlpha(0.03f),
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1),
-            BorderBrush = Color.FromHex("#000000").WithAlpha(0.08f),
-            Padding = new Thickness(16),
-            Child = _liveStackPanel
-        };
-
-        _stackInfoText = new TextBlock()
-            .FontSize(11)
-            .Foreground(Color.FromHex("#6B7280"));
-
-        RefreshStackPanel();
-
-        return card.Child(new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
-            .Children(header, desc, controlsRow, viewport, _stackInfoText));
+        return Ui.Section("DockPanel",
+            "Docks children to the edges in the order they are added; each takes the remaining space. The last child " +
+            "fills what is left, unless LastChildFill is off.",
+            Ui.Row(
+                new Switch("LastChildFill").BindIsChecked(_vm, v => v.LastChildFill, (v, on) => v.LastChildFill = on),
+                new Switch("Right panel").BindIsChecked(_vm, v => v.ShowRightPanel, (v, on) => v.ShowRightPanel = on),
+                Ui.SliderSetting("Spacing", _vm, v => v.DockSpacing, (v, x) => v.DockSpacing = x, 0, 24)),
+            Stage(dock),
+            Ui.Code("new DockPanel().LastChildFill().Spacing(8).Children(\n    header.Dock(Dock.Top), footer.Dock(Dock.Bottom), nav.Dock(Dock.Left), content)"));
     }
 
-    private void RefreshStackPanel()
+    private UIElement GridSection()
     {
-        if (_liveStackPanel == null) return;
-
-        _liveStackPanel.Orientation = _viewModel.StackOrientation;
-        _liveStackPanel.Spacing = _viewModel.StackSpacing;
-        _liveStackPanel.Clear();
-
-        Color[] colors =
-        [
-            Color.FromHex("#1E88E5"),
-            Color.FromHex("#10B981"),
-            Color.FromHex("#F59E0B"),
-            Color.FromHex("#8B5CF6"),
-            Color.FromHex("#EC4899"),
-            Color.FromHex("#06B6D4"),
-            Color.FromHex("#6366F1"),
-            Color.FromHex("#14B8A6")
-        ];
-
-        for (int i = 0; i < _viewModel.StackItemCount; i++)
-        {
-            Color c = colors[i % colors.Length];
-            var item = new Border
-            {
-                Background = c.WithAlpha(0.15f),
-                BorderThickness = new Thickness(1.5f),
-                BorderBrush = c,
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(12, 8),
-                Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-                    .Children(
-                        new Icon(MaterialIconKind.Layers, 16, foreground: c),
-                        new TextBlock($"Item {i + 1}") { FontSize = 12, Bold = true, Foreground = c }
-                    )
-            };
-            _liveStackPanel.Add(item);
-        }
-
-        if (_stackInfoText != null)
-        {
-            _stackInfoText.Text = $"StackPanel: Orientation={_viewModel.StackOrientation}, Spacing={_viewModel.StackSpacing:F0}px, Children={_viewModel.StackItemCount}";
-        }
-    }
-
-    #endregion
-
-    #region 2. DockPanel Card
-
-    private UIElement CreateDockPanelCard()
-    {
-        var card = new Card(CardVariant.Outlined)
-            .Padding(18)
-            .CornerRadius(12);
-
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
+        var shell = new Grid()
+            .Columns("140,*,Auto")
+            .Rows("Auto,*,Auto")
+            .Height(240)
+            .Bind(Grid.ColumnSpacingProperty, _vm, v => v.GridColumnSpacing)
+            .Bind(Grid.RowSpacingProperty, _vm, v => v.GridRowSpacing)
             .Children(
-                new Icon(MaterialIconKind.Dock, 20, foreground: Color.FromHex("#10B981")),
-                new TextBlock("DockPanel — Edge Pinning & LastChildFill").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
-                new Border
-                {
-                    Background = Color.FromHex("#10B981").WithAlpha(0.12f),
-                    CornerRadius = new CornerRadius(8),
-                    Padding = new Thickness(6, 2),
-                    Child = new TextBlock("Dock.Left • Top • Right • Bottom") { FontSize = 10, Bold = true, Foreground = Color.FromHex("#059669") }
-                }
-            );
+                Block("Header · Cell(0, 0, columnSpan: 3)", 0).Cell(0, 0, columnSpan: 3),
+                Block("Sidebar · 140 px", 1).Cell(1, 0),
+                Block("Content · *", 2).Cell(1, 1),
+                Block("Inspector · Auto", 1).Cell(1, 2),
+                Block("Footer · spans 3 columns", 0).Cell(2, 0, columnSpan: 3));
 
-        var desc = new TextBlock("Arranges child elements along outer container edges (Left, Top, Right, Bottom). The final child can automatically expand to fill remaining interior workspace when LastChildFill is true.") { TextWrapping = TextWrapping.Wrap }
-            .FontSize(12).Foreground(Color.FromHex("#757575"));
+        var weights = new Grid()
+            .Columns("*,2*,*")
+            .Bind(Grid.ColumnSpacingProperty, _vm, v => v.GridColumnSpacing)
+            .Children(Block("*", 0).Column(0), Block("2*", 1).Column(1), Block("*", 2).Column(2));
 
-        // Controls
-        _btnLastChildFill = new Button("LastChildFill: True")
-        {
-            Variant = ButtonVariant.Filled,
-            Padding = new Thickness(10, 5),
-            CornerRadius = new CornerRadius(14),
-            Command = _viewModel.ToggleLastChildFillCommand
-        };
-
-        _btnToggleRightDock = new Button("Right Panel: Visible")
-        {
-            Variant = ButtonVariant.Tonal,
-            Padding = new Thickness(10, 5),
-            CornerRadius = new CornerRadius(14),
-            Command = _viewModel.ToggleRightDockCommand
-        };
-
-        var controlsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(_btnLastChildFill, _btnToggleRightDock);
-
-        // Simulated Window Viewport with DockPanel
-        _liveDockPanel = new DockPanel { LastChildFill = _viewModel.LastChildFill };
-
-        // 1. Top Bar
-        var topBar = new Border
-        {
-            Height = 36,
-            Background = Color.FromHex("#1E88E5").WithAlpha(0.15f),
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            BorderBrush = Color.FromHex("#1E88E5").WithAlpha(0.4f),
-            Padding = new Thickness(10, 4),
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.Window, 16, foreground: Color.FromHex("#1E88E5")),
-                    new TextBlock("Top Ribbon / MenuBar (Dock.Top)") { FontSize = 11, Bold = true, Foreground = Color.FromHex("#1E88E5") }
-                )
-        };
-        DockPanel.SetDock(topBar, Dock.Top);
-
-        // 2. Bottom Status Bar
-        var bottomBar = new Border
-        {
-            Height = 28,
-            Background = Color.FromHex("#4B5563").WithAlpha(0.12f),
-            BorderThickness = new Thickness(0, 1, 0, 0),
-            BorderBrush = Color.FromHex("#4B5563").WithAlpha(0.3f),
-            Padding = new Thickness(10, 4),
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.CheckCircle, 14, foreground: Color.FromHex("#059669")),
-                    new TextBlock("Status Bar (Dock.Bottom) • Ready • Line 1, Col 1") { FontSize = 11, Foreground = Color.FromHex("#4B5563") }
-                )
-        };
-        DockPanel.SetDock(bottomBar, Dock.Bottom);
-
-        // 3. Left Explorer Sidebar
-        var leftSidebar = new Border
-        {
-            Width = 140,
-            Background = Color.FromHex("#059669").WithAlpha(0.12f),
-            BorderThickness = new Thickness(0, 0, 1, 0),
-            BorderBrush = Color.FromHex("#059669").WithAlpha(0.3f),
-            Padding = new Thickness(10),
-            Child = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 }
-                .Children(
-                    new TextBlock("Sidebar (Dock.Left)").Bold().FontSize(11).Foreground(Color.FromHex("#059669")),
-                    new TextBlock("📁 Project Root").FontSize(10),
-                    new TextBlock("📄 MainWindow.cs").FontSize(10),
-                    new TextBlock("📄 Styles.xaml").FontSize(10)
-                )
-        };
-        DockPanel.SetDock(leftSidebar, Dock.Left);
-
-        // 4. Right Inspector Flyout
-        _dockRightPanel = new Border
-        {
-            Width = 130,
-            Background = Color.FromHex("#8B5CF6").WithAlpha(0.12f),
-            BorderThickness = new Thickness(1, 0, 0, 0),
-            BorderBrush = Color.FromHex("#8B5CF6").WithAlpha(0.3f),
-            Padding = new Thickness(10),
-            Child = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6 }
-                .Children(
-                    new TextBlock("Inspector (Dock.Right)").Bold().FontSize(11).Foreground(Color.FromHex("#7C3AED")),
-                    new TextBlock("Width: 100%").FontSize(10),
-                    new TextBlock("Height: Auto").FontSize(10),
-                    new TextBlock("Opacity: 1.0").FontSize(10)
-                )
-        };
-        DockPanel.SetDock(_dockRightPanel, Dock.Right);
-
-        // 5. Center Work Area (Last Child Fill)
-        var centerWorkArea = new Border
-        {
-            Background = Color.FromHex("#F59E0B").WithAlpha(0.10f),
-            Padding = new Thickness(16),
-            Child = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.AspectRatio, 28, foreground: Color.FromHex("#D97706")),
-                    new TextBlock("Center Document Workspace").Bold().FontSize(13).Foreground(Color.FromHex("#B45309")),
-                    new TextBlock("Expands dynamically to fill remaining area (LastChildFill)")
-                    {
-                        FontSize = 11,
-                        Foreground = Color.FromHex("#757575"),
-                        HorizontalAlignment = HorizontalAlignment.Center
-                    }
-                )
-        };
-
-        _liveDockPanel.Add(topBar);
-        _liveDockPanel.Add(bottomBar);
-        _liveDockPanel.Add(leftSidebar);
-        _liveDockPanel.Add(_dockRightPanel);
-        _liveDockPanel.Add(centerWorkArea);
-
-        var viewport = new Border
-        {
-            Height = 220,
-            Background = Color.FromHex("#000000").WithAlpha(0.03f),
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1),
-            BorderBrush = Color.FromHex("#000000").WithAlpha(0.08f),
-            Child = _liveDockPanel
-        };
-
-        _dockInfoText = new TextBlock()
-            .FontSize(11)
-            .Foreground(Color.FromHex("#6B7280"));
-
-        RefreshDockPanel();
-
-        return card.Child(new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
-            .Children(header, desc, controlsRow, viewport, _dockInfoText));
+        return Ui.Section("Grid",
+            "Arranges children in rows and columns. Sizes are Auto (fit the content), pixels, or stars that share the " +
+            "remaining space by weight; children can span several cells.",
+            Ui.Row(
+                Ui.SliderSetting("Column spacing", _vm, v => v.GridColumnSpacing, (v, x) => v.GridColumnSpacing = x, 0, 24),
+                Ui.SliderSetting("Row spacing", _vm, v => v.GridRowSpacing, (v, x) => v.GridRowSpacing = x, 0, 24)),
+            Ui.Demo("Rows \"Auto,*,Auto\" and columns \"140,*,Auto\"", Stage(shell)),
+            Ui.Demo("Star weights \"*,2*,*\"", Stage(weights)),
+            Ui.Code("new Grid().Columns(\"140,*,Auto\").Rows(\"Auto,*,Auto\").Spacing(8, 8).Children(\n" +
+                    "    header.Cell(0, 0, columnSpan: 3), sidebar.Cell(1, 0), content.Cell(1, 1), ...)"));
     }
 
-    private void RefreshDockPanel()
+    private UIElement UniformGridSection()
     {
-        if (_liveDockPanel == null) return;
+        var calendar = new UniformGrid()
+            .Spacing(6)
+            .Bind(UniformGrid.ColumnsProperty, _vm, v => (int)v.UniformColumns)
+            .Bind(UniformGrid.FirstColumnProperty, _vm, v => (int)v.UniformFirstColumn)
+            .Children(Enumerable.Range(1, 14).Select(i => (UIElement)Block(i.ToString(), i % 3)).ToArray());
 
-        _liveDockPanel.LastChildFill = _viewModel.LastChildFill;
-
-        if (_btnLastChildFill != null)
-        {
-            _btnLastChildFill.Variant = _viewModel.LastChildFill ? ButtonVariant.Filled : ButtonVariant.Outlined;
-            _btnLastChildFill.Content = new TextBlock($"LastChildFill: {_viewModel.LastChildFill}");
-        }
-
-        if (_dockRightPanel != null)
-        {
-            _dockRightPanel.Visibility = _viewModel.ShowRightDock ? Visibility.Visible : Visibility.Collapsed;
-        }
-
-        if (_btnToggleRightDock != null)
-        {
-            _btnToggleRightDock.Variant = _viewModel.ShowRightDock ? ButtonVariant.Tonal : ButtonVariant.Outlined;
-            _btnToggleRightDock.Content = new TextBlock($"Right Panel: {(_viewModel.ShowRightDock ? "Visible" : "Hidden")}");
-        }
-
-        if (_dockInfoText != null)
-        {
-            _dockInfoText.Text = $"DockPanel: LastChildFill={_viewModel.LastChildFill}, RightDock={(_viewModel.ShowRightDock ? "Visible" : "Collapsed")}";
-        }
+        return Ui.Section("UniformGrid",
+            "Gives every child a cell of the same size. Set the number of columns (or rows) and the other follows from the " +
+            "number of children; FirstColumn leaves cells empty at the start, like the first days of a month.",
+            Ui.Row(
+                Ui.SliderSetting("Columns", _vm, v => v.UniformColumns, (v, x) => v.UniformColumns = x, 1, 7, step: 1),
+                Ui.SliderSetting("First column", _vm, v => v.UniformFirstColumn, (v, x) => v.UniformFirstColumn = x, 0, 6, step: 1)),
+            Stage(calendar));
     }
 
-    #endregion
-
-    #region 3. Grid Card
-
-    private UIElement CreateGridCard()
+    private UIElement CanvasSection()
     {
-        var card = new Card(CardVariant.Outlined)
-            .Padding(18)
-            .CornerRadius(12);
+        var moving = Block("Canvas.Left / Top", 0)
+            .Bind(Canvas.LeftProperty, _vm, v => v.CanvasX)
+            .Bind(Canvas.TopProperty, _vm, v => v.CanvasY);
 
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
+        var canvas = new Canvas()
+            .Height(200)
+            .ClipToBounds()
             .Children(
-                new Icon(MaterialIconKind.GridView, 20, foreground: Color.FromHex("#8B5CF6")),
-                new TextBlock("Grid — Multi-Cell Proportional Matrix").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
-                new Border
-                {
-                    Background = Color.FromHex("#8B5CF6").WithAlpha(0.12f),
-                    CornerRadius = new CornerRadius(8),
-                    Padding = new Thickness(6, 2),
-                    Child = new TextBlock("Star (*) • Auto • Pixels • Spanning") { FontSize = 10, Bold = true, Foreground = Color.FromHex("#7C3AED") }
-                }
-            );
+                Block("Right = 12, Bottom = 12", 1).CanvasRight(12).CanvasBottom(12),
+                Block("Left = 12, Bottom = 12", 2).CanvasLeft(12).CanvasBottom(12),
+                moving);
 
-        var desc = new TextBlock("Defines a flexible matrix of rows and columns. Cells support Star (*) proportional weights, Auto content sizing, and absolute pixel dimensions, along with RowSpan and ColumnSpan.") { TextWrapping = TextWrapping.Wrap }
-            .FontSize(12).Foreground(Color.FromHex("#757575"));
-
-        // Preset buttons
-        _btnGridUniform = new Button("3×3 Uniform Star (1*:1*:1*)")
-        {
-            Padding = new Thickness(10, 5),
-            CornerRadius = new CornerRadius(14),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        _btnGridUniform.Click += (s, e) => _viewModel.SetGridPreset(GridPreset.Uniform3x3);
-
-        _btnGridAppShell = new Button("App Shell (Auto / Star)")
-        {
-            Padding = new Thickness(10, 5),
-            CornerRadius = new CornerRadius(14),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        _btnGridAppShell.Click += (s, e) => _viewModel.SetGridPreset(GridPreset.AppShell);
-
-        _btnGridSpanning = new Button("Spanning Matrix (RowSpan / ColSpan)")
-        {
-            Padding = new Thickness(10, 5),
-            CornerRadius = new CornerRadius(14),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        _btnGridSpanning.Click += (s, e) => _viewModel.SetGridPreset(GridPreset.SpanningMatrix);
-
-        var rowSpacingSlider = new Slider { Minimum = 0, Maximum = 20, Value = _viewModel.GridRowSpacing, Width = 110, VerticalAlignment = VerticalAlignment.Center };
-        rowSpacingSlider.ValueChanged += (s, v) =>
-        {
-            _viewModel.GridRowSpacing = v;
-            _viewModel.GridColumnSpacing = v;
-            UpdateGridSpacingLabel();
-            RefreshGrid();
-        };
-
-        _gridSpacingLabel = new TextBlock($"Spacing: {_viewModel.GridRowSpacing:F0}px") { FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
-
-        var presetsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(_btnGridUniform, _btnGridAppShell, _btnGridSpanning, rowSpacingSlider, _gridSpacingLabel);
-
-        // Viewport
-        _gridContainer = new Border
-        {
-            Height = 220,
-            Background = Color.FromHex("#000000").WithAlpha(0.03f),
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1),
-            BorderBrush = Color.FromHex("#000000").WithAlpha(0.08f),
-            Padding = new Thickness(12)
-        };
-
-        RefreshGrid();
-
-        return card.Child(new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
-            .Children(header, desc, presetsRow, _gridContainer));
+        return Ui.Section("Canvas",
+            "Positions children at fixed coordinates, measured from the left or right and top or bottom edge. Children " +
+            "don't affect each other, which suits diagrams and free-form editors.",
+            Ui.Row(
+                Ui.SliderSetting("Left", _vm, v => v.CanvasX, (v, x) => v.CanvasX = x, 0, 300),
+                Ui.SliderSetting("Top", _vm, v => v.CanvasY, (v, x) => v.CanvasY = x, 0, 150)),
+            Stage(canvas));
     }
 
-    private void UpdateGridSpacingLabel()
+    private UIElement BorderSection()
     {
-        if (_gridSpacingLabel != null)
-        {
-            _gridSpacingLabel.Text = $"Spacing: {_viewModel.GridRowSpacing:F0}px";
-        }
+        var border = new Border()
+            .HorizontalAlignment(HorizontalAlignment.Left)
+            .Themed(Border.BackgroundProperty, c => c.SurfaceContainerLowest)
+            .Themed(Border.BorderBrushProperty, c => c.Primary)
+            .BindCornerRadius(_vm, v => v.BorderCornerRadius)
+            .BindPadding(_vm, v => v.BorderPadding)
+            .BindElevation(_vm, v => v.BorderElevation)
+            .Bind(Border.BorderThicknessProperty, _vm, v => new Thickness(v.BorderThickness))
+            .Child(new StackPanel().Spacing(4).Children(
+                new TextBlock("Border").TitleMedium(),
+                new TextBlock("Background, outline, corners, padding and shadow").BodySmall().Muted()));
+
+        return Ui.Section("Border",
+            "Draws a background, an outline and a shadow around a single child, with rounded corners and padding.",
+            Ui.Row(
+                Ui.SliderSetting("Corner radius", _vm, v => v.BorderCornerRadius, (v, x) => v.BorderCornerRadius = x, 0, 40),
+                Ui.SliderSetting("Thickness", _vm, v => v.BorderThickness, (v, x) => v.BorderThickness = x, 0, 8, step: 1),
+                Ui.SliderSetting("Padding", _vm, v => v.BorderPadding, (v, x) => v.BorderPadding = x, 0, 40),
+                Ui.SliderSetting("Elevation", _vm, v => v.BorderElevation, (v, x) => v.BorderElevation = x, 0, 12, step: 1)),
+            Stage(border).Padding(32));
     }
 
-    private void RefreshGrid()
+    private UIElement ScrollViewerSection()
     {
-        if (_gridContainer == null) return;
+        var tiles = new UniformGrid()
+            .Columns(8)
+            .Spacing(8)
+            .Children(Enumerable.Range(1, 40).Select(i => (UIElement)Block($"Tile {i}", i % 3).Size(110, 64)).ToArray());
 
-        if (_btnGridUniform != null) _btnGridUniform.Variant = _viewModel.SelectedGridPreset == GridPreset.Uniform3x3 ? ButtonVariant.Filled : ButtonVariant.Outlined;
-        if (_btnGridAppShell != null) _btnGridAppShell.Variant = _viewModel.SelectedGridPreset == GridPreset.AppShell ? ButtonVariant.Filled : ButtonVariant.Outlined;
-        if (_btnGridSpanning != null) _btnGridSpanning.Variant = _viewModel.SelectedGridPreset == GridPreset.SpanningMatrix ? ButtonVariant.Filled : ButtonVariant.Outlined;
+        var scroller = new ScrollViewer()
+            .Height(200)
+            .Content(tiles)
+            .Bind(ScrollViewer.HorizontalScrollBarVisibilityProperty, _vm, v => v.HorizontalScrolling)
+            .Bind(ScrollViewer.VerticalScrollBarVisibilityProperty, _vm, v => v.VerticalScrolling)
+            .OnScrollChanged((_, e) => _vm.ScrollInfo =
+                $"Offset {e.HorizontalOffset:0}, {e.VerticalOffset:0} · viewport {e.ViewportWidth:0}×{e.ViewportHeight:0} · extent {e.ExtentWidth:0}×{e.ExtentHeight:0}");
 
-        static Border MakeCell(string label, string desc, Color color)
-        {
-            return new Border
-            {
-                Background = color.WithAlpha(0.15f),
-                BorderThickness = new Thickness(1.5f),
-                BorderBrush = color,
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(8, 6),
-                Child = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
-                    .Children(
-                        new TextBlock(label) { FontSize = 11, Bold = true, Foreground = color, HorizontalAlignment = HorizontalAlignment.Center },
-                        new TextBlock(desc) { FontSize = 10, Foreground = color.WithAlpha(0.8f), HorizontalAlignment = HorizontalAlignment.Center }
-                    )
-            };
-        }
-
-        var grid = new Grid()
-            .Spacing(_viewModel.GridColumnSpacing, _viewModel.GridRowSpacing);
-
-        switch (_viewModel.SelectedGridPreset)
-        {
-            case GridPreset.Uniform3x3:
-                grid.Rows(GridLength.Star, GridLength.Star, GridLength.Star);
-                grid.Columns(GridLength.Star, GridLength.Star, GridLength.Star);
-
-                Color[] palette = [Color.FromHex("#1E88E5"), Color.FromHex("#10B981"), Color.FromHex("#F59E0B"), Color.FromHex("#8B5CF6")];
-                for (int r = 0; r < 3; r++)
-                {
-                    for (int c = 0; c < 3; c++)
-                    {
-                        var cell = MakeCell($"R{r}, C{c}", "1* × 1*", palette[(r + c) % palette.Length]);
-                        Grid.SetRow(cell, r);
-                        Grid.SetColumn(cell, c);
-                        grid.Add(cell);
-                    }
-                }
-                break;
-
-            case GridPreset.AppShell:
-                // Header (Auto), Main (Star), Footer (32px)
-                grid.Rows(GridLength.Auto, GridLength.Star, GridLength.Pixels(30));
-                // Nav (130px), Content (Star)
-                grid.Columns(GridLength.Pixels(130), GridLength.Star);
-
-                var headerCell = MakeCell("Header Bar", "Row 0 (Auto), ColSpan 2", Color.FromHex("#1E88E5"));
-                Grid.SetRow(headerCell, 0);
-                Grid.SetColumn(headerCell, 0);
-                Grid.SetColumnSpan(headerCell, 2);
-                grid.Add(headerCell);
-
-                var navCell = MakeCell("Nav Sidebar", "R1, C0 (130px)", Color.FromHex("#059669"));
-                Grid.SetRow(navCell, 1);
-                Grid.SetColumn(navCell, 0);
-                grid.Add(navCell);
-
-                var contentCell = MakeCell("Main Content Area", "R1, C1 (Star)", Color.FromHex("#8B5CF6"));
-                Grid.SetRow(contentCell, 1);
-                Grid.SetColumn(contentCell, 1);
-                grid.Add(contentCell);
-
-                var footerCell = MakeCell("Footer / Status", "Row 2 (30px), ColSpan 2", Color.FromHex("#6B7280"));
-                Grid.SetRow(footerCell, 2);
-                Grid.SetColumn(footerCell, 0);
-                Grid.SetColumnSpan(footerCell, 2);
-                grid.Add(footerCell);
-                break;
-
-            case GridPreset.SpanningMatrix:
-                grid.Rows(GridLength.Star, GridLength.Star, GridLength.Star);
-                grid.Columns(GridLength.Star, GridLength.Star, GridLength.Star);
-
-                // Big cell spanning R0-1, C0-1
-                var bigCell = MakeCell("Feature Hero", "RowSpan 2, ColSpan 2", Color.FromHex("#EC4899"));
-                Grid.SetRow(bigCell, 0);
-                Grid.SetColumn(bigCell, 0);
-                Grid.SetRowSpan(bigCell, 2);
-                Grid.SetColumnSpan(bigCell, 2);
-                grid.Add(bigCell);
-
-                var c2r0 = MakeCell("Card A", "R0, C2", Color.FromHex("#1E88E5"));
-                Grid.SetRow(c2r0, 0);
-                Grid.SetColumn(c2r0, 2);
-                grid.Add(c2r0);
-
-                var c2r1 = MakeCell("Card B", "R1, C2", Color.FromHex("#10B981"));
-                Grid.SetRow(c2r1, 1);
-                Grid.SetColumn(c2r1, 2);
-                grid.Add(c2r1);
-
-                var bot0 = MakeCell("Footer 1", "R2, C0", Color.FromHex("#F59E0B"));
-                Grid.SetRow(bot0, 2);
-                Grid.SetColumn(bot0, 0);
-                grid.Add(bot0);
-
-                var bot1 = MakeCell("Footer 2 & 3", "R2, ColSpan 2", Color.FromHex("#8B5CF6"));
-                Grid.SetRow(bot1, 2);
-                Grid.SetColumn(bot1, 1);
-                Grid.SetColumnSpan(bot1, 2);
-                grid.Add(bot1);
-                break;
-        }
-
-        _gridContainer.Child = grid;
+        return Ui.Section("ScrollViewer",
+            "Shows a larger content through a viewport. Each axis can scroll with a bar shown when needed (Auto), always " +
+            "(Visible), never (Hidden), or not scroll at all (Disabled). The wheel scrolls vertically, Shift+wheel " +
+            "horizontally; this scroll area is nested in the page's own.",
+            Ui.Columns(360,
+                Ui.Labeled("Horizontal", Choice("scroll-h", v => v.HorizontalScrolling, (v, x) => v.HorizontalScrolling = x)),
+                Ui.Labeled("Vertical", Choice("scroll-v", v => v.VerticalScrolling, (v, x) => v.VerticalScrolling = x))),
+            Stage(scroller),
+            Ui.Readout(_vm, v => v.ScrollInfo));
     }
 
-    #endregion
-
-    #region 4. WrapPanel Card
-
-    private UIElement CreateWrapPanelCard()
+    private UIElement AlignmentSection()
     {
-        var card = new Card(CardVariant.Outlined)
-            .Padding(18)
-            .CornerRadius(12);
+        var child = Block("Aligned child", 0)
+            .Bind(UIElement.HorizontalAlignmentProperty, _vm, v => v.ChildHorizontalAlignment)
+            .Bind(UIElement.VerticalAlignmentProperty, _vm, v => v.ChildVerticalAlignment)
+            .Bind(UIElement.MarginProperty, _vm, v => new Thickness(v.ChildMargin));
 
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.WrapText, 20, foreground: Color.FromHex("#F59E0B")),
-                new TextBlock("WrapPanel — Responsive Flow & Dynamic Wrapping").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
-                new Border
-                {
-                    Background = Color.FromHex("#F59E0B").WithAlpha(0.12f),
-                    CornerRadius = new CornerRadius(8),
-                    Padding = new Thickness(6, 2),
-                    Child = new TextBlock("Dynamic Line Breaking • Tags & Chips") { FontSize = 10, Bold = true, Foreground = Color.FromHex("#D97706") }
-                }
-            );
+        var slot = new Border()
+            .Height(160)
+            .CornerRadius(8)
+            .BorderThickness(1)
+            .Themed(Border.BorderBrushProperty, c => c.OutlineVariant)
+            .Child(child);
 
-        var desc = new TextBlock("Positions child elements sequentially from left to right, automatically breaking content to the next line at the edge of the containing box. Drag the width slider to watch chips wrap!") { TextWrapping = TextWrapping.Wrap }
-            .FontSize(12).Foreground(Color.FromHex("#757575"));
-
-        // Controls
-        _btnWrapOrientation = new Button("Orientation: Horizontal")
-        {
-            Variant = ButtonVariant.Tonal,
-            Padding = new Thickness(10, 5),
-            CornerRadius = new CornerRadius(14),
-            Command = _viewModel.ToggleWrapOrientationCommand,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        _btnWrapUniform = new Button("Item Size: Auto")
-        {
-            Variant = ButtonVariant.Outlined,
-            Padding = new Thickness(10, 5),
-            CornerRadius = new CornerRadius(14),
-            Command = _viewModel.ToggleWrapUniformCommand,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        var widthSlider = new Slider { Minimum = 220, Maximum = 650, Value = _viewModel.WrapContainerWidth, Width = 150, VerticalAlignment = VerticalAlignment.Center };
-        _wrapWidthLabel = new TextBlock($"Width: {_viewModel.WrapContainerWidth:F0}px") { FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
-        widthSlider.ValueChanged += (s, v) =>
-        {
-            _viewModel.WrapContainerWidth = v;
-            _wrapWidthLabel.Text = $"Width: {v:F0}px";
-            if (_wrapWrapper != null)
-            {
-                _wrapWrapper.Width = v;
-            }
-        };
-
-        var controlsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(_btnWrapOrientation, _btnWrapUniform, widthSlider, _wrapWidthLabel);
-
-        // Viewport
-        _liveWrapPanel = new WrapPanel
-        {
-            Orientation = _viewModel.WrapOrientation,
-            HorizontalSpacing = _viewModel.WrapSpacing,
-            VerticalSpacing = _viewModel.WrapSpacing
-        };
-
-        _wrapWrapper = new Border
-        {
-            Width = _viewModel.WrapContainerWidth,
-            MinHeight = 160,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Background = Color.FromHex("#000000").WithAlpha(0.03f),
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1.5f),
-            BorderBrush = Color.FromHex("#F59E0B").WithAlpha(0.4f),
-            Padding = new Thickness(12),
-            Child = _liveWrapPanel
-        };
-
-        RefreshWrapPanel();
-
-        return card.Child(new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
-            .Children(header, desc, controlsRow, _wrapWrapper));
+        return Ui.Section("Alignment, margin and size",
+            "An element is placed in the slot its parent gives it: stretched to fill it (the default) or aligned to a side " +
+            "or the center. The margin keeps space around it; minimum and maximum sizes limit how small or large it gets.",
+            Ui.Columns(360,
+                Ui.Labeled("HorizontalAlignment", Choice("align-h", v => v.ChildHorizontalAlignment, (v, x) => v.ChildHorizontalAlignment = x)),
+                Ui.Labeled("VerticalAlignment", Choice("align-v", v => v.ChildVerticalAlignment, (v, x) => v.ChildVerticalAlignment = x))),
+            Ui.Row(Ui.SliderSetting("Margin", _vm, v => v.ChildMargin, (v, x) => v.ChildMargin = x, 0, 40)),
+            Stage(slot),
+            Ui.Demo("Size limits",
+                Ui.Row(
+                    Block("120 × 56", 0).Size(120, 56),
+                    Block("MinWidth 200", 1).MinWidth(200),
+                    new Border()
+                        .MaxWidth(200)
+                        .Padding(12, 8)
+                        .CornerRadius(8)
+                        .Themed(Border.BackgroundProperty, c => c.TertiaryContainer)
+                        .Child(new TextBlock("MaxWidth 200: longer text wraps instead of growing wider")
+                            .TextWrapping()
+                            .Themed(TextBlock.ForegroundProperty, c => c.OnTertiaryContainer)))));
     }
 
-    private void RefreshWrapPanel()
+    private UIElement VisibilitySection()
     {
-        if (_liveWrapPanel == null) return;
+        var clipped = new Border()
+            .Size(220, 90)
+            .HorizontalAlignment(HorizontalAlignment.Left)
+            .CornerRadius(12)
+            .Bind(UIElement.ClipToBoundsProperty, _vm, v => v.ClipChildren)
+            .Themed(Border.BackgroundProperty, c => c.SurfaceContainerHighest)
+            .Child(Block("This child is larger than its 220×90 parent", 1).Size(300, 70).Margin(40, 40, 0, 0).HorizontalAlignment(HorizontalAlignment.Left));
 
-        _liveWrapPanel.Orientation = _viewModel.WrapOrientation;
-        _liveWrapPanel.Clear();
-
-        if (_viewModel.WrapUniformItems)
-        {
-            _liveWrapPanel.ItemWidth = 110f;
-            _liveWrapPanel.ItemHeight = 36f;
-        }
-        else
-        {
-            _liveWrapPanel.ItemWidth = float.NaN;
-            _liveWrapPanel.ItemHeight = float.NaN;
-        }
-
-        if (_btnWrapOrientation != null)
-        {
-            _btnWrapOrientation.Content = new TextBlock($"Orientation: {_viewModel.WrapOrientation}");
-        }
-
-        if (_btnWrapUniform != null)
-        {
-            _btnWrapUniform.Variant = _viewModel.WrapUniformItems ? ButtonVariant.Filled : ButtonVariant.Outlined;
-            _btnWrapUniform.Content = new TextBlock($"Item Size: {(_viewModel.WrapUniformItems ? "Uniform (110×36)" : "Auto")}");
-        }
-
-        string[] tags =
-        [
-            "#MaterialDesign3", "#SkiaSharp", "#NativeAOT", "#SilkNET", "#HotReload",
-            "#DirectX12", "#Vulkan", "#CrossPlatform", "#ZeroReflection", "#Vectors",
-            "#Typography", "#PropertyGrid", "#DialogHost", "#TreeView", "#Animation"
-        ];
-
-        Color[] colors =
-        [
-            Color.FromHex("#1E88E5"), Color.FromHex("#10B981"), Color.FromHex("#F59E0B"),
-            Color.FromHex("#8B5CF6"), Color.FromHex("#EC4899"), Color.FromHex("#06B6D4")
-        ];
-
-        for (int i = 0; i < tags.Length; i++)
-        {
-            Color c = colors[i % colors.Length];
-            var chip = new Border
-            {
-                Background = c.WithAlpha(0.12f),
-                BorderThickness = new Thickness(1),
-                BorderBrush = c.WithAlpha(0.5f),
-                CornerRadius = new CornerRadius(14),
-                Padding = new Thickness(10, 4),
-                Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center }
-                    .Children(
-                        new Icon(MaterialIconKind.Tag, 13, foreground: c),
-                        new TextBlock(tags[i]) { FontSize = 11, Bold = true, Foreground = c }
-                    )
-            };
-            _liveWrapPanel.Add(chip);
-        }
+        return Ui.Section("Visibility, clipping and opacity",
+            "Hidden elements keep their space, collapsed ones don't. ClipToBounds cuts off children that extend beyond " +
+            "the element (following rounded corners). Opacity fades an element and its children.",
+            Ui.Demo("Visibility of the middle block",
+                Choice("visibility", v => v.MiddleVisibility, (v, x) => v.MiddleVisibility = x),
+                Stage(Ui.Row(
+                    Block("First", 0),
+                    Block("Middle", 1).Bind(UIElement.VisibilityProperty, _vm, v => v.MiddleVisibility),
+                    Block("Last", 2)))),
+            Ui.Columns(320,
+                Ui.Demo("ClipToBounds",
+                    new Switch("Clip children").BindIsChecked(_vm, v => v.ClipChildren, (v, on) => v.ClipChildren = on),
+                    clipped.Margin(0, 0, 0, 40)),
+                Ui.Demo("Opacity",
+                    Ui.SliderSetting("Opacity", _vm, v => v.BlockOpacity, (v, x) => v.BlockOpacity = x, 0, 1, "0.00"),
+                    Block("Faded block", 0).HorizontalAlignment(HorizontalAlignment.Left).BindOpacity(_vm, v => v.BlockOpacity))));
     }
 
-    #endregion
+    /// <summary>Radio buttons for every value of an enum, bound to a view model property.</summary>
+    private UIElement Choice<TEnum>(string group, Func<LayoutViewModel, TEnum> getter, Action<LayoutViewModel, TEnum> setter)
+        where TEnum : struct, Enum =>
+        Ui.Row(Enum.GetValues<TEnum>()
+            .Select(value => (UIElement)new RadioButton(value.ToString()).GroupName(group).BindIsChecked(_vm, getter, setter, value))
+            .ToArray());
 
-    #region 5. Canvas Card
+    /// <summary>A tinted area that shows a demo panel's bounds.</summary>
+    private static Border Stage(UIElement content) =>
+        new Border()
+            .Padding(12)
+            .CornerRadius(12)
+            .Themed(Border.BackgroundProperty, c => c.SurfaceContainer)
+            .Child(content);
 
-    private UIElement CreateCanvasCard()
-    {
-        var card = new Card(CardVariant.Outlined)
-            .Padding(18)
-            .CornerRadius(12);
-
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.Brush, 20, foreground: Color.FromHex("#EC4899")),
-                new TextBlock("Canvas — Absolute 2D Coordinate System").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
-                new Border
-                {
-                    Background = Color.FromHex("#EC4899").WithAlpha(0.12f),
-                    CornerRadius = new CornerRadius(8),
-                    Padding = new Thickness(6, 2),
-                    Child = new TextBlock("Canvas.Left • Canvas.Top") { FontSize = 10, Bold = true, Foreground = Color.FromHex("#DB2777") }
-                }
-            );
-
-        var desc = new TextBlock("Provides absolute positioning of child elements using attached Canvas.Left and Canvas.Top coordinates. Ideal for diagrams, node graphs, CAD surfaces, and custom freeform overlays.") { TextWrapping = TextWrapping.Wrap }
-            .FontSize(12).Foreground(Color.FromHex("#757575"));
-
-        // Controls
-        var xSlider = new Slider { Minimum = 10, Maximum = 400, Value = _viewModel.CanvasItemX, Width = 120, VerticalAlignment = VerticalAlignment.Center };
-        var ySlider = new Slider { Minimum = 10, Maximum = 140, Value = _viewModel.CanvasItemY, Width = 100, VerticalAlignment = VerticalAlignment.Center };
-
-        _canvasCoordText = new TextBlock($"X: {_viewModel.CanvasItemX:F0}px, Y: {_viewModel.CanvasItemY:F0}px")
-        {
-            FontSize = 12,
-            Bold = true,
-            Foreground = Color.FromHex("#EC4899"),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-
-        xSlider.ValueChanged += (s, v) =>
-        {
-            _viewModel.CanvasItemX = v;
-            UpdateCanvasItemPos();
-        };
-
-        ySlider.ValueChanged += (s, v) =>
-        {
-            _viewModel.CanvasItemY = v;
-            UpdateCanvasItemPos();
-        };
-
-        var btnReset = new Button("Reset")
-        {
-            Variant = ButtonVariant.Text,
-            Padding = new Thickness(8, 4),
-            CornerRadius = new CornerRadius(12),
-            Command = _viewModel.ResetCanvasPositionCommand
-        };
-
-        var controlsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new TextBlock("Left (X):") { FontSize = 12, VerticalAlignment = VerticalAlignment.Center },
-                xSlider,
-                new TextBlock("Top (Y):") { FontSize = 12, VerticalAlignment = VerticalAlignment.Center },
-                ySlider,
-                _canvasCoordText,
-                btnReset
-            );
-
-        // Viewport
-        _liveCanvas = new Canvas();
-
-        // Fixed landmark items
-        void AddLandmark(float x, float y, string name, Color c)
-        {
-            var node = new Border
-            {
-                Background = c.WithAlpha(0.15f),
-                BorderThickness = new Thickness(1.5f),
-                BorderBrush = c,
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(8, 4),
-                Child = new TextBlock(name) { FontSize = 11, Bold = true, Foreground = c }
-            };
-            Canvas.SetLeft(node, x);
-            Canvas.SetTop(node, y);
-            _liveCanvas.Add(node);
-        }
-
-        AddLandmark(20, 20, "Fixed Node (20, 20)", Color.FromHex("#6B7280"));
-        AddLandmark(260, 30, "Target B (260, 30)", Color.FromHex("#10B981"));
-        AddLandmark(380, 110, "Target C (380, 110)", Color.FromHex("#8B5CF6"));
-        AddLandmark(80, 140, "Anchor (80, 140)", Color.FromHex("#F59E0B"));
-
-        // Movable highlight element
-        _movableCanvasItem = new Border
-        {
-            Background = Color.FromHex("#EC4899"),
-            BorderThickness = new Thickness(2),
-            BorderBrush = Color.White,
-            Elevation = 6,
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(12, 8),
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center }
-                .Children(
-                    new Icon(MaterialIconKind.ControlCamera, 16, foreground: Color.White),
-                    new TextBlock("Movable Target") { FontSize = 12, Bold = true, Foreground = Color.White }
-                )
-        };
-        Canvas.SetLeft(_movableCanvasItem, _viewModel.CanvasItemX);
-        Canvas.SetTop(_movableCanvasItem, _viewModel.CanvasItemY);
-        _liveCanvas.Add(_movableCanvasItem);
-
-        var viewport = new Border
-        {
-            Height = 210,
-            Background = Color.FromHex("#000000").WithAlpha(0.03f),
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1),
-            BorderBrush = Color.FromHex("#000000").WithAlpha(0.08f),
-            Child = _liveCanvas
-        };
-
-        return card.Child(new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
-            .Children(header, desc, controlsRow, viewport));
-    }
-
-    private void UpdateCanvasItemPos()
-    {
-        if (_movableCanvasItem != null)
-        {
-            Canvas.SetLeft(_movableCanvasItem, _viewModel.CanvasItemX);
-            Canvas.SetTop(_movableCanvasItem, _viewModel.CanvasItemY);
-        }
-
-        if (_canvasCoordText != null)
-        {
-            _canvasCoordText.Text = $"X: {_viewModel.CanvasItemX:F0}px, Y: {_viewModel.CanvasItemY:F0}px";
-        }
-    }
-
-    #endregion
-
-    #region 6. Border & Card Container
-
-    private UIElement CreateBorderCard()
-    {
-        var card = new Card(CardVariant.Outlined)
-            .Padding(18)
-            .CornerRadius(12);
-
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new Icon(MaterialIconKind.CropFree, 20, foreground: Color.FromHex("#06B6D4")),
-                new TextBlock("Border & Card — Container Decorators").TitleMedium().Bold().VerticalAlignment(VerticalAlignment.Center),
-                new Border
-                {
-                    Background = Color.FromHex("#06B6D4").WithAlpha(0.12f),
-                    CornerRadius = new CornerRadius(8),
-                    Padding = new Thickness(6, 2),
-                    Child = new TextBlock("CornerRadius • Thickness • Elevation • Padding") { FontSize = 10, Bold = true, Foreground = Color.FromHex("#0891B2") }
-                }
-            );
-
-        var desc = new TextBlock("Draws a border, background, and optional drop shadow elevation around another single child element. Supports asymmetric or uniform corner radii and thickness.") { TextWrapping = TextWrapping.Wrap }
-            .FontSize(12).Foreground(Color.FromHex("#757575"));
-
-        // Sliders
-        var radiusSlider = new Slider { Minimum = 0, Maximum = 32, Value = _viewModel.BorderCornerRadius, Width = 100, VerticalAlignment = VerticalAlignment.Center };
-        radiusSlider.ValueChanged += (s, v) => { _viewModel.BorderCornerRadius = v; RefreshBorder(); };
-
-        var thickSlider = new Slider { Minimum = 0, Maximum = 8, Value = _viewModel.BorderThickness, Width = 80, VerticalAlignment = VerticalAlignment.Center };
-        thickSlider.ValueChanged += (s, v) => { _viewModel.BorderThickness = v; RefreshBorder(); };
-
-        var elevSlider = new Slider { Minimum = 0, Maximum = 24, Value = _viewModel.BorderElevation, Width = 90, VerticalAlignment = VerticalAlignment.Center };
-        elevSlider.ValueChanged += (s, v) => { _viewModel.BorderElevation = v; RefreshBorder(); };
-
-        var padSlider = new Slider { Minimum = 4, Maximum = 32, Value = _viewModel.BorderPadding, Width = 90, VerticalAlignment = VerticalAlignment.Center };
-        padSlider.ValueChanged += (s, v) => { _viewModel.BorderPadding = v; RefreshBorder(); };
-
-        var controlsRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center }
-            .Children(
-                new TextBlock("Radius:") { FontSize = 11, VerticalAlignment = VerticalAlignment.Center },
-                radiusSlider,
-                new TextBlock("Thickness:") { FontSize = 11, VerticalAlignment = VerticalAlignment.Center },
-                thickSlider,
-                new TextBlock("Elevation:") { FontSize = 11, VerticalAlignment = VerticalAlignment.Center },
-                elevSlider,
-                new TextBlock("Padding:") { FontSize = 11, VerticalAlignment = VerticalAlignment.Center },
-                padSlider
-            );
-
-        // Live preview border
-        _liveBorder = new Border
-        {
-            Width = 360,
-            Background = Color.FromHex("#06B6D4").WithAlpha(0.12f),
-            BorderBrush = Color.FromHex("#06B6D4"),
-            BorderThickness = new Thickness(_viewModel.BorderThickness),
-            CornerRadius = new CornerRadius(_viewModel.BorderCornerRadius),
-            Elevation = _viewModel.BorderElevation,
-            Padding = new Thickness(_viewModel.BorderPadding),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = new StackPanel { Orientation = Orientation.Vertical, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center }
-                .Children(
-                    new TextBlock("Decorated Border Container").Bold().FontSize(13).Foreground(Color.FromHex("#0891B2")).HorizontalAlignment(HorizontalAlignment.Center),
-                    new TextBlock("Hosts child elements with custom padding, borders & drop shadows.")
-                    {
-                        FontSize = 11,
-                        Foreground = Color.FromHex("#6B7280"),
-                        HorizontalAlignment = HorizontalAlignment.Center,
-                        TextWrapping = TextWrapping.Wrap
-                    }
-                )
-        };
-
-        var viewport = new Border
-        {
-            Height = 180,
-            Background = Color.FromHex("#000000").WithAlpha(0.03f),
-            CornerRadius = new CornerRadius(8),
-            BorderThickness = new Thickness(1),
-            BorderBrush = Color.FromHex("#000000").WithAlpha(0.08f),
-            Child = _liveBorder
-        };
-
-        _borderMetricsText = new TextBlock()
-            .FontSize(11)
-            .Foreground(Color.FromHex("#6B7280"));
-
-        RefreshBorder();
-
-        return card.Child(new StackPanel { Orientation = Orientation.Vertical, Spacing = 10 }
-            .Children(header, desc, controlsRow, viewport, _borderMetricsText));
-    }
-
-    private void RefreshBorder()
-    {
-        if (_liveBorder == null) return;
-
-        _liveBorder.CornerRadius = new CornerRadius(_viewModel.BorderCornerRadius);
-        _liveBorder.BorderThickness = new Thickness(_viewModel.BorderThickness);
-        _liveBorder.Elevation = _viewModel.BorderElevation;
-        _liveBorder.Padding = new Thickness(_viewModel.BorderPadding);
-
-        if (_borderMetricsText != null)
-        {
-            _borderMetricsText.Text = $"Border: CornerRadius={_viewModel.BorderCornerRadius:F0}px, Thickness={_viewModel.BorderThickness:F0}px, Elevation={_viewModel.BorderElevation:F0}dp, Padding={_viewModel.BorderPadding:F0}px";
-        }
-    }
-
-    #endregion
-
-    private void RefreshLiveViewports()
-    {
-        RefreshStackPanel();
-        RefreshDockPanel();
-        RefreshGrid();
-        RefreshWrapPanel();
-        UpdateCanvasItemPos();
-        RefreshBorder();
-    }
+    /// <summary>A colored block with a centered label, in one of three tones.</summary>
+    private static Border Block(string text, int tone) =>
+        new Border()
+            .Padding(12, 8)
+            .CornerRadius(8)
+            .Themed(Border.BackgroundProperty, c => (tone % 3) switch { 0 => c.PrimaryContainer, 1 => c.SecondaryContainer, _ => c.TertiaryContainer })
+            .Child(new TextBlock(text)
+                .LabelLarge()
+                .Center()
+                .Themed(TextBlock.ForegroundProperty, c => (tone % 3) switch { 0 => c.OnPrimaryContainer, 1 => c.OnSecondaryContainer, _ => c.OnTertiaryContainer }));
 }
