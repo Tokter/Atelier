@@ -61,8 +61,8 @@ All screenshots show the included [Gallery](samples/Atelier.Gallery) application
 | **Typography**: the MD3 type scale and a live playground | **Layout**: stack, wrap, dock, grid, uniform grid and canvas |
 | ![Popups and dialogs](docs/screenshots/popups-dialogs.png) | ![Property grid](docs/screenshots/property-grid.png) |
 | **Popups & dialogs**: presets, custom content, scoped hosts | **Property grid**: generated metadata, validation, custom editors |
-| ![Tooltips](docs/screenshots/tooltips.png) | |
-| **Tooltips**: plain text, or rich content with clickable actions | |
+| ![Tooltips](docs/screenshots/tooltips.png) | ![Theme editor](docs/screenshots/theme-editor.png) |
+| **Tooltips**: plain text, or rich content with clickable actions | **Theme editor**: schemes generated from an accent color, every role tunable in light and dark |
 
 ---
 
@@ -168,6 +168,8 @@ element can set the mouse cursor (`.Cursor(CursorType.Hand)`); text boxes show t
 ### Theming and styling
 
 - `MaterialTheme.CreateLight()` / `CreateDark()`: MD3 color schemes, switchable at runtime in every open window.
+- `MaterialColorScheme.FromSeed(accent, isDark, variant)` generates a complete light or dark scheme from one accent
+  color (tonal spot, vibrant, fidelity, neutral or monochrome), with every "on" color at 4.5:1 contrast or more.
 - Theme default styles follow the MD3 specs with a desktop density (32 px buttons, 48 px text fields);
   `MaterialSizing.Touch` gives the standard MD3 sizes.
 - Styles apply by type or by key (`.StyleKey(...)`, typography shortcuts such as `.TitleLarge()`), with the precedence
@@ -238,7 +240,8 @@ states, with the code that builds it. Useful shortcuts:
 
 To render pages to PNG files without opening a window, as for the screenshots above, set
 `ATELIER_GALLERY_SNAPSHOT=<output folder>`. Optionally also set `ATELIER_GALLERY_PAGES=0,3,7`,
-`ATELIER_GALLERY_THEME=dark` and `ATELIER_GALLERY_SIZE=1280x800`. `ATELIER_GALLERY_TOOLTIP=<n>` opens the page's n-th
+`ATELIER_GALLERY_THEME=dark`, `ATELIER_GALLERY_SIZE=1280x800` and `ATELIER_GALLERY_SEED=#006A6A[:Vibrant]` (a theme
+generated from that accent color). `ATELIER_GALLERY_TOOLTIP=<n>` opens the page's n-th
 tooltip, and `ATELIER_GALLERY_FILE_DIALOG=open|save|folder` shows a file dialog limited to the repository (run it
 from the repository folder), and in Debug builds `ATELIER_GALLERY_DEVTOOLS=<text>[:tab]` opens the developer tools
 with the first element whose description contains the text selected.

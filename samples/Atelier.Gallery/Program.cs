@@ -23,9 +23,7 @@ internal static class Program
         }
 
         // ATELIER_GALLERY_THEME=dark starts in the dark theme.
-        ThemeManager.Current = string.Equals(Environment.GetEnvironmentVariable("ATELIER_GALLERY_THEME"), "dark", StringComparison.OrdinalIgnoreCase)
-            ? MaterialTheme.CreateDark()
-            : MaterialTheme.CreateLight();
+        Infrastructure.GalleryTheme.IsDark = string.Equals(Environment.GetEnvironmentVariable("ATELIER_GALLERY_THEME"), "dark", StringComparison.OrdinalIgnoreCase);
 
         // ATELIER_GALLERY_WINDOWS=N opens N windows at startup (for multi-window testing).
         var mainWindow = OpenGalleryWindow();
@@ -65,7 +63,8 @@ internal static class Program
             .Register<TransformationViewModel>(vm => new TransformationView(vm))
             .Register<TransitionsViewModel>(vm => new TransitionsView(vm))
             .Register<PropertyGridViewModel>(vm => new PropertyGridView(vm))
-            .Register<KeybindingViewModel>(vm => new KeybindingView(vm));
+            .Register<KeybindingViewModel>(vm => new KeybindingView(vm))
+            .Register<ThemeEditorViewModel>(vm => new ThemeEditorView(vm));
 
     /// <summary>
     /// Opens a gallery window with its own view model. Works before and while the application runs.

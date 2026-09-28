@@ -20,7 +20,7 @@ namespace Atelier.Gallery.Infrastructure;
 /// Enabled with <c>ATELIER_GALLERY_SNAPSHOT=&lt;output directory&gt;</c>. Optional: <c>ATELIER_GALLERY_PAGES</c> (page
 /// indexes, comma-separated; all by default), <c>ATELIER_GALLERY_THEME=dark</c>, and <c>ATELIER_GALLERY_SIZE</c>
 /// (<c>WIDTHxHEIGHT</c>, 1280x860 by default; a taller size shows more of a page), <c>ATELIER_GALLERY_TOOLTIP</c> and
-/// <c>ATELIER_GALLERY_FILE_DIALOG</c> (see below).
+/// <c>ATELIER_GALLERY_FILE_DIALOG</c> (see below), and <c>ATELIER_GALLERY_SEED</c> (<c>#RRGGBB[:Variant]</c>, a generated theme).
 /// </remarks>
 internal static class Snapshot
 {
@@ -34,8 +34,16 @@ internal static class Snapshot
 
         Directory.CreateDirectory(outputDirectory);
         bool dark = string.Equals(Environment.GetEnvironmentVariable("ATELIER_GALLERY_THEME"), "dark", StringComparison.OrdinalIgnoreCase);
-        var theme = dark ? MaterialTheme.CreateDark() : MaterialTheme.CreateLight();
-        ThemeManager.Current = theme;
+        // ATELIER_GALLERY_SEED=#RRGGBB[:Variant] generates the schemes from an accent color, as the Theme Editor does.
+        if (Environment.GetEnvironmentVariable("ATELIER_GALLERY_SEED") is { Length: > 0 } seedText)
+        {
+            var parts = seedText.Split(':');
+            var seed = Color.FromHex(parts[0]);
+            var variant = parts.Length > 1 ? Enum.Parse<MaterialSchemeVariant>(parts[1], ignoreCase: true) : MaterialSchemeVariant.TonalSpot;
+            GalleryTheme.Generate(seed, variant);
+        }
+        GalleryTheme.IsDark = dark;
+        GalleryTheme.Apply();
 
         (int width, int height) = ParseSize(Environment.GetEnvironmentVariable("ATELIER_GALLERY_SIZE"));
         var viewModel = new MainViewModel();
@@ -123,7 +131,7 @@ internal static class Snapshot
             using var bitmap = new SKBitmap(width, height);
             using (var canvas = new SKCanvas(bitmap))
             {
-                var background = theme.Colors.Surface;
+                var background = GalleryTheme.Scheme(dark).Surface;
                 canvas.Clear(new SKColor(background.R, background.G, background.B, background.A));
                 var context = new DrawingContext(canvas, registry);
                 VisualTreeRenderer.Render(rendered, ref context, ThemeVisualPresenter.Instance);

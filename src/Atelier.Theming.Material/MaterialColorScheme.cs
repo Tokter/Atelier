@@ -3,6 +3,21 @@ using Atelier.Core.Primitives;
 
 namespace Atelier.Theming.Material;
 
+/// <summary>How colorful a scheme created by <see cref="MaterialColorScheme.FromSeed"/> is.</summary>
+public enum MaterialSchemeVariant
+{
+    /// <summary>The MD3 default: a calm primary accent from the seed's hue, muted secondary and tertiary accents and nearly gray surfaces.</summary>
+    TonalSpot,
+    /// <summary>The most colorful primary the seed's hue allows, livelier accents and tinted surfaces.</summary>
+    Vibrant,
+    /// <summary>Keeps the seed's own colorfulness: vivid seeds give vivid schemes, muted seeds muted ones.</summary>
+    Fidelity,
+    /// <summary>Barely tinted: nearly gray accents and surfaces.</summary>
+    Neutral,
+    /// <summary>Grays only; the seed's hue is ignored.</summary>
+    Monochrome,
+}
+
 /// <summary>
 /// The Material Design 3 color roles of a theme. <see cref="Light"/> and <see cref="Dark"/> are the MD3 baseline
 /// schemes (seed color #6750A4); create an instance with your own values for a custom scheme.
@@ -87,6 +102,66 @@ public class MaterialColorScheme
     public Color Shadow { get; init; } = Color.Black;
     /// <summary>The color of the scrim behind modal content (drawn at 32% opacity).</summary>
     public Color Scrim { get; init; } = Color.Black;
+
+    /// <summary>
+    /// Creates a scheme from one accent color: tonal palettes for the primary, secondary and tertiary accents, the
+    /// neutrals and errors (see <see cref="MaterialTonalPalette"/>), with each role at its MD3 tone, e.g. primary at
+    /// tone 40 in light schemes and 80 in dark ones. "On" roles contrast with their role by at least 4.5:1.
+    /// </summary>
+    /// <param name="seed">The accent color; its hue colors the whole scheme, even the surfaces slightly.</param>
+    /// <param name="isDark">Whether to create the dark scheme.</param>
+    /// <param name="variant">How colorful the scheme is.</param>
+    public static MaterialColorScheme FromSeed(Color seed, bool isDark, MaterialSchemeVariant variant = MaterialSchemeVariant.TonalSpot)
+    {
+        MaterialTonalPalette.ToLch(seed, out _, out double seedChroma, out double hue);
+        (double primary, double secondary, double tertiary, double neutral, double neutralVariant) = variant switch
+        {
+            MaterialSchemeVariant.Vibrant => (200.0, 24.0, 32.0, 9.0, 12.0),
+            MaterialSchemeVariant.Fidelity => (seedChroma, Math.Max(seedChroma - 32, seedChroma * 0.5), seedChroma * 0.6, seedChroma / 10, seedChroma / 10 + 3),
+            MaterialSchemeVariant.Neutral => (14.0, 7.0, 12.0, 2.0, 3.0),
+            MaterialSchemeVariant.Monochrome => (0.0, 0.0, 0.0, 0.0, 0.0),
+            _ => (48.0, 14.0, 21.0, 4.5, 6.5),
+        };
+        var p = new MaterialTonalPalette(hue, primary);
+        var s = new MaterialTonalPalette(hue, secondary);
+        var t = new MaterialTonalPalette(hue + 55, tertiary);
+        var n = new MaterialTonalPalette(hue, neutral);
+        var nv = new MaterialTonalPalette(hue, neutralVariant);
+        var e = MaterialTonalPalette.FromColor(Color.FromHex("#B3261E"));
+
+        return isDark
+            ? new MaterialColorScheme
+            {
+                Primary = p.Tone(80), OnPrimary = p.Tone(20), PrimaryContainer = p.Tone(30), OnPrimaryContainer = p.Tone(90),
+                Secondary = s.Tone(80), OnSecondary = s.Tone(20), SecondaryContainer = s.Tone(30), OnSecondaryContainer = s.Tone(90),
+                Tertiary = t.Tone(80), OnTertiary = t.Tone(20), TertiaryContainer = t.Tone(30), OnTertiaryContainer = t.Tone(90),
+                Surface = n.Tone(6), SurfaceDim = n.Tone(6), SurfaceBright = n.Tone(24),
+                SurfaceContainerLowest = n.Tone(4), SurfaceContainerLow = n.Tone(10), SurfaceContainer = n.Tone(12),
+                SurfaceContainerHigh = n.Tone(17), SurfaceContainerHighest = n.Tone(22),
+                OnSurface = n.Tone(90), OnSurfaceVariant = nv.Tone(80),
+                Outline = nv.Tone(60), OutlineVariant = nv.Tone(30),
+                Background = n.Tone(6), OnBackground = n.Tone(90),
+                Error = e.Tone(80), OnError = e.Tone(20),
+                InverseSurface = n.Tone(90), InverseOnSurface = n.Tone(20), InversePrimary = p.Tone(40),
+            }
+            : new MaterialColorScheme
+            {
+                Primary = p.Tone(40), OnPrimary = p.Tone(100), PrimaryContainer = p.Tone(90), OnPrimaryContainer = p.Tone(10),
+                Secondary = s.Tone(40), OnSecondary = s.Tone(100), SecondaryContainer = s.Tone(90), OnSecondaryContainer = s.Tone(10),
+                Tertiary = t.Tone(40), OnTertiary = t.Tone(100), TertiaryContainer = t.Tone(90), OnTertiaryContainer = t.Tone(10),
+                Surface = n.Tone(98), SurfaceDim = n.Tone(87), SurfaceBright = n.Tone(98),
+                SurfaceContainerLowest = n.Tone(100), SurfaceContainerLow = n.Tone(96), SurfaceContainer = n.Tone(94),
+                SurfaceContainerHigh = n.Tone(92), SurfaceContainerHighest = n.Tone(90),
+                OnSurface = n.Tone(10), OnSurfaceVariant = nv.Tone(30),
+                Outline = nv.Tone(50), OutlineVariant = nv.Tone(80),
+                Background = n.Tone(98), OnBackground = n.Tone(10),
+                Error = e.Tone(40), OnError = e.Tone(100),
+                InverseSurface = n.Tone(20), InverseOnSurface = n.Tone(95), InversePrimary = p.Tone(80),
+            };
+    }
+
+    /// <summary>Creates a copy of the scheme.</summary>
+    public MaterialColorScheme Clone() => (MaterialColorScheme)MemberwiseClone();
 
     /// <summary>The MD3 baseline light scheme.</summary>
     public static MaterialColorScheme Light() => new()

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using Atelier.Controls;
 using Atelier.Core.Keybinding;
+using Atelier.Gallery.Infrastructure;
 using Atelier.Theming;
 using Atelier.Theming.Material;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -60,6 +61,7 @@ public partial class MainViewModel : ObservableObject
             new TransitionsViewModel(),
             new PropertyGridViewModel(),
             new KeybindingViewModel(),
+            new ThemeEditorViewModel(),
         ];
 
         foreach (var page in _allPages)
@@ -106,7 +108,7 @@ public partial class MainViewModel : ObservableObject
     [property: Keybinding("ToggleTheme", "Global", "Ctrl+T")]
     private void ToggleTheme()
     {
-        ThemeManager.Current = ThemeManager.Current.IsDark ? MaterialTheme.CreateLight() : MaterialTheme.CreateDark();
+        GalleryTheme.Toggle();
     }
 
     [RelayCommand]
