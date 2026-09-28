@@ -301,10 +301,23 @@ public class Popup : Control
     /// </summary>
     internal VisualNode GetOwnerRoot()
     {
-        VisualNode node = Parent == null && PlacementTarget != null ? PlacementTarget : this;
-        while (node.Parent != null)
+        // Follow parentless popups to their targets, so a popup inside another one (such as a context menu's submenu)
+        // belongs to the window too.
+        VisualNode node = this;
+        for (int hops = 0; hops < 32; hops++)
         {
-            node = node.Parent;
+            if (node is Popup { Parent: null, PlacementTarget: { } target } && target != node)
+            {
+                node = target;
+            }
+            while (node.Parent != null)
+            {
+                node = node.Parent;
+            }
+            if (node is not Popup { Parent: null, PlacementTarget: not null })
+            {
+                break;
+            }
         }
         return node;
     }

@@ -217,6 +217,7 @@ public class SilkWindow : IDisposable, IHostWindow
         else
         {
             ToolTipService.Close(); // a tooltip doesn't outlive the window's activation
+            MenuManager.Reset();
         }
         InvalidateRender();
     }
@@ -1179,6 +1180,7 @@ public class SilkWindow : IDisposable, IHostWindow
         _needsRender = true; // discrete input usually changes something on screen
         FocusManager.NotifyPointerInteraction(); // hide focus rings until the keyboard is used again
         ToolTipService.OnPointerPressed();
+        MenuManager.OnPointerPressed();
         if (_rootElement == null) return;
 
         var screenPos = new Point(mouse.Position.X, mouse.Position.Y);
@@ -1245,6 +1247,7 @@ public class SilkWindow : IDisposable, IHostWindow
         {
             var e = new PointerEventArgs(screenPos, screenPos, btn, (ulong)Environment.TickCount64, modifiers, clickCount);
             target.DispatchPointerEvent(e, static (el, a) => el.OnPreviewPointerReleased(a), static (el, a) => el.OnPointerReleased(a));
+            ContextMenuService.OnPointerReleased(target, btn, e.Handled); // an unhandled right-click opens the context menu
         }
 
         if (button == MouseButton.Left && CapturedInThisWindow is { } capturedElement)
@@ -1465,6 +1468,7 @@ public class SilkWindow : IDisposable, IHostWindow
         }
 
         FocusManager.DispatchKeyDown(keyEventArgs, _rootElement);
+        MenuManager.HandleKeyDown(keyEventArgs, _rootElement); // Alt, F10, Alt+letter, the menu key
 
         // Manual hot reload with F5 or Ctrl+R, unless the app handled the key itself (e.g. its own F5 shortcut).
         if (!keyEventArgs.Handled &&
@@ -1487,6 +1491,7 @@ public class SilkWindow : IDisposable, IHostWindow
         var atelierKey = MapKey(key);
         var keyEventArgs = new KeyEventArgs(atelierKey, keyCode, GetModifiers(keyboard), false);
         FocusManager.DispatchKeyUp(keyEventArgs, _rootElement);
+        MenuManager.HandleKeyUp(keyEventArgs, _rootElement);
     }
 
     // Double/triple click detection, using the platform's double-click time and distance.

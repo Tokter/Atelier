@@ -55,6 +55,7 @@ internal static class Program
             .Register<IconsViewModel>(vm => new IconsView(vm))
             .Register<BadgesViewModel>(vm => new BadgesView(vm))
             .Register<TabsViewModel>(vm => new TabsView(vm))
+            .Register<MenusViewModel>(vm => new MenusView(vm))
             .Register<TypographyViewModel>(vm => new TypographyView(vm))
             .Register<LayoutViewModel>(vm => new LayoutView(vm))
             .Register<DialogHostViewModel>(vm => new DialogHostView(vm))

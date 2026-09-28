@@ -302,6 +302,64 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
         return Enum.TryParse(token, true, out key) && key != Key.None && Enum.IsDefined(key);
     }
 
+    /// <summary>
+    /// Formats the gesture for display, e.g. in a menu: like <see cref="ToString"/> but with keys as they are labeled,
+    /// such as <c>"Ctrl+1"</c> instead of <c>"Ctrl+D1"</c> and <c>"Ctrl+,"</c> instead of <c>"Ctrl+Comma"</c>.
+    /// </summary>
+    public string ToDisplayString()
+    {
+        var sb = new StringBuilder();
+        if (Modifiers.HasFlag(ModifierKeys.Control)) sb.Append("Ctrl+");
+        if (Modifiers.HasFlag(ModifierKeys.Alt)) sb.Append("Alt+");
+        if (Modifiers.HasFlag(ModifierKeys.Shift)) sb.Append("Shift+");
+        if (Modifiers.HasFlag(ModifierKeys.Windows)) sb.Append("Win+");
+        sb.Append(KeyDisplayName(Key));
+        return sb.ToString();
+    }
+
+    /// <summary>Formats strokes for display, separated by <c>", "</c> (e.g. <c>"Ctrl+K, Ctrl+C"</c>).</summary>
+    public static string FormatSequenceForDisplay(IReadOnlyList<KeybindingGesture> strokes)
+    {
+        if (strokes.Count == 1) return strokes[0].ToDisplayString();
+        var parts = new string[strokes.Count];
+        for (int i = 0; i < strokes.Count; i++) parts[i] = strokes[i].ToDisplayString();
+        return string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// Formats a gesture or chord string for display (see <see cref="ToDisplayString"/>), or returns it unchanged when it
+    /// doesn't parse.
+    /// </summary>
+    public static string FormatForDisplay(string? gestureString) =>
+        TryParseSequence(gestureString, out var strokes) ? FormatSequenceForDisplay(strokes) : gestureString ?? string.Empty;
+
+    private static string KeyDisplayName(Key key) => key switch
+    {
+        >= Key.D0 and <= Key.D9 => ((char)('0' + (key - Key.D0))).ToString(),
+        >= Key.NumPad0 and <= Key.NumPad9 => "Num " + (char)('0' + (key - Key.NumPad0)),
+        Key.Minus => "-",
+        Key.Equal => "=",
+        Key.Comma => ",",
+        Key.Period => ".",
+        Key.Slash => "/",
+        Key.Semicolon => ";",
+        Key.Apostrophe => "'",
+        Key.LeftBracket => "[",
+        Key.RightBracket => "]",
+        Key.Backslash => "\\",
+        Key.GraveAccent => "`",
+        Key.NumPadAdd => "Num +",
+        Key.NumPadSubtract => "Num -",
+        Key.NumPadMultiply => "Num *",
+        Key.NumPadDivide => "Num /",
+        Key.Delete => "Del",
+        Key.Insert => "Ins",
+        Key.Escape => "Esc",
+        Key.PageUp => "PgUp",
+        Key.PageDown => "PgDn",
+        _ => key.ToString(),
+    };
+
     /// <summary>Formats the gesture in canonical form, e.g. <c>"Ctrl+Alt+Shift+Win+K"</c>.</summary>
     public override string ToString()
     {

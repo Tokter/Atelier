@@ -42,6 +42,7 @@ public static partial class KeybindingManager
         }
 
         RegisteredKeybindings[keybindingDescriptor.Group][keybindingDescriptor.Name] = keybindingDescriptor;
+        OnKeybindingsChanged();
         WarmGestureCache(keybindingDescriptor.Keybinding);
         ReportConflicts(keybindingDescriptor);
     }
@@ -62,6 +63,7 @@ public static partial class KeybindingManager
         }
 
         groupKeybindings[keybindingDescriptor.Name] = keybindingDescriptor;
+        OnKeybindingsChanged();
         WarmGestureCache(keybindingDescriptor.Keybinding);
         ReportConflicts(keybindingDescriptor);
     }
@@ -83,6 +85,7 @@ public static partial class KeybindingManager
         {
             RegisteredKeybindings.Remove(group);
         }
+        OnKeybindingsChanged();
         return true;
     }
 
@@ -109,6 +112,7 @@ public static partial class KeybindingManager
         RegisteredKeybindings.Clear();
         _gestureCache.Clear();
         _sequenceCache.Clear();
+        OnKeybindingsChanged();
     }
 
     private static void WarmGestureCache(string? keybindingStr)

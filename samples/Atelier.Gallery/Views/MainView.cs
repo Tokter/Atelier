@@ -67,9 +67,31 @@ public class MainView : KeybindingHandler
         }
     }
 
+    // The main menu in the title bar. Shortcuts come from the keybindings of the commands (Ctrl+T, F1, ...); Alt or F10
+    // reach the menu from the keyboard.
+    private Menu MainMenu() => new Menu()
+        .WithItemSetup((MenuItem item, PageViewModel page) => item
+            .Header(page.PageTitle)
+            .Icon(page.PageIcon)
+            .OnClick(() => _vm.CurrentPage = page))
+        .Items(
+            new MenuItem("_File").Items(
+                new MenuItem("_New window", _vm.NewWindowCommand).Icon(MaterialIconKind.OpenInNew),
+                new Separator(),
+                new MenuItem("E_xit").Icon(MaterialIconKind.Logout).InputGestureText("Alt+F4").OnClick(() => Host?.Close())),
+            new MenuItem("_View").Items(
+                new MenuItem("_Toggle theme", _vm.ToggleThemeCommand).Icon(MaterialIconKind.DarkMode),
+                new MenuItem("_FPS overlay", _vm.ToggleFpsOverlayCommand).Icon(MaterialIconKind.Speed),
+                new Separator(),
+                new MenuItem("_Go to page").Icon(MaterialIconKind.Pageview).ItemsSource(_vm.Pages)),
+            new MenuItem("_Help").Items(
+                new MenuItem("_Keyboard shortcuts", new ShowShortcutsHelpCommand()).Icon(MaterialIconKind.Keyboard),
+                new MenuItem("_Search pages").Icon(MaterialIconKind.Search).InputGestureText("Ctrl+F").OnClick(() => _search.Focus())));
+
     private TitleBar TitleBar() => new TitleBar()
         .Title("Atelier Gallery")
         .Icon(new Image("Assets/Icons/Atelier.png").Size(22, 22))
+        .Menu(MainMenu())
         // The search box takes the space the buttons leave (up to 320 px), so the title bar fits narrow windows too.
         .Content(new Grid()
             .Columns(GridLength.Star, GridLength.Auto, GridLength.Auto)

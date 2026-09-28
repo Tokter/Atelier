@@ -275,6 +275,17 @@ public class ItemsControl : Control
     }
 
     /// <summary>
+    /// Regenerates all containers, for example after a setting that <see cref="CreateContainerForItem"/> depends on
+    /// changed; <see cref="OnItemsChanged"/> then reports a reset.
+    /// </summary>
+    protected void RefreshContainers()
+    {
+        RebuildContainers();
+        OnItemsChanged(ResetArgs);
+        InvalidateMeasure();
+    }
+
+    /// <summary>
     /// Called after <see cref="Items"/> changed and the containers were updated. <paramref name="e"/> describes the change
     /// in <see cref="Items"/> coordinates; a reset (also used after a new <see cref="ItemsSource"/> or
     /// <see cref="ItemTemplate"/>) means all containers were regenerated. The base implementation does nothing.

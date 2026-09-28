@@ -8,7 +8,7 @@ namespace Atelier.Core.Keybinding;
 /// on a target of type <typeparamref name="TTarget"/> provided as the command parameter.
 /// </summary>
 /// <typeparam name="TTarget">The target type containing the command property.</typeparam>
-public sealed class PropertyKeybindingCommand<TTarget> : ICommand where TTarget : class
+public sealed class PropertyKeybindingCommand<TTarget> : ICommand, IKeybindingCommandResolver where TTarget : class
 {
     private readonly Func<TTarget, ICommand?> _commandGetter;
     private readonly string _name;
@@ -73,6 +73,9 @@ public sealed class PropertyKeybindingCommand<TTarget> : ICommand where TTarget 
 
         cmd.Execute(null);
     }
+
+    /// <inheritdoc/>
+    public ICommand? ResolveCommand(object? target) => target is TTarget typed ? _commandGetter(typed) : null;
 
     /// <summary>
     /// Raises <see cref="CanExecuteChanged"/>.

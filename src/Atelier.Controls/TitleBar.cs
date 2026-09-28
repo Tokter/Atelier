@@ -88,6 +88,13 @@ public class TitleBar : Control
             null,
             (s, o, n) => ((TitleBar)s)._contentPresenter.Content = n);
 
+    /// <summary>Identifies the <see cref="Menu"/> property.</summary>
+    public static readonly BindableProperty<Menu?> MenuProperty =
+        BindableProperty.Register<TitleBar, Menu?>(
+            nameof(Menu),
+            null,
+            (s, o, n) => ((TitleBar)s).OnMenuChanged(o, n));
+
     /// <summary>Identifies the <see cref="ShowMinimizeButton"/> property.</summary>
     public static readonly BindableProperty<bool> ShowMinimizeButtonProperty =
         BindableProperty.Register<TitleBar, bool>(
@@ -138,6 +145,29 @@ public class TitleBar : Control
     {
         get => GetValue(ContentProperty);
         set => SetValue(ContentProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets a menu bar shown after the icon, before the title (like many editors do). The bar's headers take
+    /// clicks; the free space around them still moves the window. <c>null</c> (the default) for none.
+    /// </summary>
+    public Menu? Menu
+    {
+        get => GetValue(MenuProperty);
+        set => SetValue(MenuProperty, value);
+    }
+
+    private void OnMenuChanged(Menu? oldMenu, Menu? newMenu)
+    {
+        if (oldMenu != null)
+        {
+            _leftStack.Remove(oldMenu);
+        }
+        if (newMenu != null)
+        {
+            newMenu.VerticalAlignment = VerticalAlignment.Center;
+            _leftStack.InsertChild(1, newMenu); // after the icon, before the title
+        }
     }
 
     /// <summary>Gets or sets whether the minimize button is shown. The default is <c>true</c>.</summary>

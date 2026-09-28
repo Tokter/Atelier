@@ -60,6 +60,8 @@ public class MaterialTheme : Theme
         renderers.Register(new MaterialBadgeRenderer(colors));
         renderers.Register(new MaterialTabControlRenderer(colors));
         renderers.Register(new MaterialTabItemRenderer(colors));
+        renderers.Register(new MaterialMenuItemRenderer(colors));
+        renderers.Register(new MaterialSeparatorRenderer(colors));
         renderers.Register(new MaterialProgressBarRenderer(colors));
         renderers.Register(new MaterialTextBlockRenderer(colors, renderers));
         renderers.Register(new MaterialBorderRenderer(colors));

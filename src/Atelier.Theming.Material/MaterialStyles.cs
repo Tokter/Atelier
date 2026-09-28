@@ -138,6 +138,12 @@ public static class MaterialStyles
                 .Set(TextBlock.ForegroundProperty, colors.OnSurface),
             new Style(PickerStyleKeys.Divider, typeof(Atelier.Layout.Border))
                 .Set(Atelier.Layout.Border.BackgroundProperty, colors.OutlineVariant),
+            // Menus: the shortcut text and submenu arrow in on-surface-variant (MD3 trailing text and icon).
+            new Style(MenuItem.SecondaryStyleKey, typeof(TextBlock))
+                .Set(TextBlock.ForegroundProperty, colors.OnSurfaceVariant),
+            new Style(MenuItem.SecondaryStyleKey, typeof(Icon))
+                .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
+
             // Tabs: on-surface-variant close and "+" buttons, and title-small labels.
             new Style(TabItem.CloseButtonStyleKey, typeof(Button))
                 .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
