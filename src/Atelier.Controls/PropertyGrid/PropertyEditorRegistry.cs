@@ -632,6 +632,8 @@ public class PropertyEditorRegistry
     /// Creates a hex color editor (<c>#RRGGBB</c> or <c>#AARRGGBB</c>) with a swatch for a <see cref="Color"/> or
     /// <c>Color?</c> property. The swatch previews valid input while typing; the value is committed on Enter or when
     /// the text box loses focus. A nullable color shows an empty text for <see langword="null"/> and accepts clearing.
+    /// Hovering the editor of a writable property opens a <see cref="ColorPicker"/> as a rich tooltip; it edits the
+    /// value live.
     /// </summary>
     /// <param name="context">The context of the edited property.</param>
     /// <returns>A horizontal <see cref="StackPanel"/> with the swatch and the text box.</returns>
@@ -692,7 +694,42 @@ public class PropertyEditorRegistry
         container.Add(swatch);
         container.Add(hexBox);
 
+        if (!context.IsReadOnly)
+        {
+            ToolTipService.SetToolTip(container, CreateColorPickerToolTip(context));
+        }
+
         return container;
+    }
+
+    // The rich tooltip of the color editor: a color picker that edits the property live.
+    private static ColorPicker CreateColorPickerToolTip(PropertyEditorContext context)
+    {
+        var picker = new ColorPicker { Color = context.Value is Color color ? color : Color.White };
+        bool isSyncing = false;
+        picker.ColorChanged += (_, picked) =>
+        {
+            if (!isSyncing)
+            {
+                context.UpdateValue(picked);
+            }
+        };
+        context.ValueChanged += value =>
+        {
+            if (value is Color current)
+            {
+                isSyncing = true;
+                try
+                {
+                    picker.Color = current;
+                }
+                finally
+                {
+                    isSyncing = false;
+                }
+            }
+        };
+        return picker;
     }
 
     private static string FormatColor(object? value) => value is Color c ? c.ToString() : string.Empty;

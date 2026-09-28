@@ -293,6 +293,21 @@ public static class PopupManager
             var popups = RentSnapshot(root);
             try
             {
+                // An element in a popup that captured the pointer (e.g. a dragged slider) gets every move, like in the
+                // window's tree, even outside the popup.
+                if (UIElement.CapturedElement is { } captured)
+                {
+                    for (int i = 0; i < popups.Count; i++)
+                    {
+                        if (IsDescendantOf(captured, popups[i]))
+                        {
+                            var capturedE = new PointerEventArgs(screenPoint, screenPoint, modifiers: modifiers);
+                            captured.DispatchPointerEvent(capturedE, static (el, a) => el.OnPreviewPointerMoved(a), static (el, a) => el.OnPointerMoved(a));
+                            return true;
+                        }
+                    }
+                }
+
                 hit = HitTest(popups, screenPoint, out _);
             }
             finally

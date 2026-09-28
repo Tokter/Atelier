@@ -349,6 +349,93 @@ public readonly ref struct DrawingContext
         }
     }
 
+    [ThreadStatic] private static SKPaint? t_gradientPaint;
+
+    /// <summary>
+    /// Fills a rounded rectangle with a linear gradient from <paramref name="start"/> to <paramref name="end"/> through
+    /// <paramref name="colors"/>, spaced evenly. Beyond the ends the first and last colors continue.
+    /// </summary>
+    public void DrawLinearGradient(in Rect rect, in CornerRadius radius, in Point start, in Point end, ReadOnlySpan<Color> colors)
+    {
+        if (colors.Length == 0 || rect.Width <= 0 || rect.Height <= 0) return;
+        using var shader = SKShader.CreateLinearGradient(
+            new SKPoint(start.X, start.Y), new SKPoint(end.X, end.Y), ToSkColors(colors), SKShaderTileMode.Clamp);
+        var paint = GetGradientPaint(shader);
+        if (radius.IsUniform)
+        {
+            Canvas.DrawRoundRect(rect.Left, rect.Top, rect.Width, rect.Height, radius.TopLeft, radius.TopLeft, paint);
+        }
+        else
+        {
+            Canvas.DrawRoundRect(GetRoundRect(rect, radius, 0f), paint);
+        }
+        paint.Shader = null;
+    }
+
+    /// <summary>
+    /// Fills a circle with a sweep (conic) gradient through <paramref name="colors"/>, spaced evenly, clockwise from
+    /// the right (3 o'clock). Repeat the first color at the end for a seamless ring.
+    /// </summary>
+    public void DrawSweepGradientCircle(in Point center, float radius, ReadOnlySpan<Color> colors)
+    {
+        if (colors.Length == 0 || radius <= 0) return;
+        using var shader = SKShader.CreateSweepGradient(new SKPoint(center.X, center.Y), ToSkColors(colors));
+        var paint = GetGradientPaint(shader);
+        Canvas.DrawCircle(center.X, center.Y, radius, paint);
+        paint.Shader = null;
+    }
+
+    /// <summary>Fills a circle with a radial gradient from <paramref name="inner"/> at the center to <paramref name="outer"/> at the edge.</summary>
+    public void DrawRadialGradientCircle(in Point center, float radius, in Color inner, in Color outer)
+    {
+        if (radius <= 0) return;
+        using var shader = SKShader.CreateRadialGradient(
+            new SKPoint(center.X, center.Y), radius, ToSkColors([inner, outer]), SKShaderTileMode.Clamp);
+        var paint = GetGradientPaint(shader);
+        Canvas.DrawCircle(center.X, center.Y, radius, paint);
+        paint.Shader = null;
+    }
+
+    /// <summary>
+    /// Fills a rounded rectangle with a checkerboard of <paramref name="cellSize"/> squares, the usual backdrop that
+    /// makes transparency visible.
+    /// </summary>
+    public void DrawCheckerboard(in Rect rect, in CornerRadius radius, float cellSize, in Color light, in Color dark)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0 || cellSize <= 0) return;
+        using var clip = PushRoundedClip(rect, radius);
+        DrawRect(rect, light);
+        var darkPaint = PaintRegistry.GetFillPaint(ApplyOpacity(dark));
+        int columns = (int)MathF.Ceiling(rect.Width / cellSize);
+        int rows = (int)MathF.Ceiling(rect.Height / cellSize);
+        for (int row = 0; row < rows; row++)
+        {
+            for (int column = row % 2; column < columns; column += 2)
+            {
+                Canvas.DrawRect(rect.Left + column * cellSize, rect.Top + row * cellSize, cellSize, cellSize, darkPaint);
+            }
+        }
+    }
+
+    private SKColor[] ToSkColors(ReadOnlySpan<Color> colors)
+    {
+        var result = new SKColor[colors.Length];
+        for (int i = 0; i < colors.Length; i++)
+        {
+            var c = ApplyOpacity(colors[i]);
+            result[i] = new SKColor(c.R, c.G, c.B, c.A);
+        }
+        return result;
+    }
+
+    // A reused antialiased fill paint with the shader set; the caller clears the shader after drawing.
+    private static SKPaint GetGradientPaint(SKShader shader)
+    {
+        var paint = t_gradientPaint ??= new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
+        paint.Shader = shader;
+        return paint;
+    }
+
     public void DrawPath(SKPath path, in Color color)
     {
         if (color.A == 0) return;

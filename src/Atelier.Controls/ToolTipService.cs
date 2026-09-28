@@ -235,6 +235,13 @@ public static class ToolTipService
 
         if (_owner != null && target != _owner)
         {
+            if (_toolTip!.IsInteractive && HasFocusWithin(_toolTip))
+            {
+                // Something in the tooltip has the keyboard focus (e.g. the user types in it): it stays open until a
+                // press outside it or Escape.
+                return;
+            }
+
             if (target == null && _toolTip!.IsInteractive && !_openedByKeyboard)
             {
                 // Give the pointer time to cross the gap onto the tooltip.
@@ -467,6 +474,9 @@ public static class ToolTipService
 
     private static bool CanShow(UIElement element) =>
         GetIsEnabled(element) && element.Visibility == Visibility.Visible && (element.IsEnabled || GetShowOnDisabled(element));
+
+    private static bool HasFocusWithin(ToolTip toolTip) =>
+        FocusManager.GetFocusedElement(toolTip) is { } focused && IsInside(focused, toolTip);
 
     private static bool IsInside(UIElement element, UIElement ancestor)
     {

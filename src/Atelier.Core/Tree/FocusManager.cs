@@ -41,11 +41,17 @@ public static class FocusManager
         public UIElement? Focused;
         public readonly List<ModalScope> ModalStack = [];
 
+        // The focus outside owned trees when it moved into one (see SetTreeOwner); restored when that tree is released.
+        public UIElement? FocusBeforeOwnedTree;
+
         public UIElement? CurrentModal => ModalStack.Count > 0 ? ModalStack[^1].Root : null;
     }
 
     // Keyed by tree root. Weak keys: a closed window's tree (and the scope's references into it) can be collected.
     private static readonly ConditionalWeakTable<VisualNode, FocusScope> s_scopes = new();
+
+    // Separate trees (parentless popups) that share the focus scope of the tree of an element (their owner).
+    private static readonly ConditionalWeakTable<VisualNode, WeakReference<VisualNode>> s_treeOwners = new();
     private static WeakReference<VisualNode>? s_activeRoot;
     private static bool s_activeRootSetByHost;
 
@@ -371,11 +377,72 @@ public static class FocusManager
         }
     }
 
+    /// <summary>
+    /// Makes the separate tree rooted at <paramref name="root"/> (such as a popup without a parent) part of the focus
+    /// scope of <paramref name="owner"/>'s tree, or releases it with <c>null</c>.
+    /// </summary>
+    /// <remarks>
+    /// While owned, focusing an element of the tree moves the owner tree's focus there, so it receives that tree's
+    /// keyboard input, and Tab cycles within the owned tree. Releasing the tree while it holds the focus returns the
+    /// focus to the element that had it before (if it is still in the owner's tree).
+    /// </remarks>
+    /// <param name="root">The root of the separate tree.</param>
+    /// <param name="owner">An element of the tree whose focus scope to share, or <c>null</c> to release.</param>
+    public static void SetTreeOwner(VisualNode root, VisualNode? owner)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        Dispatcher.VerifyAccess("FocusManager.SetTreeOwner");
+
+        if (owner == null)
+        {
+            if (!s_treeOwners.TryGetValue(root, out var ownerRef))
+            {
+                return;
+            }
+
+            // Find the scope while the link still exists, then release the focus it holds in the tree.
+            var scope = GetScopeOrNull(root);
+            s_treeOwners.Remove(root);
+            if (scope?.Focused is { } focused && IsSelfOrDescendant(focused, root))
+            {
+                var previous = scope.FocusBeforeOwnedTree;
+                bool canReturn = previous != null && ownerRef.TryGetTarget(out var ownerNode) && GetRoot(previous) == GetRoot(ownerNode);
+                SetScopeFocus(scope, canReturn ? previous : null);
+            }
+            return;
+        }
+
+        if (root.Parent != null)
+        {
+            throw new InvalidOperationException("Only the root of a tree can be owned.");
+        }
+        s_treeOwners.AddOrUpdate(root, new WeakReference<VisualNode>(owner));
+    }
+
+    // The root of the owned tree containing element, or null when it isn't in one.
+    private static VisualNode? GetOwnedTreeRoot(VisualNode element)
+    {
+        VisualNode root = element;
+        while (root.Parent != null)
+        {
+            root = root.Parent;
+        }
+        return s_treeOwners.TryGetValue(root, out _) ? root : null;
+    }
+
+    // The parent, or at the root of an owned tree its owner.
+    private static VisualNode? NextOwnerStep(VisualNode node) =>
+        node.Parent ?? (s_treeOwners.TryGetValue(node, out var owner) && owner.TryGetTarget(out var target) ? target : null);
+
     private static void SetScopeFocus(FocusScope scope, UIElement? element)
     {
         if (scope.Focused == element) return;
 
         var old = scope.Focused;
+        if (element != null && GetOwnedTreeRoot(element) != null && (old == null || GetOwnedTreeRoot(old) == null))
+        {
+            scope.FocusBeforeOwnedTree = old;
+        }
         old?.OnLostFocus();
 
         scope.Focused = element;
@@ -409,6 +476,12 @@ public static class FocusManager
         NotifyKeyboardInteraction();
         var scope = GetScopeOrNull(root);
         var effectiveRoot = scope?.CurrentModal ?? root;
+
+        // Focus in an owned tree (such as an interactive tooltip) cycles within that tree.
+        if (scope?.Focused is { } current && GetOwnedTreeRoot(current) is UIElement ownedRoot)
+        {
+            effectiveRoot = ownedRoot;
+        }
 
         s_focusables.Clear();
         CollectFocusableElements(effectiveRoot, s_focusables);
@@ -473,15 +546,38 @@ public static class FocusManager
         return false;
     }
 
-    private static bool IsSelfOrDescendant(UIElement element, UIElement ancestor) =>
-        element == ancestor || element.IsDescendantOf(ancestor);
+    // Whether element is ancestor or inside it, following owned trees to their owners.
+    private static bool IsSelfOrDescendant(VisualNode element, VisualNode ancestor)
+    {
+        int depth = 0;
+        for (VisualNode? node = element; node != null && depth < MaxOwnerDepth; node = NextOwnerStep(node), depth++)
+        {
+            if (node == ancestor)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 
+    // Guards against an owner cycle (a popup owned by an element of its own tree).
+    private const int MaxOwnerDepth = 10_000;
+
+    // The root of the node's focus scope: the root of its tree or, for an owned tree, of the owner's tree.
     private static VisualNode GetRoot(VisualNode node)
     {
         VisualNode current = node;
-        while (current.Parent != null)
+        for (int hops = 0; hops < 32; hops++)
         {
-            current = current.Parent;
+            while (current.Parent != null)
+            {
+                current = current.Parent;
+            }
+            if (!s_treeOwners.TryGetValue(current, out var owner) || !owner.TryGetTarget(out var ownerNode) || ownerNode == current)
+            {
+                break;
+            }
+            current = ownerNode;
         }
         return current;
     }

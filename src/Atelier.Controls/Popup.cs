@@ -262,6 +262,13 @@ public class Popup : Control
 
             PopupManager.OpenPopup(this);
 
+            // A popup without a parent is its own tree; share the focus scope of its target's tree, so its text boxes
+            // and other focusable elements get keyboard input.
+            if (Parent == null && PlacementTarget is { } target)
+            {
+                FocusManager.SetTreeOwner(this, target);
+            }
+
             // Position now when a viewport is known, so Opened handlers see real bounds.
             var viewport = _lastViewport;
             if (viewport.Width <= 0 || viewport.Height <= 0)
@@ -279,6 +286,7 @@ public class Popup : Control
         else
         {
             PopupManager.ClosePopup(this);
+            FocusManager.SetTreeOwner(this, null);
             ActualBounds = Rect.Zero;
             InvalidateVisual();
             Closed?.Invoke(this, EventArgs.Empty);

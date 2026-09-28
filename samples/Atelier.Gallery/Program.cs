@@ -47,6 +47,7 @@ internal static class Program
             .Register<TextBoxesViewModel>(vm => new TextBoxesView(vm))
             .Register<ComboBoxViewModel>(vm => new ComboBoxView(vm))
             .Register<RangeControlsViewModel>(vm => new RangeControlsView(vm))
+            .Register<ColorPickerViewModel>(vm => new ColorPickerView(vm))
             .Register<ListsViewModel>(vm => new ListsView(vm))
             .Register<TreeViewViewModel>(vm => new TreeViewView(vm))
             .Register<CardsViewModel>(vm => new CardsView(vm))

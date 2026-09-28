@@ -41,6 +41,7 @@ public partial class MainViewModel : ObservableObject
             new TextBoxesViewModel(),
             new ComboBoxViewModel(),
             new RangeControlsViewModel(),
+            new ColorPickerViewModel(),
             new ListsViewModel(),
             new TreeViewViewModel(),
             new CardsViewModel(),

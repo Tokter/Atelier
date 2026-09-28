@@ -133,6 +133,105 @@ public readonly struct Color(byte a, byte r, byte g, byte b) : IEquatable<Color>
         );
     }
 
+    /// <summary>
+    /// Creates a color from hue, saturation and value (HSV, also called HSB: hue, saturation, brightness).
+    /// </summary>
+    /// <param name="hue">The hue in degrees: 0 is red, 120 green, 240 blue; wrapped into [0, 360).</param>
+    /// <param name="saturation">The saturation from 0 (gray) to 1 (the pure hue); clamped.</param>
+    /// <param name="value">The value (brightness) from 0 (black) to 1; clamped.</param>
+    /// <param name="alpha">The alpha from 0 (transparent) to 1 (opaque); clamped.</param>
+    public static Color FromHsv(float hue, float saturation, float value, float alpha = 1f)
+    {
+        HsvToRgb(hue, saturation, value, out float r, out float g, out float b);
+        return FromRgba(r, g, b, alpha);
+    }
+
+    /// <summary>
+    /// Creates a color from hue, saturation and lightness (HSL).
+    /// </summary>
+    /// <param name="hue">The hue in degrees: 0 is red, 120 green, 240 blue; wrapped into [0, 360).</param>
+    /// <param name="saturation">The saturation from 0 (gray) to 1; clamped.</param>
+    /// <param name="lightness">The lightness from 0 (black) through 0.5 (the pure hue) to 1 (white); clamped.</param>
+    /// <param name="alpha">The alpha from 0 (transparent) to 1 (opaque); clamped.</param>
+    public static Color FromHsl(float hue, float saturation, float lightness, float alpha = 1f)
+    {
+        HslToHsv(saturation, lightness, out float s, out float v);
+        return FromHsv(hue, s, v, alpha);
+    }
+
+    /// <summary>
+    /// Converts the color to hue (degrees in [0, 360)), saturation and value (0 to 1). The hue of a gray is 0.
+    /// </summary>
+    public void ToHsv(out float hue, out float saturation, out float value)
+    {
+        float r = Rf, g = Gf, b = Bf;
+        float max = MathF.Max(r, MathF.Max(g, b));
+        float min = MathF.Min(r, MathF.Min(g, b));
+        float delta = max - min;
+
+        value = max;
+        saturation = max > 0 ? delta / max : 0;
+
+        if (delta <= 0)
+        {
+            hue = 0;
+            return;
+        }
+
+        if (max == r) hue = 60f * ((g - b) / delta);
+        else if (max == g) hue = 60f * ((b - r) / delta + 2f);
+        else hue = 60f * ((r - g) / delta + 4f);
+
+        if (hue < 0) hue += 360f;
+    }
+
+    /// <summary>
+    /// Converts the color to hue (degrees in [0, 360)), saturation and lightness (0 to 1). The hue of a gray is 0.
+    /// </summary>
+    public void ToHsl(out float hue, out float saturation, out float lightness)
+    {
+        ToHsv(out hue, out float s, out float v);
+        HsvToHsl(s, v, out saturation, out lightness);
+    }
+
+    /// <summary>Converts HSV saturation and value to HSL saturation and lightness (the hue is the same).</summary>
+    public static void HsvToHsl(float saturation, float value, out float hslSaturation, out float lightness)
+    {
+        saturation = Math.Clamp(saturation, 0f, 1f);
+        value = Math.Clamp(value, 0f, 1f);
+        lightness = value * (1f - saturation * 0.5f);
+        float m = MathF.Min(lightness, 1f - lightness);
+        hslSaturation = m > 0 ? (value - lightness) / m : 0f;
+    }
+
+    /// <summary>Converts HSL saturation and lightness to HSV saturation and value (the hue is the same).</summary>
+    public static void HslToHsv(float saturation, float lightness, out float hsvSaturation, out float value)
+    {
+        saturation = Math.Clamp(saturation, 0f, 1f);
+        lightness = Math.Clamp(lightness, 0f, 1f);
+        value = lightness + saturation * MathF.Min(lightness, 1f - lightness);
+        hsvSaturation = value > 0 ? 2f * (1f - lightness / value) : 0f;
+    }
+
+    private static void HsvToRgb(float hue, float saturation, float value, out float r, out float g, out float b)
+    {
+        hue %= 360f;
+        if (hue < 0) hue += 360f;
+        saturation = Math.Clamp(saturation, 0f, 1f);
+        value = Math.Clamp(value, 0f, 1f);
+
+        // f(n) = V - V·S·max(0, min(k, 4 - k, 1)) with k = (n + H/60) mod 6.
+        r = Channel(5f);
+        g = Channel(3f);
+        b = Channel(1f);
+
+        float Channel(float n)
+        {
+            float k = (n + hue / 60f) % 6f;
+            return value - value * saturation * MathF.Max(0f, MathF.Min(k, MathF.Min(4f - k, 1f)));
+        }
+    }
+
     // Rounds rather than truncates, so e.g. halfway between 0 and 255 is 128 and t = 1 always reaches the target.
     private static byte LerpChannel(byte from, byte to, float t) => (byte)MathF.Round(from + (to - from) * t);
 

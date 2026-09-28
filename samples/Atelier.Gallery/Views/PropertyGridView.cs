@@ -30,6 +30,7 @@ public class PropertyGridView : GalleryPage
     {
         var grid = new PropertyGrid()
             .Height(560)
+            .VerticalAlignment(VerticalAlignment.Top) // stays put while the event log beside it grows
             .BindSelectedObject(_vm, v => v.SelectedObject)
             .BindTwoWay(PropertyGrid.SortModeProperty, _vm, v => v.SortMode, (v, mode) => v.SortMode = mode)
             .BindTwoWay(PropertyGrid.FilterTextProperty, _vm, v => v.FilterText, (v, text) => v.FilterText = text)
