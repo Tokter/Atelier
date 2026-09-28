@@ -19,7 +19,8 @@ namespace Atelier.Gallery.Infrastructure;
 /// <remarks>
 /// Enabled with <c>ATELIER_GALLERY_SNAPSHOT=&lt;output directory&gt;</c>. Optional: <c>ATELIER_GALLERY_PAGES</c> (page
 /// indexes, comma-separated; all by default), <c>ATELIER_GALLERY_THEME=dark</c>, and <c>ATELIER_GALLERY_SIZE</c>
-/// (<c>WIDTHxHEIGHT</c>, 1280x860 by default; a taller size shows more of a page).
+/// (<c>WIDTHxHEIGHT</c>, 1280x860 by default; a taller size shows more of a page), <c>ATELIER_GALLERY_TOOLTIP</c> and
+/// <c>ATELIER_GALLERY_FILE_DIALOG</c> (see below).
 /// </remarks>
 internal static class Snapshot
 {
@@ -59,6 +60,31 @@ internal static class Snapshot
                 root.Arrange(new Rect(0, 0, width, height));
             }
 
+            // ATELIER_GALLERY_FILE_DIALOG=open|save|folder shows a file dialog over the page, limited to this repository
+            // (its RootDirectory), so the picture shows no other folders of the machine.
+            if (Environment.GetEnvironmentVariable("ATELIER_GALLERY_FILE_DIALOG") is { Length: > 0 } fileDialog && FindRepositoryRoot() is { } repository)
+            {
+                CommonItemDialog dialog = fileDialog switch
+                {
+                    "save" => new SaveFileDialog { Filter = "C# source file (*.cs)|*.cs|All files (*.*)|*.*", FileName = "DataGridView.cs" },
+                    "folder" => new FolderBrowserDialog { Description = "Choose where the export goes." },
+                    _ => new OpenFileDialog { Filter = "C# source (*.cs)|*.cs|Projects (*.csproj)|*.csproj|All files (*.*)|*.*", Multiselect = true },
+                };
+                dialog.RootDirectory = repository;
+                dialog.InitialDirectory = Path.Combine(repository, "src", "Atelier.Controls");
+                _ = dialog.ShowAsync(root);
+                if (dialog is OpenFileDialog && dialog.View is { } view)
+                {
+                    var selected = System.Linq.Enumerable.FirstOrDefault(view.Entries, e => e.Name == "DataGrid.cs") ?? System.Linq.Enumerable.FirstOrDefault(view.Entries, e => !e.IsDirectory);
+                    if (selected != null) view.FileList.SelectedItem = selected;
+                }
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    root.Measure(new Size(width, height));
+                    root.Arrange(new Rect(0, 0, width, height));
+                }
+            }
+
             // ATELIER_GALLERY_TOOLTIP=n opens the tooltip of the page's n-th element (0-based) that has one.
             if (int.TryParse(Environment.GetEnvironmentVariable("ATELIER_GALLERY_TOOLTIP"), out int toolTipIndex)
                 && FindToolTipOwner(root, ref toolTipIndex) is { } owner)
@@ -87,6 +113,20 @@ internal static class Snapshot
         }
 
         return true;
+    }
+
+    // The folder of the repository (the one with src/Atelier.Controls), from the gallery's folder upwards.
+    private static string? FindRepositoryRoot()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+        {
+            if (Directory.Exists(Path.Combine(dir.FullName, "src", "Atelier.Controls"))) return dir.FullName;
+        }
+        for (var dir = new DirectoryInfo(Environment.CurrentDirectory); dir != null; dir = dir.Parent)
+        {
+            if (Directory.Exists(Path.Combine(dir.FullName, "src", "Atelier.Controls"))) return dir.FullName;
+        }
+        return null;
     }
 
     // Depth-first search for the index-th element with a tooltip.

@@ -47,16 +47,20 @@ All screenshots show the included [Gallery](samples/Atelier.Gallery) application
 
 | | |
 |---|---|
-| ![Buttons](docs/screenshots/buttons.png) | ![Text fields, dark theme](docs/screenshots/text-fields-dark.png) |
-| **Buttons**: variants, commands, repeat and toggle buttons, toolbars | **Text fields**: outlined and filled, labels, validation, binding |
-| ![Cards](docs/screenshots/cards.png) | ![Icons, dark theme](docs/screenshots/icons-dark.png) |
-| **Cards**: variants, elevation, shape, media and clipping | **Icons**: Material Symbols with fill, weight, grade and optical size |
-| ![Typography](docs/screenshots/typography.png) | ![Layout panels, dark theme](docs/screenshots/layout-dark.png) |
-| **Typography**: the MD3 type scale and a live playground | **Layout**: stack, wrap, dock, grid, uniform grid and canvas |
-| ![Popups and dialogs](docs/screenshots/popups-dialogs.png) | ![Property grid](docs/screenshots/property-grid.png) |
-| **Popups & dialogs**: presets, custom content, scoped hosts | **Property grid**: generated metadata, validation, custom editors |
-| ![Tooltips](docs/screenshots/tooltips.png) | |
-| **Tooltips**: plain text, or rich content with clickable actions | |
+| ![Data grid](docs/screenshots/data-grid.png) | ![Open file dialog](docs/screenshots/file-dialog.png) |
+| **Data grid**: 10,000 virtualized rows, sorting, filter menus, column chooser, cell editing | **File dialogs**: open, save and folder dialogs with a path bar, folder tree and file grid |
+| ![Color picker, dark theme](docs/screenshots/color-picker-dark.png) | ![Date and time pickers, dark theme](docs/screenshots/date-time-pickers-dark.png) |
+| **Color picker**: wheel, RGB/HSL/HSB gradient sliders, alpha and hex | **Date & time pickers**: MD3 docked and modal calendars, clock dial and text input |
+| ![Tabs](docs/screenshots/tabs.png) | ![Buttons](docs/screenshots/buttons.png) |
+| **Tabs**: MD3 primary and secondary tabs, closeable and reorderable browser tabs | **Buttons**: variants, commands, repeat and toggle buttons, toolbars |
+| ![Text fields, dark theme](docs/screenshots/text-fields-dark.png) | ![Cards](docs/screenshots/cards.png) |
+| **Text fields**: outlined and filled, labels, validation, binding | **Cards**: variants, elevation, shape, media and clipping |
+| ![Icons, dark theme](docs/screenshots/icons-dark.png) | ![Typography](docs/screenshots/typography.png) |
+| **Icons**: Material Symbols with fill, weight, grade and optical size | **Typography**: the MD3 type scale and a live playground |
+| ![Layout panels, dark theme](docs/screenshots/layout-dark.png) | ![Popups and dialogs](docs/screenshots/popups-dialogs.png) |
+| **Layout**: stack, wrap, dock, grid, uniform grid and canvas | **Popups & dialogs**: presets, custom content, scoped hosts |
+| ![Property grid](docs/screenshots/property-grid.png) | ![Tooltips](docs/screenshots/tooltips.png) |
+| **Property grid**: generated metadata, validation, custom editors | **Tooltips**: plain text, or rich content with clickable actions |
 
 ---
 
@@ -131,10 +135,17 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `Button`, `RepeatButton`, `ToggleButton` | Filled, tonal, elevated, outlined and text variants; commands with `CanExecute`; click modes; repeat delay and interval; two- and three-state toggles |
 | `CheckBox`, `RadioButton`, `Switch` | Three states, rich content, named and unnamed radio groups, thumb icons, value-matching radio binding |
 | `TextBox` | Outlined and filled variants, floating label, placeholder, leading icon, supporting text, `INotifyDataErrorInfo` validation, max length, password mode, undo/redo, clipboard and word navigation |
-| `ComboBox` | Items or bound collections, typed item templates, text search, keyboard navigation, max drop-down height |
+| `ComboBox` | Items or bound collections, typed item templates, text search, keyboard navigation, max drop-down height, compact mode |
 | `Slider`, `ProgressBar` | Ranges, small and large steps, tick snapping, formatted value bubble; determinate and indeterminate progress |
-| `ListBox`, `ItemsControl` | Incremental updates from observable collections, typed templates, type-to-search, keyboard navigation |
-| `TreeView` | Data-bound or item-built trees, children selector, typed templates, configurable expander icons |
+| `ListBox`, `ItemsControl` | UI virtualization (only the items in view get containers), incremental updates from observable collections, typed templates, type-to-search, keyboard navigation |
+| `TreeView` | Data-bound or item-built trees, children selector, typed templates, configurable expander icons; the shown nodes form one virtualized list |
+| `DataGrid` | Virtualized rows; text, template and check box columns; multi-column sorting; Pixel, Auto and Star widths; resizing, reordering and a column chooser with saved layouts; a filter row and spreadsheet-style filter menus; single, check box and extended selection of rows or cells; F2 editing with custom editors and validation; Ctrl+C as tab-separated text; row context menus and empty placeholders |
+| `OpenFileDialog`, `SaveFileDialog`, `FolderBrowserDialog` | The same dialog on every platform, with WPF's properties (`Filter`, `Multiselect`, `CheckFileExists`, `OverwritePrompt`, `InitialDirectory`, ...): path bar with clickable folders, folder tree, file grid with optional attribute columns, new folder and rename; any file system through `IFileSystemProvider` |
+| `Menu`, `MenuItem`, `ContextMenu` | Menu bars (also in the title bar), submenus and context menus; icons, check and radio items, separators; shortcut text from the command's keybinding; `CanExecute` disables or hides items; access keys; menus built from data with a children selector and item templates |
+| `TabControl` | MD3 primary and secondary tabs with a sliding indicator; browser-style tabs that close, add and reorder by dragging; header and content templates |
+| `DatePicker`, `TimePicker` | MD3 docked and modal calendars and date input; clock dial and text input with 12- and 24-hour clocks; typed dates and times, ranges and validation; compact mode |
+| `ColorPicker` | Hue/saturation wheel, RGB, HSL and HSB sliders that show their gradients, alpha, hex and channel inputs |
+| `Badge` | MD3 small dot and large count or text badges on any element |
 | `Card`, `Border` | Outlined, elevated and filled cards; elevation shadows; per-corner radii; clipping |
 | `Popup`, `Dialog`, `DialogHost` | Smart placement with flipping (or at the pointer), light dismiss, dialog presets and custom buttons, async results, scoped hosts |
 | `ToolTip`, `RichToolTip` | `.ToolTip("text")` on any element; rich tooltips hold any element and stay open for their buttons and links; placement, delays, disabled elements, optional keyboard-focus tooltips |
@@ -147,7 +158,8 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 
 ### Layout
 
-`StackPanel`, `WrapPanel`, `DockPanel`, `Grid` (Auto, pixel and star sizes, spans), `UniformGrid` and `Canvas`, plus
+`StackPanel`, `WrapPanel`, `DockPanel`, `Grid` (Auto, pixel and star sizes, spans), `UniformGrid`, `Canvas` and
+`VirtualizingStackPanel` (realizes only the items in view and reuses their containers; fixed or measured heights), plus
 margin, padding, alignment, min/max sizes, visibility, clipping, opacity, layout transforms and render transforms. Any
 element can set the mouse cursor (`.Cursor(CursorType.Hand)`); text boxes show the I-beam and splitters the resize arrows.
 
@@ -183,7 +195,7 @@ element can set the mouse cursor (`.Cursor(CursorType.Hand)`); text boxes show t
 | [`Atelier.Generators`](src/Atelier.Generators) | Source generators for keybindings and property-grid metadata |
 | [`Atelier.Platform.Silk`](src/Atelier.Platform.Silk) | Windows, OpenGL context, input and clipboard via Silk.NET |
 | [`Atelier.Gallery`](samples/Atelier.Gallery) | Showcase application for every control |
-| [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (900+) |
+| [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (1,100+) |
 
 ---
 
@@ -205,7 +217,9 @@ states, with the code that builds it. Useful shortcuts:
 
 To render pages to PNG files without opening a window, as for the screenshots above, set
 `ATELIER_GALLERY_SNAPSHOT=<output folder>`. Optionally also set `ATELIER_GALLERY_PAGES=0,3,7`,
-`ATELIER_GALLERY_THEME=dark` and `ATELIER_GALLERY_SIZE=1280x800`.
+`ATELIER_GALLERY_THEME=dark` and `ATELIER_GALLERY_SIZE=1280x800`. `ATELIER_GALLERY_TOOLTIP=<n>` opens the page's n-th
+tooltip, and `ATELIER_GALLERY_FILE_DIALOG=open|save|folder` shows a file dialog limited to the repository (run it
+from the repository folder).
 
 ---
 
