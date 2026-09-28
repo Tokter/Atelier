@@ -21,7 +21,7 @@ public class CheckboxesView : GalleryPage
 
         Settings(
             new Switch("Controls enabled").ShowThumbIcon().BindIsChecked(_vm, v => v.ControlsEnabled, (v, on) => v.ControlsEnabled = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         // IsEnabled is inherited: disabling the sections panel disables every demo on the page.
         SectionsPanel.BindIsEnabled(_vm, v => v.ControlsEnabled);
@@ -71,7 +71,7 @@ public class CheckboxesView : GalleryPage
                 new CheckBox("Push notifications").BindIsChecked(_vm, v => v.EnableNotifications, (v, on) => v.EnableNotifications = on),
                 Ui.Row(
                     Ui.Readout(_vm, v => $"EnableNotifications = {v.EnableNotifications}"),
-                    new Button("Toggle from the view model").Variant(ButtonVariant.Outlined).Command(_vm.ToggleNotificationsCommand)))),
+                    new Button().Variant(ButtonVariant.Outlined).Command(_vm.ToggleNotificationsCommand)))),
 
         Ui.Code("new CheckBox(\"Push notifications\")\n    .BindIsChecked(vm, v => v.EnableNotifications, (v, on) => v.EnableNotifications = on)"));
 
@@ -142,6 +142,6 @@ public class CheckboxesView : GalleryPage
                     .BindIsChecked(_vm, v => v.BluetoothEnabled, (v, on) => v.BluetoothEnabled = on)
                     .OnCheckedChanged(state => _vm.LastEvent = $"Bluetooth CheckedChanged → {state}"),
                 Ui.Row(
-                    new Button("Toggle both").Variant(ButtonVariant.Outlined).Command(_vm.ToggleWirelessCommand),
+                    new Button().Variant(ButtonVariant.Outlined).Command(_vm.ToggleWirelessCommand),
                     Ui.Readout(_vm, v => v.LastEvent)))));
 }

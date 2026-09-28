@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Atelier.Controls;
 using Atelier.Core.Animation;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -97,9 +98,11 @@ public partial class TransitionsViewModel : PageViewModel
     partial void OnDurationMsChanged(float value) => OnPropertyChanged(nameof(Duration));
 
     [RelayCommand]
+    [property: Command("Next", "Transitions", Icon = MaterialIcons.ArrowForward, Description = "Show the next card with the chosen transition")]
     private void Next() => CardIndex = (CardIndex + 1) % Cards.Count;
 
     [RelayCommand]
+    [property: Command("Previous", "Transitions", Icon = MaterialIcons.ArrowBack, Description = "Show the previous card with the chosen transition")]
     private void Previous() => CardIndex = (CardIndex + Cards.Count - 1) % Cards.Count;
 
     public void OnTransitionStarted() => Status = $"Started: {++_started} · completed: {_completed}";

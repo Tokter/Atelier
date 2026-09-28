@@ -21,7 +21,7 @@ public class ComboBoxView : GalleryPage
 
         Settings(
             new Switch("Controls enabled").ShowThumbIcon().BindIsChecked(_vm, v => v.ControlsEnabled, (v, on) => v.ControlsEnabled = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         SectionsPanel.BindIsEnabled(_vm, v => v.ControlsEnabled);
 
@@ -62,8 +62,8 @@ public class ComboBoxView : GalleryPage
                     .BindItemsSource(_vm, v => v.Tags)
                     .BindSelectedItem(_vm, v => v.SelectedTag, (v, tag) => v.SelectedTag = tag),
                 Ui.Row(
-                    Ui.IconButton(MaterialIconKind.Add, "Add", ButtonVariant.Tonal).Command(_vm.AddTagCommand),
-                    Ui.IconButton(MaterialIconKind.Delete, "Remove selected", ButtonVariant.Outlined).Command(_vm.RemoveTagCommand)),
+                    new Button().Variant(ButtonVariant.Tonal).Command(_vm.AddTagCommand),
+                    new Button().Variant(ButtonVariant.Outlined).Command(_vm.RemoveTagCommand)),
                 Ui.Readout(_vm, v => $"{v.Tags.Count} tags · SelectedTag = {v.SelectedTag ?? "null"}"))),
         Ui.Code("new ComboBox().ItemsSource(vm.Destinations)\n" +
                 "    .WithItemTemplate((Destination d) => new TextBlock(d.City))\n" +
@@ -93,7 +93,7 @@ public class ComboBoxView : GalleryPage
                     .OnSelectionChanged(item => _vm.LastEvent = $"SelectionChanged → {item ?? "null"}")
                     .OnDropDownOpened(() => _vm.LastEvent = "DropDownOpened")
                     .OnDropDownClosed(() => _vm.LastEvent = "DropDownClosed"),
-                Ui.Row(new Button("Open drop-down").Variant(ButtonVariant.Tonal).Command(_vm.OpenDropDownCommand))),
+                Ui.Row(new Button().Variant(ButtonVariant.Tonal).Command(_vm.OpenDropDownCommand))),
             Ui.Demo("Events",
                 Ui.Readout(_vm, v => v.LastEvent),
                 Ui.Readout(_vm, v => $"IsDropDownOpen = {v.IsDropDownOpen}"))));

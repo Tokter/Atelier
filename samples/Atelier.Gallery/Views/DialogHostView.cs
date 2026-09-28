@@ -20,7 +20,7 @@ public class DialogHostView : GalleryPage
     {
         _vm = viewModel;
 
-        Settings(new Button("Reset options").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+        Settings(new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         Sections(DialogSection(), HostSection(), PopupSection());
     }
@@ -172,7 +172,7 @@ public class DialogHostView : GalleryPage
                     new Switch("Close on click away").BindIsChecked(_vm, v => v.LocalCloseOnClickAway, (v, on) => v.LocalCloseOnClickAway = on),
                     Ui.Row(
                         new Button("Show in root host").Variant(ButtonVariant.Tonal).OnClick(ShowInRootHost),
-                        new Button("Close all").Variant(ButtonVariant.Text).Command(_vm.ToggleLocalHostCommand)
+                        new Button().Variant(ButtonVariant.Text).Command(_vm.ToggleLocalHostCommand)
                             .BindIsEnabled(_vm, v => v.IsLocalHostOpen)),
                     Ui.Readout(_vm, v => $"IsOpen = {v.IsLocalHostOpen}"),
                     Ui.Readout(_vm, v => v.LastHostEvent))),

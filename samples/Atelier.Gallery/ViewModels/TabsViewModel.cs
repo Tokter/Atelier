@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Linq;
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -65,6 +66,7 @@ public partial class TabsViewModel : PageViewModel
     };
 
     [RelayCommand]
+    [property: Command("Reset", "Tabs", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         _untitled = 0;

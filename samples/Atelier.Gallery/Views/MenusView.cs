@@ -23,14 +23,15 @@ public class MenusView : GalleryPage
         Settings(
             new Switch("Has selection").ShowThumbIcon().BindIsChecked(_vm, v => v.HasSelection, (v, on) => v.HasSelection = on),
             new Switch("Clipboard filled").ShowThumbIcon().BindIsChecked(_vm, v => v.HasClipboard, (v, on) => v.HasClipboard = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         Sections(MenuBarSection(), DataSection(), ContextMenuSection());
     }
 
     private UIElement MenuBarSection() => Ui.Section("Menu bar",
-        "Click a header, then hover the others. The shortcuts come from [property: Keybinding] on the view model's " +
-        "commands (group \"Menus\") and work while the focus is in this demo; Cut, Copy and Paste follow CanExecute and " +
+        "Click a header, then hover the others. The items only name their command: headers, access keys, icons and " +
+        "shortcuts come from [property: Keybinding] on the view model's commands (group \"Menus\"). The shortcuts work " +
+        "while the focus is in this demo; Cut, Copy and Paste follow CanExecute and " +
         "Delete hides itself. Underscores in the headers are access keys: with the focus in the demo, press a letter in an " +
         "open menu. The gallery's own menu in the title bar opens with Alt or F10 and Alt+F/V/H.",
         new KeybindingHandler("Menus", new StackPanel().Spacing(12).Children(
@@ -41,7 +42,10 @@ public class MenusView : GalleryPage
                 .Themed(Border.BackgroundProperty, c => c.SurfaceContainer)
                 .Child(DemoMenu()),
             Ui.Readout(_vm, v => v.LastAction))),
-        Ui.Code("new MenuItem(\"_Copy\", vm.CopyCommand).Icon(MaterialIconKind.ContentCopy)   // shows Ctrl+C from its keybinding\n" +
+        Ui.Code("[RelayCommand(CanExecute = nameof(HasSelection))]\n" +
+                "[property: Keybinding(\"MenusCopy\", \"Menus\", \"Ctrl+C\", Label = \"_Copy\", Icon = MaterialIcons.ContentCopy)]\n" +
+                "private void Copy() { ... }\n\n" +
+                "new MenuItem().Command(vm.CopyCommand)   // header, access key, icon and Ctrl+C from the command\n" +
                 "new MenuItem(\"Word _wrap\").IsCheckable().StaysOpenOnClick().BindIsChecked(vm, v => v.WordWrap, ...)"));
 
     private Menu DemoMenu() => new Menu()
@@ -49,23 +53,23 @@ public class MenusView : GalleryPage
         .KeybindingGroup("Menus")
         .Items(
             new MenuItem("_File").Items(
-                new MenuItem("_New", _vm.NewCommand).Icon(MaterialIconKind.NoteAdd),
-                new MenuItem("_Open…", _vm.OpenCommand).Icon(MaterialIconKind.FolderOpen),
+                new MenuItem().Command(_vm.NewCommand),
+                new MenuItem().Command(_vm.OpenCommand),
                 new MenuItem("Open _recent").Icon(MaterialIconKind.History)
                     .ItemsSource(_vm.RecentFiles),
                 new Separator(),
-                new MenuItem("_Save", _vm.SaveCommand).Icon(MaterialIconKind.Save)),
+                new MenuItem().Command(_vm.SaveCommand)),
             new MenuItem("_Edit").Items(
-                new MenuItem("_Undo", _vm.UndoCommand).Icon(MaterialIconKind.Undo),
-                new MenuItem("_Redo", _vm.RedoCommand).Icon(MaterialIconKind.Redo),
+                new MenuItem().Command(_vm.UndoCommand),
+                new MenuItem().Command(_vm.RedoCommand),
                 new Separator(),
-                new MenuItem("Cu_t", _vm.CutCommand).Icon(MaterialIconKind.ContentCut),
-                new MenuItem("_Copy", _vm.CopyCommand).Icon(MaterialIconKind.ContentCopy),
-                new MenuItem("_Paste", _vm.PasteCommand).Icon(MaterialIconKind.ContentPaste),
-                new MenuItem("_Delete", _vm.DeleteCommand).Icon(MaterialIconKind.Delete).HideWhenDisabled(),
+                new MenuItem().Command(_vm.CutCommand),
+                new MenuItem().Command(_vm.CopyCommand),
+                new MenuItem().Command(_vm.PasteCommand),
+                new MenuItem().Command(_vm.DeleteCommand).HideWhenDisabled(),
                 new Separator(),
-                new MenuItem("Select _all", _vm.SelectAllCommand).Icon(MaterialIconKind.SelectAll),
-                new MenuItem("Toggle co_mment", _vm.CommentLineCommand).Icon(MaterialIconKind.Comment),
+                new MenuItem().Command(_vm.SelectAllCommand),
+                new MenuItem().Command(_vm.CommentLineCommand),
                 new MenuItem("_Find in files").Icon(MaterialIconKind.FindInPage).InputGestureText("Ctrl+Shift+F")
                     .OnClick(() => _vm.LastAction = "Find in files (its shortcut text is set by hand)")),
             new MenuItem("_View").Items(
@@ -138,9 +142,9 @@ public class MenusView : GalleryPage
             .ContextMenu(new ContextMenu()
                 .KeybindingGroup("Menus")
                 .Items(
-                    new MenuItem("Cu_t", _vm.CutCommand).Icon(MaterialIconKind.ContentCut),
-                    new MenuItem("_Copy", _vm.CopyCommand).Icon(MaterialIconKind.ContentCopy),
-                    new MenuItem("_Paste", _vm.PasteCommand).Icon(MaterialIconKind.ContentPaste),
+                    new MenuItem().Command(_vm.CutCommand),
+                    new MenuItem().Command(_vm.CopyCommand),
+                    new MenuItem().Command(_vm.PasteCommand),
                     new Separator(),
                     new MenuItem("_Sort by").Icon(MaterialIconKind.Sort).Items(
                         new MenuItem("_Name").IsCheckable().GroupName("sort").IsChecked().OnClick(() => _vm.LastAction = "Sort by name"),
@@ -152,5 +156,5 @@ public class MenusView : GalleryPage
                         .OnClick(() => _vm.LastAction = "Rename"))
                 .OnOpening((s, e) => _vm.LastAction = e.ByKeyboard ? "Context menu opened with the keyboard" : "Context menu opened"))),
         Ui.Readout(_vm, v => v.LastAction),
-        Ui.Code("element.ContextMenu(new ContextMenu().Items(\n    new MenuItem(\"_Copy\", vm.CopyCommand),\n    new Separator(),\n    ...))"));
+        Ui.Code("element.ContextMenu(new ContextMenu().Items(\n    new MenuItem().Command(vm.CopyCommand),\n    new Separator(),\n    ...))"));
 }

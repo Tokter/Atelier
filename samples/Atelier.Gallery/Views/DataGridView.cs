@@ -403,6 +403,6 @@ public class DataGridView : GalleryPage
                     TextConverter = v => v is long bytes ? FileEntry.FormatSize(bytes) : "",
                 }),
         Ui.Row(
-            new Button("Add file").Variant(ButtonVariant.Tonal).Command(_vm.AddFileCommand),
-            new Button("Clear").Variant(ButtonVariant.Outlined).Command(_vm.ClearFilesCommand)));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.AddFileCommand),
+            new Button().Variant(ButtonVariant.Outlined).Command(_vm.ClearFilesCommand)));
 }

@@ -1,4 +1,5 @@
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -80,9 +81,11 @@ public partial class CheckboxesViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("ToggleNotifications", "SelectionControls", Label = "Toggle from the view model", Description = "Change EnableNotifications in the view model; the check box follows its binding")]
     private void ToggleNotifications() => EnableNotifications = !EnableNotifications;
 
     [RelayCommand]
+    [property: Command("ToggleWireless", "SelectionControls", Label = "Toggle both", Description = "Switch Wi-Fi and Bluetooth in the view model")]
     private void ToggleWireless()
     {
         bool target = !(WifiEnabled && BluetoothEnabled);
@@ -91,6 +94,7 @@ public partial class CheckboxesViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("Reset", "SelectionControls", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         ControlsEnabled = true;

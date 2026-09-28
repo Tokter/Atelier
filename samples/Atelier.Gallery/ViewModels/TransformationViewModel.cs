@@ -2,6 +2,7 @@ using System;
 using System.Numerics;
 using Atelier.Controls;
 using Atelier.Core.Primitives;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -123,9 +124,11 @@ public partial class TransformationViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("CardClicked", "Transformation", Label = "Click me", Description = "Clicks and hit-testing follow the transform")]
     private void CardClicked() => ClickCount++;
 
     [RelayCommand]
+    [property: Command("Preset", "Transformation", Label = "Apply preset", Description = "Apply this combination of rotation, skew and scale")]
     private void Preset(string name)
     {
         Reset();
@@ -152,6 +155,7 @@ public partial class TransformationViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("Reset", "Transformation", Label = "Reset transform", Icon = MaterialIcons.RestartAlt, Description = "Put the transform back to none")]
     private void Reset()
     {
         UniformScale = true;
@@ -166,6 +170,7 @@ public partial class TransformationViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("SetZoom", "Transformation", Label = "Set zoom", Description = "Set the zoom of the layout transform")]
     private void SetZoom(string percent) => Zoom = float.Parse(percent, System.Globalization.CultureInfo.InvariantCulture) / 100f;
 
     private static float ToRadians(float degrees) => degrees * MathF.PI / 180f;

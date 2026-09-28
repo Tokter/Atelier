@@ -8,6 +8,7 @@ using Atelier.Core.Platform;
 using Atelier.Core.Primitives;
 using Atelier.Gallery.Infrastructure;
 using Atelier.Theming.Material;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -195,18 +196,23 @@ public partial class ThemeEditorViewModel : PageViewModel
     partial void OnIsDarkChanged(bool value) => GalleryTheme.IsDark = value;
 
     [RelayCommand]
+    [property: Command("UsePreset", "ThemeEditor", Label = "Use preset", Description = "Generate the light and dark schemes from this accent color")]
     private void UsePreset(AccentPreset preset) => SeedColor = preset.Color;
 
     [RelayCommand]
+    [property: Command("Reset", "ThemeEditor", Label = "Reset to baseline", Icon = MaterialIcons.RestartAlt, Description = "Go back to the Material 3 baseline schemes, in light and dark")]
     private void Reset() => GalleryTheme.Reset();
 
     [RelayCommand]
+    [property: Command("CopyLight", "ThemeEditor", Label = "Copy the light scheme", Icon = MaterialIcons.ContentCopy, Description = "Copy the light scheme with every role as C#")]
     private void CopyLight() => CopyScheme(false);
 
     [RelayCommand]
+    [property: Command("CopyDark", "ThemeEditor", Label = "Copy the dark scheme", Icon = MaterialIcons.ContentCopy, Description = "Copy the dark scheme with every role as C#")]
     private void CopyDark() => CopyScheme(true);
 
     [RelayCommand]
+    [property: Command("CopySeedCode", "ThemeEditor", Label = "Copy this code", Icon = MaterialIcons.ContentCopy, Description = "Copy the FromSeed code to the clipboard")]
     private void CopySeedCode()
     {
         Clipboard.SetText(SeedCode);

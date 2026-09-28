@@ -1,6 +1,7 @@
 using System;
 using Atelier.Controls;
 using Atelier.Theming.Material;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -98,12 +99,15 @@ public partial class TypographyViewModel : PageViewModel
     partial void OnFontWeightChanged(float value) => OnPropertyChanged(nameof(EffectiveFontWeight));
 
     [RelayCommand]
+    [property: Command("ToggleBold", "Typography", Label = "Toggle bold", Icon = MaterialIcons.FormatBold, Description = "Make the samples bold, or normal again")]
     private void ToggleBold() => IsBold = !IsBold;
 
     [RelayCommand]
+    [property: Command("ToggleItalic", "Typography", Label = "Toggle italic", Icon = MaterialIcons.FormatItalic, Description = "Make the samples italic, or upright again")]
     private void ToggleItalic() => IsItalic = !IsItalic;
 
     [RelayCommand]
+    [property: Command("Reset", "Typography", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         SampleText = DefaultSampleText;

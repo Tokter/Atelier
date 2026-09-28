@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -69,6 +70,7 @@ public partial class ListsViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("AddContact", "Lists", Label = "Add", Icon = MaterialIcons.Add, Description = "Add a contact to the bound collection")]
     private void AddContact()
     {
         _added++;
@@ -78,6 +80,7 @@ public partial class ListsViewModel : PageViewModel
     }
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
+    [property: Command("RemoveSelected", "Lists", Label = "Remove", Icon = MaterialIcons.Delete, Description = "Remove the selected contact")]
     private void RemoveSelected()
     {
         int index = SelectedContact is { } contact ? Contacts.IndexOf(contact) : -1;
@@ -91,9 +94,11 @@ public partial class ListsViewModel : PageViewModel
     }
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
+    [property: Command("MoveUp", "Lists", Label = "Up", Icon = MaterialIcons.ArrowUpward, Description = "Move the selected contact up")]
     private void MoveUp() => Move(-1);
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
+    [property: Command("MoveDown", "Lists", Label = "Down", Icon = MaterialIcons.ArrowDownward, Description = "Move the selected contact down")]
     private void MoveDown() => Move(1);
 
     private void Move(int delta)
@@ -114,9 +119,11 @@ public partial class ListsViewModel : PageViewModel
     private bool HasSelection() => SelectedContact != null;
 
     [RelayCommand]
+    [property: Command("ClearContacts", "Lists", Label = "Clear", Description = "Remove all contacts")]
     private void ClearContacts() => Contacts.Clear();
 
     [RelayCommand]
+    [property: Command("ResetContacts", "Lists", Label = "Restore", Description = "Bring back the sample contacts")]
     private void ResetContacts()
     {
         Contacts.Clear();
@@ -130,6 +137,7 @@ public partial class ListsViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("AddTag", "Lists", Label = "Add tag", Icon = MaterialIcons.Add, Description = "Add the typed tag")]
     private void AddTag()
     {
         string tag = NewTag.Trim();
@@ -141,6 +149,7 @@ public partial class ListsViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("RemoveLastTag", "Lists", Label = "Remove last", Description = "Remove the last tag")]
     private void RemoveLastTag()
     {
         if (Tags.Count > 0)
@@ -150,6 +159,7 @@ public partial class ListsViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("Reset", "Lists", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         ControlsEnabled = true;

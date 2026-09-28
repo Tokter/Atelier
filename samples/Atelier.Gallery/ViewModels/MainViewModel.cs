@@ -105,17 +105,21 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    [property: Command("NewWindow", "Global", Label = "_New window", Icon = MaterialIcons.OpenInNew,
+        Description = "Open another gallery window with its own state")]
     private void NewWindow() => Program.OpenGalleryWindow();
 
     [RelayCommand]
-    [property: Keybinding("ToggleTheme", "Global", "Ctrl+T")]
+    [property: Command("ToggleTheme", "Global", Label = "_Toggle theme", Icon = MaterialIcons.DarkMode,
+        Description = "Switch between the light and dark theme in all windows", DefaultKeybinding = "Ctrl+T")]
     private void ToggleTheme()
     {
         GalleryTheme.Toggle();
     }
 
     [RelayCommand]
-    [property: Keybinding("ToggleFpsOverlay", "Global", "Ctrl+Shift+F")]
+    [property: Command("ToggleFpsOverlay", "Global", Label = "_FPS overlay", Icon = MaterialIcons.Speed,
+        Description = "Show or hide the frame rate", DefaultKeybinding = "Ctrl+Shift+F")]
     private void ToggleFpsOverlay() => ToggleFpsOverlayAction?.Invoke();
 
     private void UpdateThemeToggle()

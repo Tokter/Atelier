@@ -1,6 +1,7 @@
 using System;
 using Atelier.Controls;
 using Atelier.Core.Threading;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -74,6 +75,7 @@ public partial class RangeControlsViewModel : PageViewModel
     }
 
     [RelayCommand(CanExecute = nameof(CanStartDownload))]
+    [property: Command("StartDownload", "RangeControls", Label = "Download", Icon = MaterialIcons.Download, Description = "Start the simulated download")]
     private void StartDownload()
     {
         DownloadProgress = 0;
@@ -85,6 +87,7 @@ public partial class RangeControlsViewModel : PageViewModel
     private bool CanStartDownload() => !IsDownloading;
 
     [RelayCommand(CanExecute = nameof(CanCancelDownload))]
+    [property: Command("CancelDownload", "RangeControls", Label = "Cancel", Icon = MaterialIcons.Cancel, Description = "Stop the download")]
     private void CancelDownload()
     {
         _downloadTimer.Stop();
@@ -107,6 +110,7 @@ public partial class RangeControlsViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("Reset", "RangeControls", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         ControlsEnabled = true;

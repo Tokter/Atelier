@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -66,6 +67,7 @@ public partial class ComboBoxViewModel : PageViewModel
     public string[] Numbers { get; } = Enumerable.Range(1, 60).Select(i => $"Item {i:00}").ToArray();
 
     [RelayCommand]
+    [property: Command("AddTag", "ComboBox", Label = "Add", Icon = MaterialIcons.Add, Description = "Add a tag to the bound collection; the drop-down updates")]
     private void AddTag()
     {
         string tag = $"Tag {_nextTag++}";
@@ -74,6 +76,7 @@ public partial class ComboBoxViewModel : PageViewModel
     }
 
     [RelayCommand(CanExecute = nameof(CanRemoveTag))]
+    [property: Command("RemoveTag", "ComboBox", Label = "Remove selected", Icon = MaterialIcons.Delete, Description = "Remove the selected tag from the collection")]
     private void RemoveTag()
     {
         if (SelectedTag != null)
@@ -85,9 +88,11 @@ public partial class ComboBoxViewModel : PageViewModel
     private bool CanRemoveTag() => SelectedTag != null;
 
     [RelayCommand]
+    [property: Command("OpenDropDown", "ComboBox", Label = "Open drop-down", Description = "Set IsDropDownOpen from the view model")]
     private void OpenDropDown() => IsDropDownOpen = true;
 
     [RelayCommand]
+    [property: Command("Reset", "ComboBox", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         ControlsEnabled = true;

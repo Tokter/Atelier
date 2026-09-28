@@ -21,7 +21,7 @@ public class ListsView : GalleryPage
 
         Settings(
             new Switch("Controls enabled").ShowThumbIcon().BindIsChecked(_vm, v => v.ControlsEnabled, (v, on) => v.ControlsEnabled = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         SectionsPanel.BindIsEnabled(_vm, v => v.ControlsEnabled);
 
@@ -47,12 +47,12 @@ public class ListsView : GalleryPage
                     Ui.Readout(_vm, v => v.LastSelectionChanged)),
                 Ui.Demo("Change the collection",
                     Ui.Row(
-                        Ui.IconButton(MaterialIconKind.Add, "Add", ButtonVariant.Tonal).Command(_vm.AddContactCommand),
-                        Ui.IconButton(MaterialIconKind.Delete, "Remove", ButtonVariant.Outlined).Command(_vm.RemoveSelectedCommand),
-                        Ui.IconButton(MaterialIconKind.ArrowUpward, "Up", ButtonVariant.Outlined).Command(_vm.MoveUpCommand),
-                        Ui.IconButton(MaterialIconKind.ArrowDownward, "Down", ButtonVariant.Outlined).Command(_vm.MoveDownCommand),
-                        new Button("Clear").Variant(ButtonVariant.Text).Command(_vm.ClearContactsCommand),
-                        new Button("Restore").Variant(ButtonVariant.Text).Command(_vm.ResetContactsCommand))),
+                        new Button().Variant(ButtonVariant.Tonal).Command(_vm.AddContactCommand),
+                        new Button().Variant(ButtonVariant.Outlined).Command(_vm.RemoveSelectedCommand),
+                        new Button().Variant(ButtonVariant.Outlined).Command(_vm.MoveUpCommand),
+                        new Button().Variant(ButtonVariant.Outlined).Command(_vm.MoveDownCommand),
+                        new Button().Variant(ButtonVariant.Text).Command(_vm.ClearContactsCommand),
+                        new Button().Variant(ButtonVariant.Text).Command(_vm.ResetContactsCommand))),
                 Ui.Note("Keyboard: Up/Down, Home/End and Page Up/Down move the selection. Typing jumps to the next " +
                         "contact whose name starts with the typed letters."))),
 
@@ -139,8 +139,8 @@ public class ListsView : GalleryPage
                             .Themed(TextBlock.ForegroundProperty, c => c.OnSecondaryContainer)))),
             Ui.Row(
                 new TextBox().Placeholder("New tag").Width(200).BindText(_vm, v => v.NewTag, (v, text) => v.NewTag = text),
-                Ui.IconButton(MaterialIconKind.Add, "Add tag", ButtonVariant.Tonal).Command(_vm.AddTagCommand),
-                new Button("Remove last").Variant(ButtonVariant.Outlined).Command(_vm.RemoveLastTagCommand))),
+                new Button().Variant(ButtonVariant.Tonal).Command(_vm.AddTagCommand),
+                new Button().Variant(ButtonVariant.Outlined).Command(_vm.RemoveLastTagCommand))),
 
         Ui.Code("class ChipList : ItemsControl\n" +
                 "{\n" +

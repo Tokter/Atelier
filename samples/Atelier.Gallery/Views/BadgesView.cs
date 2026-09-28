@@ -21,7 +21,7 @@ public class BadgesView : GalleryPage
 
         Settings(
             new Switch("Badges visible").ShowThumbIcon().BindIsChecked(_vm, v => v.BadgesVisible, (v, on) => v.BadgesVisible = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         Sections(IconSection(), ButtonSection(), LiveSection());
     }
@@ -64,8 +64,8 @@ public class BadgesView : GalleryPage
                 .BindCount(_vm, v => (int?)v.Unread)
                 .Bind(Badge.ShowZeroProperty, _vm, v => v.ShowZero)
                 .BindIsBadgeVisible(_vm, v => v.BadgesVisible),
-            new Button("−").Variant(ButtonVariant.Outlined).Command(_vm.DecrementCommand),
-            new Button("+").Variant(ButtonVariant.Outlined).Command(_vm.IncrementCommand),
+            new Button().Variant(ButtonVariant.Outlined).CommandDisplay(CommandDisplay.Icon).Padding(6).MinWidth(32).Command(_vm.DecrementCommand),
+            new Button().Variant(ButtonVariant.Outlined).CommandDisplay(CommandDisplay.Icon).Padding(6).MinWidth(32).Command(_vm.IncrementCommand),
             new Switch("Show zero").BindIsChecked(_vm, v => v.ShowZero, (v, on) => v.ShowZero = on),
             Ui.Readout(_vm, v => v.CountText)),
         Ui.Code("new Badge(mailButton).BindCount(vm, v => v.Unread)"));

@@ -26,9 +26,9 @@ public class TypographyView : GalleryPage
         _vm = viewModel;
 
         Settings(
-            new Button("Toggle bold").Variant(ButtonVariant.Tonal).Command(_vm.ToggleBoldCommand),
-            new Button("Toggle italic").Variant(ButtonVariant.Tonal).Command(_vm.ToggleItalicCommand),
-            new Button("Reset").Variant(ButtonVariant.Outlined).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ToggleBoldCommand),
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ToggleItalicCommand),
+            new Button().Variant(ButtonVariant.Outlined).Command(_vm.ResetCommand));
 
         Sections(PlaygroundSection(), TypeScaleSection(), FontSection(), StyleAndColorSection(), LayoutSection());
     }

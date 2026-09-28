@@ -24,7 +24,7 @@ public class TransformationView : GalleryPage
     {
         _vm = viewModel;
 
-        Settings(new Button("Reset transform").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+        Settings(new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         _zoomPreview = ZoomPreview();
         Sections(PlaygroundSection(), ShortcutsSection(), ZoomSection());
@@ -45,7 +45,7 @@ public class TransformationView : GalleryPage
             .Bind(VisualNode.TransformOriginProperty, _vm, v => v.Origin)
             .Child(new StackPanel().Spacing(10).Children(
                 new TextBlock("Transformed card").TitleMedium(),
-                new Button("Click me").Command(_vm.CardClickedCommand),
+                new Button().Command(_vm.CardClickedCommand),
                 new Slider().BindValue(_vm, v => v.CardSliderValue, (v, x) => v.CardSliderValue = x),
                 new Switch("Still interactive").BindIsChecked(_vm, v => v.CardSwitch, (v, on) => v.CardSwitch = on)));
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Atelier.Controls;
 using Atelier.Core.Primitives;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -91,12 +92,15 @@ public partial class DialogHostViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("ToggleLocalHost", "Dialogs", Label = "Close all", Description = "Close the dialogs of the local host (enabled while it is open)")]
     private void ToggleLocalHost() => IsLocalHostOpen = !IsLocalHostOpen;
 
     [RelayCommand]
+    [property: Command("TogglePlacementPopup", "Dialogs", Label = "Open popup", Description = "Open or close the popup placed at this button")]
     private void TogglePlacementPopup() => IsPlacementPopupOpen = !IsPlacementPopupOpen;
 
     [RelayCommand]
+    [property: Command("Reset", "Dialogs", Label = "Reset options", Icon = MaterialIcons.RestartAlt, Description = "Put the dialog options back as they were")]
     private void Reset()
     {
         CloseOnEscape = true;

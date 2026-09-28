@@ -21,7 +21,7 @@ public class LayoutView : GalleryPage
     {
         _vm = viewModel;
 
-        Settings(new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+        Settings(new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         Sections(
             StackPanelSection(),
@@ -64,8 +64,8 @@ public class LayoutView : GalleryPage
             Ui.Row(
                 new Switch("Vertical").BindIsChecked(_vm, v => v.StackVertical, (v, on) => v.StackVertical = on),
                 Ui.SliderSetting("Spacing", _vm, v => v.StackSpacing, (v, x) => v.StackSpacing = x, 0, 32),
-                new Button("Add item").Variant(ButtonVariant.Outlined).Command(_vm.AddStackItemCommand),
-                new Button("Remove item").Variant(ButtonVariant.Outlined).Command(_vm.RemoveStackItemCommand)),
+                new Button().Variant(ButtonVariant.Outlined).Command(_vm.AddStackItemCommand),
+                new Button().Variant(ButtonVariant.Outlined).Command(_vm.RemoveStackItemCommand)),
             Stage(stack),
             Ui.Readout(_vm, v => $"Orientation = {(v.StackVertical ? "Vertical" : "Horizontal")}, Spacing = {v.StackSpacing:0}, Children = {v.StackItems.Count}"));
     }

@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using Atelier.Controls;
 using Atelier.Core.Primitives;
 using Atelier.Gallery.Models;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -82,6 +83,7 @@ public partial class PropertyGridViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("RandomizeShape", "PropertyGrid", Label = "Change shape in code", Icon = MaterialIcons.Shuffle, Description = "Change the shape in the view model; the grid follows")]
     private void RandomizeShape()
     {
         Inspected = InspectedObject.Shape;
@@ -94,6 +96,7 @@ public partial class PropertyGridViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("Reset", "PropertyGrid", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         Shape.Reset();

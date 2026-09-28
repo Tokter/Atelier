@@ -22,7 +22,7 @@ public class DateTimePickersView : GalleryPage
 
         Settings(
             new Switch("Pickers enabled").ShowThumbIcon().BindIsChecked(_vm, v => v.PickersEnabled, (v, on) => v.PickersEnabled = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         SectionsPanel.BindIsEnabled(_vm, v => v.PickersEnabled);
 

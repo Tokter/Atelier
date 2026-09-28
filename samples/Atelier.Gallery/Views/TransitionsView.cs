@@ -53,8 +53,8 @@ public class TransitionsView : GalleryPage
                 .Themed(Border.BackgroundProperty, c => c.SurfaceContainer)
                 .Child(host),
             Ui.Row(
-                Ui.IconButton(MaterialIconKind.ArrowBack, "Previous", ButtonVariant.Outlined).Command(_vm.PreviousCommand),
-                Ui.IconButton(MaterialIconKind.ArrowForward, "Next").Command(_vm.NextCommand),
+                new Button().Variant(ButtonVariant.Outlined).Command(_vm.PreviousCommand),
+                new Button().Command(_vm.NextCommand),
                 Ui.Readout(_vm, v => $"Card {v.CardIndex + 1} of {v.Cards.Count}"),
                 Ui.Readout(_vm, v => v.Status)),
             Ui.Code("new TransitioningContentControl()\n" +

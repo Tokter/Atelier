@@ -21,7 +21,7 @@ public class PropertyGridView : GalleryPage
     {
         _vm = viewModel;
 
-        Settings(new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+        Settings(new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         Sections(InspectorSection(), CustomEditorSection());
     }
@@ -71,7 +71,7 @@ public class PropertyGridView : GalleryPage
             Ui.Row(
                 new Button("Expand all").Variant(ButtonVariant.Outlined).OnClick(grid.ExpandAll),
                 new Button("Collapse all").Variant(ButtonVariant.Outlined).OnClick(grid.CollapseAll),
-                Ui.IconButton(MaterialIconKind.Shuffle, "Change shape in code", ButtonVariant.Tonal).Command(_vm.RandomizeShapeCommand)),
+                new Button().Variant(ButtonVariant.Tonal).Command(_vm.RandomizeShapeCommand)),
             Ui.Columns(360,
                 grid,
                 Ui.Stack(ShapePreview(), EventLog())));

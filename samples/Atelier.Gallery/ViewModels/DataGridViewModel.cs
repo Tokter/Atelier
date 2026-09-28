@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -152,6 +153,7 @@ public partial class DataGridViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("AddFile", "DataGrid", Label = "Add file", Icon = MaterialIcons.NoteAdd, Description = "Add a row to the bound collection")]
     private void AddFile()
     {
         var file = CreateFiles(new Random(), 1)[0];
@@ -160,6 +162,7 @@ public partial class DataGridViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("ClearFiles", "DataGrid", Label = "Clear", Icon = MaterialIcons.ClearAll, Description = "Remove all rows")]
     private void ClearFiles()
     {
         SmallList.Clear();

@@ -15,7 +15,8 @@ public sealed record MenuNode(string Title, MaterialIconKind Icon = MaterialIcon
 public sealed record HighlightColor(string Name, Color Color);
 
 /// <summary>
-/// The menus demo. The commands carry [property: Keybinding] in the "Menus" group, so the menus show their shortcuts
+/// The menus demo. The commands carry [property: Keybinding] in the "Menus" group with their labels (and access keys) and
+/// icons, so the menu items only name their command; the menus show their shortcuts
 /// and the keys work while the focus is inside the demo.
 /// </summary>
 public partial class MenusViewModel : PageViewModel
@@ -80,30 +81,31 @@ public partial class MenusViewModel : PageViewModel
     private void Did(string action) => LastAction = action;
 
     [RelayCommand]
-    [property: Keybinding("MenusNew", "Menus", "Ctrl+N")]
+    [property: Keybinding("MenusNew", "Menus", "Ctrl+N", Label = "_New", Icon = MaterialIcons.NoteAdd, Description = "Start a new document")]
     private void New() => Did("New");
 
     [RelayCommand]
-    [property: Keybinding("MenusOpen", "Menus", "Ctrl+O")]
+    [property: Keybinding("MenusOpen", "Menus", "Ctrl+O", Label = "_Open…", Icon = MaterialIcons.FolderOpen, Description = "Open a document")]
     private void Open() => Did("Open…");
 
     [RelayCommand]
-    [property: Keybinding("MenusSave", "Menus", "Ctrl+S")]
+    [property: Keybinding("MenusSave", "Menus", "Ctrl+S", Label = "_Save", Icon = MaterialIcons.Save, Description = "Save the document")]
     private void Save() => Did("Save");
 
     [RelayCommand]
+    [property: Command("OpenRecent", "Menus", Label = "Open recent", Description = "Open the chosen recent file")]
     private void OpenRecent(string file) => Did($"Open recent: {file}");
 
     [RelayCommand]
-    [property: Keybinding("MenusUndo", "Menus", "Ctrl+Z")]
+    [property: Keybinding("MenusUndo", "Menus", "Ctrl+Z", Label = "_Undo", Icon = MaterialIcons.Undo, Description = "Undo the last change")]
     private void Undo() => Did("Undo");
 
     [RelayCommand]
-    [property: Keybinding("MenusRedo", "Menus", "Ctrl+Y")]
+    [property: Keybinding("MenusRedo", "Menus", "Ctrl+Y", Label = "_Redo", Icon = MaterialIcons.Redo, Description = "Redo the change")]
     private void Redo() => Did("Redo");
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
-    [property: Keybinding("MenusCut", "Menus", "Ctrl+X")]
+    [property: Keybinding("MenusCut", "Menus", "Ctrl+X", Label = "Cu_t", Icon = MaterialIcons.ContentCut, Description = "Cut the selection")]
     private void Cut()
     {
         HasClipboard = true;
@@ -111,7 +113,7 @@ public partial class MenusViewModel : PageViewModel
     }
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
-    [property: Keybinding("MenusCopy", "Menus", "Ctrl+C")]
+    [property: Keybinding("MenusCopy", "Menus", "Ctrl+C", Label = "_Copy", Icon = MaterialIcons.ContentCopy, Description = "Copy the selection")]
     private void Copy()
     {
         HasClipboard = true;
@@ -119,15 +121,15 @@ public partial class MenusViewModel : PageViewModel
     }
 
     [RelayCommand(CanExecute = nameof(HasClipboard))]
-    [property: Keybinding("MenusPaste", "Menus", "Ctrl+V")]
+    [property: Keybinding("MenusPaste", "Menus", "Ctrl+V", Label = "_Paste", Icon = MaterialIcons.ContentPaste, Description = "Paste the clipboard")]
     private void Paste() => Did("Paste");
 
     [RelayCommand(CanExecute = nameof(HasSelection))]
-    [property: Keybinding("MenusDelete", "Menus", "Delete")]
+    [property: Keybinding("MenusDelete", "Menus", "Delete", Label = "_Delete", Icon = MaterialIcons.Delete, Description = "Delete the selection")]
     private void Delete() => Did("Delete (hidden while nothing is selected)");
 
     [RelayCommand]
-    [property: Keybinding("MenusSelectAll", "Menus", "Ctrl+A")]
+    [property: Keybinding("MenusSelectAll", "Menus", "Ctrl+A", Label = "Select _all", Icon = MaterialIcons.SelectAll, Description = "Select everything")]
     private void SelectAll()
     {
         HasSelection = true;
@@ -135,13 +137,14 @@ public partial class MenusViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Keybinding("MenusComment", "Menus", "Ctrl+K, Ctrl+C")]
+    [property: Keybinding("MenusComment", "Menus", "Ctrl+K, Ctrl+C", Label = "Toggle co_mment", Icon = MaterialIcons.Comment, Description = "Comment the line, or uncomment it")]
     private void CommentLine() => Did("Comment line (a chord: Ctrl+K, Ctrl+C)");
 
     [RelayCommand]
     private void Pick(string what) => Did(what);
 
     [RelayCommand]
+    [property: Command("Reset", "Menus", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         HasSelection = true;

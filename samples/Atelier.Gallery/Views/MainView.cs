@@ -67,7 +67,7 @@ public class MainView : KeybindingHandler
         }
     }
 
-    // The main menu in the title bar. Shortcuts come from the keybindings of the commands (Ctrl+T, F1, ...); Alt or F10
+    // The main menu in the title bar. Icons and shortcuts come from the [Command] declarations (Ctrl+T, F1, ...); Alt or F10
     // reach the menu from the keyboard.
     private Menu MainMenu() => new Menu()
         .WithItemSetup((MenuItem item, PageViewModel page) => item
@@ -76,16 +76,16 @@ public class MainView : KeybindingHandler
             .OnClick(() => _vm.CurrentPage = page))
         .Items(
             new MenuItem("_File").Items(
-                new MenuItem("_New window", _vm.NewWindowCommand).Icon(MaterialIconKind.OpenInNew),
+                new MenuItem().Command(_vm.NewWindowCommand),
                 new Separator(),
                 new MenuItem("E_xit").Icon(MaterialIconKind.Logout).InputGestureText("Alt+F4").OnClick(() => Host?.Close())),
             new MenuItem("_View").Items(
-                new MenuItem("_Toggle theme", _vm.ToggleThemeCommand).Icon(MaterialIconKind.DarkMode),
-                new MenuItem("_FPS overlay", _vm.ToggleFpsOverlayCommand).Icon(MaterialIconKind.Speed),
+                new MenuItem().Command(_vm.ToggleThemeCommand),
+                new MenuItem().Command(_vm.ToggleFpsOverlayCommand),
                 new Separator(),
                 new MenuItem("_Go to page").Icon(MaterialIconKind.Pageview).ItemsSource(_vm.Pages)),
             new MenuItem("_Help").Items(
-                new MenuItem("_Keyboard shortcuts", new ShowShortcutsHelpCommand()).Icon(MaterialIconKind.Keyboard),
+                new MenuItem().Command(new ShowShortcutsHelpCommand()),
                 new MenuItem("_Search pages").Icon(MaterialIconKind.Search).InputGestureText("Ctrl+F").OnClick(() => _search.Focus())));
 
     private TitleBar TitleBar() => new TitleBar()
@@ -101,11 +101,11 @@ public class MainView : KeybindingHandler
             .VerticalAlignment(VerticalAlignment.Center)
             .Children(
                 _search,
-                Ui.IconButton(MaterialIconKind.OpenInNew, "New window", ButtonVariant.Text).Column(1).Command(_vm.NewWindowCommand).ToolTip("Open another gallery window with its own state"),
+                new Button().Variant(ButtonVariant.Text).Column(1).Command(_vm.NewWindowCommand),
                 new Button()
                     .Column(2)
                     .Variant(ButtonVariant.Tonal)
-                    .Command(_vm.ToggleThemeCommand).ToolTip("Switch the theme in all windows (Ctrl+T)")
+                    .Command(_vm.ToggleThemeCommand) // the tooltip (description and Ctrl+T) comes from the command
                     .Content(new StackPanel().Orientation(Orientation.Horizontal).Spacing(8).Children(
                         new Icon().Size(18).VerticalAlignment(VerticalAlignment.Center).BindKind(_vm, v => v.ThemeToggleIcon),
                         new TextBlock().VerticalAlignment(VerticalAlignment.Center).BindText(_vm, v => v.ThemeToggleText)))));

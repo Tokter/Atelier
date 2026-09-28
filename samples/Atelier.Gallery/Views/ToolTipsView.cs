@@ -25,7 +25,7 @@ public class ToolTipsView : GalleryPage
             new Switch("Show on keyboard focus").ShowThumbIcon()
                 .BindIsChecked(_vm, v => v.ShowOnKeyboardFocus, (v, on) => v.ShowOnKeyboardFocus = on)
                 .ToolTip("A global setting: focusing an element with Tab shows its tooltip"),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         Sections(PlainSection(), RichSection(), PlacementSection());
 
@@ -111,7 +111,7 @@ public class ToolTipsView : GalleryPage
                     .HorizontalAlignment(HorizontalAlignment.Left)
                     .ToolTip(ProfileCard()),
                 Ui.Row(
-                    new Button("Change status").Variant(ButtonVariant.Outlined).Command(_vm.NextStatusCommand),
+                    new Button().Variant(ButtonVariant.Outlined).Command(_vm.NextStatusCommand),
                     Ui.Readout(_vm, v => $"Status = {v.Status}")),
                 Ui.Note("A tooltip gets its element's DataContext, so its content can bind to the same view model."))),
 

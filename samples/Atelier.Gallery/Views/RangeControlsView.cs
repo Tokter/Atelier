@@ -21,7 +21,7 @@ public class RangeControlsView : GalleryPage
 
         Settings(
             new Switch("Controls enabled").ShowThumbIcon().BindIsChecked(_vm, v => v.ControlsEnabled, (v, on) => v.ControlsEnabled = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         SectionsPanel.BindIsEnabled(_vm, v => v.ControlsEnabled);
 
@@ -135,8 +135,8 @@ public class RangeControlsView : GalleryPage
                 new ProgressBar().BindValue(_vm, v => v.DownloadProgress),
                 Ui.Readout(_vm, v => v.DownloadStatus),
                 Ui.Row(
-                    Ui.IconButton(MaterialIconKind.Download, "Download").Command(_vm.StartDownloadCommand),
-                    Ui.IconButton(MaterialIconKind.Cancel, "Cancel", ButtonVariant.Outlined).Command(_vm.CancelDownloadCommand)),
+                    new Button().Command(_vm.StartDownloadCommand),
+                    new Button().Variant(ButtonVariant.Outlined).Command(_vm.CancelDownloadCommand)),
                 Ui.Note("A DispatcherTimer advances the value on the UI thread; the commands enable each other.")),
 
             Ui.Demo("Disabled",

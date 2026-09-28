@@ -40,7 +40,7 @@ public class TreeViewView : GalleryPage
 
         Settings(
             new Switch("Controls enabled").ShowThumbIcon().BindIsChecked(_vm, v => v.ControlsEnabled, (v, on) => v.ControlsEnabled = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         SectionsPanel.BindIsEnabled(_vm, v => v.ControlsEnabled);
 
@@ -60,13 +60,13 @@ public class TreeViewView : GalleryPage
                 Ui.Demo("Change the tree",
                     Ui.Row(
                         new TextBox().Placeholder("Name").Width(200).BindText(_vm, v => v.NewItemName, (v, text) => v.NewItemName = text),
-                        Ui.IconButton(MaterialIconKind.Add, "Add", ButtonVariant.Tonal).Command(_vm.AddItemCommand),
-                        Ui.IconButton(MaterialIconKind.Delete, "Remove", ButtonVariant.Outlined).Command(_vm.RemoveSelectedCommand)),
+                        new Button().Variant(ButtonVariant.Tonal).Command(_vm.AddItemCommand),
+                        new Button().Variant(ButtonVariant.Outlined).Command(_vm.RemoveSelectedCommand)),
                     Ui.Note("Names without an extension become folders. New items go into the selected folder."),
                     Ui.Row(
                         Ui.IconButton(MaterialIconKind.UnfoldMore, "Expand all", ButtonVariant.Text).OnClick(() => _explorer.ExpandAll()),
                         Ui.IconButton(MaterialIconKind.UnfoldLess, "Collapse all", ButtonVariant.Text).OnClick(() => _explorer.CollapseAll()),
-                        new Button("Restore sample").Variant(ButtonVariant.Text).Command(_vm.ResetTreeCommand))),
+                        new Button().Variant(ButtonVariant.Text).Command(_vm.ResetTreeCommand))),
                 Ui.Demo("Appearance",
                     Ui.Columns(200,
                         Ui.SliderSetting("Indent", _vm, v => v.IndentSize, (v, value) => v.IndentSize = value, 8, 40, "0 px", 1),

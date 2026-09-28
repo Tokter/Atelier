@@ -1,5 +1,6 @@
 using Atelier.Controls;
 using Atelier.Core.Primitives;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -52,6 +53,7 @@ public partial class ColorPickerViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("Reset", "ColorPicker", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         PickedColor = DefaultColor;

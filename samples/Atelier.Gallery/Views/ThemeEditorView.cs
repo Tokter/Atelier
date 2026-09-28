@@ -24,7 +24,7 @@ public class ThemeEditorView : GalleryPage
 
         Settings(
             new Switch("Dark mode").ShowThumbIcon().BindIsChecked(_vm, v => v.IsDark, (v, on) => v.IsDark = on),
-            new Button("Reset to baseline").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand),
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand),
             Ui.Readout(_vm, v => v.Status));
 
         Sections(AccentSection(), RolesSection(), CodeSection(), PreviewSection());
@@ -182,9 +182,9 @@ public class ThemeEditorView : GalleryPage
                     .Themed(TextBlock.ForegroundProperty, c => c.OnSurfaceVariant)
                     .Bind(TextBlock.TextProperty, _vm, v => v.SeedCode)),
             Ui.Row(
-                Ui.IconButton(MaterialIconKind.ContentCopy, "Copy this code", ButtonVariant.Tonal).Command(_vm.CopySeedCodeCommand),
-                Ui.IconButton(MaterialIconKind.ContentCopy, "Copy the light scheme", ButtonVariant.Outlined).Command(_vm.CopyLightCommand),
-                Ui.IconButton(MaterialIconKind.ContentCopy, "Copy the dark scheme", ButtonVariant.Outlined).Command(_vm.CopyDarkCommand))));
+                new Button().Variant(ButtonVariant.Tonal).Command(_vm.CopySeedCodeCommand),
+                new Button().Variant(ButtonVariant.Outlined).Command(_vm.CopyLightCommand),
+                new Button().Variant(ButtonVariant.Outlined).Command(_vm.CopyDarkCommand))));
 
     private UIElement PreviewSection() => Ui.Section("Preview",
         "A few controls in the current theme; every other page of the gallery shows it too.",

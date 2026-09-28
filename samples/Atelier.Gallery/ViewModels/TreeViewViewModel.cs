@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -120,6 +121,7 @@ public partial class TreeViewViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("AddItem", "TreeView", Label = "Add", Icon = MaterialIcons.Add, Description = "Add the named file or folder to the selected folder")]
     private void AddItem()
     {
         var node = TreeItemNode.FromName(string.IsNullOrWhiteSpace(NewItemName) ? "NewFolder" : NewItemName.Trim());
@@ -140,6 +142,7 @@ public partial class TreeViewViewModel : PageViewModel
     }
 
     [RelayCommand(CanExecute = nameof(CanRemove))]
+    [property: Command("RemoveSelected", "TreeView", Label = "Remove", Icon = MaterialIcons.Delete, Description = "Remove the selected item")]
     private void RemoveSelected()
     {
         if (SelectedNode is not { } node)
@@ -164,6 +167,7 @@ public partial class TreeViewViewModel : PageViewModel
     private bool CanRemove() => SelectedNode != null;
 
     [RelayCommand]
+    [property: Command("ResetTree", "TreeView", Label = "Restore sample", Description = "Bring back the sample tree")]
     private void ResetTree()
     {
         RootNodes.Clear();
@@ -197,6 +201,7 @@ public partial class TreeViewViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("Reset", "TreeView", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         ControlsEnabled = true;

@@ -23,7 +23,7 @@ public class TextBoxesView : GalleryPage
         Settings(
             new Switch("Controls enabled").ShowThumbIcon().BindIsChecked(_vm, v => v.ControlsEnabled, (v, on) => v.ControlsEnabled = on),
             new Switch("Filled variant").BindIsChecked(_vm, v => v.UseFilledVariant, (v, on) => v.UseFilledVariant = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         SectionsPanel.BindIsEnabled(_vm, v => v.ControlsEnabled);
 
@@ -92,7 +92,7 @@ public class TextBoxesView : GalleryPage
             Field().Label("Password").LeadingIconKind(MaterialIconKind.Key).PasswordChar().SupportingText("At least 8 characters")
                 .BindText(_vm.Form, f => f.Password, (f, text) => f.Password = text)),
         Ui.Row(
-            new Button("Create account").Command(_vm.SubmitCommand),
+            new Button().Command(_vm.SubmitCommand),
             Ui.Readout(_vm, v => v.SubmitResult)),
         Ui.Code("[ObservableProperty, NotifyDataErrorInfo]\n[MinLength(8, ErrorMessage = \"Use at least 8 characters\")]\n" +
                 "private string _password;\n\n" +

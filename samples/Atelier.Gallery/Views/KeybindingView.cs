@@ -17,9 +17,10 @@ public class KeybindingView : GalleryPage
 
     public KeybindingView(KeybindingViewModel viewModel)
         : base(MaterialIconKind.Keyboard, "Keybindings",
-            "Keyboard shortcuts are declared with [Keybinding] attributes and registered at compile time by a source " +
-            "generator. A KeybindingHandler runs the shortcuts of its group while the focus is inside it; keys it doesn't " +
-            "handle bubble up to handlers further out, such as the window's \"Global\" handler.")
+            "Commands are declared with [Command] (or [Keybinding]) attributes: a name, label, icon, description and default " +
+            "shortcut, registered at compile time by a source generator. Buttons and menu items bound to a command show its " +
+            "label, icon, description and shortcut. A KeybindingHandler runs the shortcuts of its group while the focus is " +
+            "inside it; keys it doesn't handle bubble up to handlers further out, such as the window's \"Global\" handler.")
     {
         _vm = viewModel;
 
@@ -27,22 +28,29 @@ public class KeybindingView : GalleryPage
         DataContext = _vm;
 
         Settings(
-            new Button("Reset demos (F5)").Variant(ButtonVariant.Tonal).Command(_vm.ResetDemosCommand),
-            new Button("Clear log (Ctrl+Shift+L)").Variant(ButtonVariant.Text).Command(_vm.ClearLogCommand));
+            // Label, icon and tooltip (with F5 and Ctrl+Shift+L) come from the commands.
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetDemosCommand),
+            new Button().Variant(ButtonVariant.Text).Command(_vm.ClearLogCommand));
 
         Sections(ScopesSection(), ProbeSection(), CatalogSection());
     }
 
     private UIElement ScopesSection() => Ui.Section("Scoped keybindings",
         "Each demo is wrapped in a KeybindingHandler with its own group. Click into a demo and use its shortcuts; F1 and " +
-        "F5 still work there because unhandled keys bubble up to the Global handler.",
+        "F5 still work there because unhandled keys bubble up to the Global handler. The menu, toolbar and player " +
+        "buttons only name their command: labels, icons, tooltips and shortcuts come from the [Command] declarations. " +
+        "The upper and lower case icons are SVG: a whole outline document and plain path data.",
         Ui.Columns(360, EditorDemo(), PlayerDemo()),
         Ui.Demo("Executed keybindings",
             LogView(),
             Ui.Note("Every command writes a line here. F1 comes from a command class, the others from [RelayCommand] methods.")),
         Ui.Code("[RelayCommand]\n" +
-                "[property: Keybinding(\"SaveDocument\", \"Editor\", \"Ctrl+S\")]\n" +
-                "private void SaveDocument() { ... }\n\n" +
+                "[property: Command(\"ToggleBold\", \"Editor\", Label = \"Bold\", Icon = MaterialIcons.FormatBold,\n" +
+                "    Description = \"Make the text bold, or normal again\", DefaultKeybinding = \"Ctrl+B\")]\n" +
+                "private void ToggleBold() { ... }\n\n" +
+                "// Icon: MaterialIcons.X (an icon name, with code completion), SVG path data or an <svg> document\n" +
+                "new Button().CommandDisplay(CommandDisplay.Icon).Command(editor.ToggleBoldCommand)\n" +
+                "new MenuItem().Command(editor.ToggleBoldCommand)\n\n" +
                 "new KeybindingHandler(\"Editor\", editorContent).DataContext(editorViewModel)"));
 
     private UIElement EditorDemo()
@@ -52,6 +60,8 @@ public class KeybindingView : GalleryPage
             .Group("Editor")
             .DataContext(editor)
             .Content(Ui.Stack(
+                EditorMenu(editor),
+                EditorToolbar(editor),
                 new TextBox()
                     .Label("Document")
                     .BindText(editor, e => e.DocumentText, (e, text) => e.DocumentText = text),
@@ -74,6 +84,34 @@ public class KeybindingView : GalleryPage
             Ui.SliderSetting("Chord timeout (s)", _vm, v => v.ChordTimeoutSeconds, (v, s) => v.ChordTimeoutSeconds = s, 1, 10, "0", 1));
     }
 
+    // Menu items without a header or icon show their command's label and icon, with its shortcut on the right.
+    private static Menu EditorMenu(EditorScopeViewModel editor) => new Menu()
+        .IsMainMenu(false)
+        .KeybindingGroup("Editor")
+        .Items(
+            new MenuItem("_Edit").Items(
+                new MenuItem().Command(editor.SaveDocumentCommand),
+                new Separator(),
+                new MenuItem().Command(editor.UpperCaseCommand),
+                new MenuItem().Command(editor.LowerCaseCommand),
+                new MenuItem().Command(editor.ClearDocumentCommand)),
+            new MenuItem("F_ormat").Items(
+                new MenuItem().Command(editor.ToggleBoldCommand),
+                new MenuItem().Command(editor.ToggleItalicCommand)));
+
+    // Icon buttons: the command gives the icon, and the tooltip its label, description and shortcut.
+    private static StackPanel EditorToolbar(EditorScopeViewModel editor) =>
+        new StackPanel().Orientation(Orientation.Horizontal).Spacing(4).Children(
+            ToolButton(editor.SaveDocumentCommand),
+            ToolButton(editor.ToggleBoldCommand),
+            ToolButton(editor.ToggleItalicCommand),
+            ToolButton(editor.UpperCaseCommand),
+            ToolButton(editor.LowerCaseCommand),
+            new Button().Variant(ButtonVariant.Text).Command(editor.ClearDocumentCommand));
+
+    private static Button ToolButton(System.Windows.Input.ICommand command) =>
+        new Button().Variant(ButtonVariant.Text).CommandDisplay(CommandDisplay.Icon).Padding(6).MinWidth(32).Command(command);
+
     private UIElement PlayerDemo()
     {
         var player = _vm.Player;
@@ -94,6 +132,12 @@ public class KeybindingView : GalleryPage
                         .VerticalAlignment(VerticalAlignment.Center)
                         .BindKind(player, p => p.IsMuted ? MaterialIconKind.VolumeOff : MaterialIconKind.VolumeUp)),
             new ProgressBar().BindValue(player, p => p.Progress),
+            Ui.Row(
+                ToolButton(player.SeekBackCommand),
+                ToolButton(player.TogglePlayCommand),
+                ToolButton(player.SeekForwardCommand),
+                ToolButton(player.ResetTrackCommand),
+                ToolButton(player.ToggleMuteCommand)),
             new TextBlock().BodySmall().Muted().BindText(player, p => p.PositionDisplay));
 
         var frame = FocusFrame(content);
@@ -132,19 +176,26 @@ public class KeybindingView : GalleryPage
             .ToList();
 
         var table = new Grid()
-            .Columns(GridLength.Auto, GridLength.Auto, GridLength.Star)
+            .Columns(GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Star)
             .Spacing(32, 10)
             .Rows(Enumerable.Repeat(GridLength.Auto, bindings.Count + 1).ToArray());
 
         table.Add(new TextBlock("Group").LabelLarge().Muted());
         table.Add(new TextBlock("Command").LabelLarge().Muted().Column(1));
         table.Add(new TextBlock("Gesture").LabelLarge().Muted().Column(2));
+        table.Add(new TextBlock("Description").LabelLarge().Muted().Column(3));
         for (int i = 0; i < bindings.Count; i++)
         {
             var binding = bindings[i];
-            table.Add(new TextBlock(binding.Group).Row(i + 1));
-            table.Add(new TextBlock(binding.Name).Row(i + 1).Column(1));
-            table.Add(KeyCaps(binding.Keybinding).Row(i + 1).Column(2));
+            table.Add(new TextBlock(binding.Group).Row(i + 1).VerticalAlignment(VerticalAlignment.Center));
+            table.Add(new StackPanel().Orientation(Orientation.Horizontal).Spacing(10).Row(i + 1).Column(1).Children(
+                Icon.FromSource(binding.Icon, 20).VerticalAlignment(VerticalAlignment.Center),
+                new StackPanel().VerticalAlignment(VerticalAlignment.Center).Children(
+                    new TextBlock(AccessText.Parse(binding.Label, out _)),
+                    new TextBlock(binding.Name).BodySmall().Muted())));
+            table.Add(KeyCaps(binding.Keybinding).Row(i + 1).Column(2).VerticalAlignment(VerticalAlignment.Center));
+            table.Add(new TextBlock(binding.Description).BodyMedium().Muted().TextWrapping()
+                .Row(i + 1).Column(3).VerticalAlignment(VerticalAlignment.Center));
         }
 
         var conflicts = KeybindingManager.GetConflicts();
@@ -153,8 +204,9 @@ public class KeybindingView : GalleryPage
             : "Conflicts: " + string.Join("; ", conflicts.Select(c =>
                 $"{c.First.Name} and {c.Second.Name} in {c.Group}{(c.IsPrefix ? " (one is a prefix of the other)" : " (same gesture)")}"));
 
-        return Ui.Section("Registered keybindings",
-            "All keybindings the source generator registered, read from KeybindingManager.RegisteredKeybindings. " +
+        return Ui.Section("Registered commands",
+            "All commands the source generator registered, with their icon, label, name, shortcut and description, read " +
+            "from KeybindingManager.RegisteredKeybindings. " +
             "GetConflicts reports gestures bound twice within a group.",
             table,
             Ui.Note(conflictText));

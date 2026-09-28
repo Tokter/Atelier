@@ -19,7 +19,7 @@ public class CardsView : GalleryPage
     {
         _vm = viewModel;
 
-        Settings(new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+        Settings(new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         Sections(VariantsSection(), CustomizationSection(), MediaSection(), InteractiveSection(), PlaygroundSection(), BorderSection());
     }
@@ -115,7 +115,7 @@ public class CardsView : GalleryPage
                     new TextBlock("Mountain cabin").TitleMedium(),
                     new TextBlock("Two nights, breakfast included. Free cancellation until Friday.").BodyMedium().Muted().TextWrapping(),
                     Ui.Row(
-                        new Button("Book").Command(_vm.CardClickCommand),
+                        new Button().Command(_vm.CardClickCommand),
                         new Button()
                             .Variant(ButtonVariant.Text)
                             .Command(_vm.ToggleFavoriteCommand)

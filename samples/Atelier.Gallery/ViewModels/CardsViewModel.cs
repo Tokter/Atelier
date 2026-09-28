@@ -1,4 +1,5 @@
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -36,12 +37,15 @@ public partial class CardsViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("Book", "Cards", Description = "Book the cabin")]
     private void CardClick() => CardClicks++;
 
     [RelayCommand]
+    [property: Command("ToggleFavorite", "Cards", Label = "Favorite", Icon = MaterialIcons.Favorite, Description = "Add the cabin to your favorites, or remove it")]
     private void ToggleFavorite() => IsFavorite = !IsFavorite;
 
     [RelayCommand]
+    [property: Command("Reset", "Cards", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         Variant = CardVariant.Elevated;

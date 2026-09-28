@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -78,6 +79,7 @@ public partial class TextBoxesViewModel : PageViewModel
     public string BioCounter => $"{Bio.Length} / {BioMaxLength}";
 
     [RelayCommand]
+    [property: Command("Submit", "TextFields", Label = "Create account", Description = "Validate the form and show the result")]
     private void Submit()
     {
         Form.Validate();
@@ -85,6 +87,7 @@ public partial class TextBoxesViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("Reset", "TextFields", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         ControlsEnabled = true;

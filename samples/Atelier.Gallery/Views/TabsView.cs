@@ -23,7 +23,7 @@ public class TabsView : GalleryPage
             new Switch("Closeable").ShowThumbIcon().BindIsChecked(_vm, v => v.Closeable, (v, on) => v.Closeable = on),
             new Switch("Add button").ShowThumbIcon().BindIsChecked(_vm, v => v.ShowAddButton, (v, on) => v.ShowAddButton = on),
             new Switch("Reorder").ShowThumbIcon().BindIsChecked(_vm, v => v.CanReorder, (v, on) => v.CanReorder = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         Sections(MaterialSection(), BrowserSection());
     }

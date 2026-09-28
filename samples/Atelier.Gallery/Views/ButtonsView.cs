@@ -25,7 +25,7 @@ public class ButtonsView : GalleryPage
 
         Settings(
             new Switch("Controls enabled").ShowThumbIcon().BindIsChecked(_vm, v => v.ControlsEnabled, (v, on) => v.ControlsEnabled = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         SectionsPanel.BindIsEnabled(_vm, v => v.ControlsEnabled);
 
@@ -60,14 +60,14 @@ public class ButtonsView : GalleryPage
 
     private UIElement CommandsSection() => Ui.Section("Commands",
         "A button runs its Command when clicked and is disabled while the command can't execute. The CommandParameter is " +
-        "passed to the command.",
+        "passed to the command. Without content of its own, a button shows the icon and label of its command's [Command] " +
+        "declaration, and its tooltip shows the description (hover the plus and minus buttons).",
         Ui.Columns(320,
             Ui.Demo("CanExecute",
                 Ui.Row(
-                    IconOnly(MaterialIconKind.Remove, ButtonVariant.Outlined).Command(_vm.DecrementCommand)
-                        .ToolTip("Decrease (disabled at 0)").ToolTipShowOnDisabled(),
+                    CommandIcon(ButtonVariant.Outlined).Command(_vm.DecrementCommand).ToolTipShowOnDisabled(),
                     new TextBlock().TitleLarge().MinWidth(40).BindText(_vm, v => v.Count.ToString()),
-                    IconOnly(MaterialIconKind.Add, ButtonVariant.Filled).Command(_vm.IncrementCommand).ToolTip("Increase")),
+                    CommandIcon(ButtonVariant.Filled).Command(_vm.IncrementCommand)),
                 Ui.Note("The minus button disables itself at 0: the command's CanExecute returns false.")),
             Ui.Demo("CommandParameter",
                 Ui.Row(
@@ -75,7 +75,12 @@ public class ButtonsView : GalleryPage
                     new Button("Green").Variant(ButtonVariant.Tonal).Command(_vm.ChooseCommand, "Green"),
                     new Button("Blue").Variant(ButtonVariant.Tonal).Command(_vm.ChooseCommand, "Blue")),
                 Ui.Readout(_vm, v => v.LastParameter))),
-        Ui.Code("new Button(\"Blue\").Command(vm.ChooseCommand, \"Blue\")"));
+        Ui.Code("[RelayCommand(CanExecute = nameof(CanDecrement))]\n" +
+                "[property: Command(\"Decrement\", \"Buttons\", Label = \"Decrease\", Icon = MaterialIcons.Remove,\n" +
+                "    Description = \"Decrease the count (disabled at 0)\")]\n" +
+                "private void Decrement() => Count--;\n\n" +
+                "new Button().CommandDisplay(CommandDisplay.Icon).Command(vm.DecrementCommand)\n" +
+                "new Button(\"Blue\").Command(vm.ChooseCommand, \"Blue\")"));
 
     private UIElement RepeatAndClickModeSection() => Ui.Section("Repeat buttons and click modes",
         "A RepeatButton clicks repeatedly while held, after a delay. ClickMode sets when a click happens: on release (the " +
@@ -83,12 +88,10 @@ public class ButtonsView : GalleryPage
         Ui.Columns(320,
             Ui.Demo("Hold to repeat",
                 Ui.Row(
-                    new RepeatButton().Variant(ButtonVariant.Outlined).Padding(6).MinWidth(32)
-                        .Content(new Icon(MaterialIconKind.Remove, 20))
+                    new RepeatButton().Variant(ButtonVariant.Outlined).Padding(6).MinWidth(32).CommandDisplay(CommandDisplay.Icon)
                         .Command(_vm.RepeatDownCommand),
                     new ProgressBar().Width(160).BindValue(_vm, v => v.RepeatValue),
-                    new RepeatButton().Padding(6).MinWidth(32)
-                        .Content(new Icon(MaterialIconKind.Add, 20))
+                    new RepeatButton().Padding(6).MinWidth(32).CommandDisplay(CommandDisplay.Icon)
                         .Delay(TimeSpan.FromMilliseconds(300))
                         .Interval(TimeSpan.FromMilliseconds(20))
                         .Command(_vm.RepeatUpCommand),
@@ -145,6 +148,10 @@ public class ButtonsView : GalleryPage
             .ToolTip($"Align {alignment.ToString().ToLowerInvariant()}")
             .BindIsChecked(_vm, v => v.Alignment == alignment)
             .Command(_vm.SelectAlignmentCommand, alignment);
+
+    // An icon-only button for a command: the icon and the tooltip come from its [Command] declaration.
+    private static Button CommandIcon(ButtonVariant variant) =>
+        new Button().Variant(variant).Padding(6).MinWidth(32).CommandDisplay(CommandDisplay.Icon);
 
     // Icon-only buttons are square-ish: less padding than labeled buttons.
     private static Button IconOnly(MaterialIconKind icon, ButtonVariant variant) =>

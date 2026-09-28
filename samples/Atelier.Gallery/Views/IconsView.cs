@@ -38,8 +38,8 @@ public class IconsView : GalleryPage
         _vm = viewModel;
 
         Settings(
-            new Button("Toggle filled").Variant(ButtonVariant.Tonal).Command(_vm.ToggleFilledCommand),
-            new Button("Reset").Variant(ButtonVariant.Outlined).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ToggleFilledCommand),
+            new Button().Variant(ButtonVariant.Outlined).Command(_vm.ResetCommand));
 
         Sections(PlaygroundSection(), AxesSection(), SizeAndColorSection(), CustomGeometrySection(), CatalogSection(), ImageSection());
 
@@ -222,11 +222,11 @@ public class IconsView : GalleryPage
                 .LeadingIconKind(MaterialIconKind.Search)
                 .Placeholder("Search icons, e.g. arrow, cloud, person")
                 .BindText(_vm, v => v.SearchText, (v, text) => v.SearchText = text),
-            new Button("Clear").Variant(ButtonVariant.Outlined).Column(1).VerticalAlignment(VerticalAlignment.Center)
+            new Button().Variant(ButtonVariant.Outlined).Column(1).VerticalAlignment(VerticalAlignment.Center)
                 .Command(_vm.ClearSearchCommand)),
         new TextBlock().BodySmall().Muted().BindText(_vm, v => v.SearchStatus),
         _catalog,
-        new Button("Show more").Variant(ButtonVariant.Tonal).HorizontalAlignment(HorizontalAlignment.Center)
+        new Button().Variant(ButtonVariant.Tonal).HorizontalAlignment(HorizontalAlignment.Center)
             .Command(_vm.ShowMoreCommand)
             .BindIsVisible(_vm, v => v.HasMore));
 

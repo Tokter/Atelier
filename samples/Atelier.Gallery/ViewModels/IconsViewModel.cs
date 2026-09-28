@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -120,6 +121,7 @@ public partial class IconsViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("ShowMore", "Icons", Label = "Show more", Icon = MaterialIcons.ExpandMore, Description = "Show the next icons of the catalog")]
     private void ShowMore()
     {
         DisplayLimit += PageSize;
@@ -127,15 +129,19 @@ public partial class IconsViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("ClearSearch", "Icons", Label = "Clear", Description = "Clear the search and show all icons")]
     private void ClearSearch() => SearchText = string.Empty;
 
     [RelayCommand]
+    [property: Command("SelectIcon", "Icons", Label = "Select icon", Description = "Load the icon into the playground")]
     private void SelectIcon(MaterialIconKind kind) => Kind = kind;
 
     [RelayCommand]
+    [property: Command("ToggleFilled", "Icons", Label = "Toggle filled", Icon = MaterialIcons.FormatColorFill, Description = "Switch the playground icon between outlined and filled")]
     private void ToggleFilled() => Fill = Fill >= 0.5f ? 0f : 1f;
 
     [RelayCommand]
+    [property: Command("Reset", "Icons", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         Kind = MaterialIconKind.Favorite;

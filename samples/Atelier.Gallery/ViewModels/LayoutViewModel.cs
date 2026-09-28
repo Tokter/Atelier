@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Atelier.Controls;
 using Atelier.Core.Primitives;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -122,6 +123,7 @@ public partial class LayoutViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("AddStackItem", "Layout", Label = "Add item", Icon = MaterialIcons.Add, Description = "Add a child to the stack panel")]
     private void AddStackItem()
     {
         if (StackItems.Count < 8)
@@ -131,6 +133,7 @@ public partial class LayoutViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("RemoveStackItem", "Layout", Label = "Remove item", Icon = MaterialIcons.Remove, Description = "Remove the last child of the stack panel")]
     private void RemoveStackItem()
     {
         if (StackItems.Count > 1)
@@ -140,6 +143,7 @@ public partial class LayoutViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("Reset", "Layout", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         SplitterShowsPreview = false;

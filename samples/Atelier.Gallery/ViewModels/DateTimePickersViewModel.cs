@@ -1,5 +1,6 @@
 using System;
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -53,6 +54,7 @@ public partial class DateTimePickersViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("Reset", "DateTimePickers", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         DockedDate = null;

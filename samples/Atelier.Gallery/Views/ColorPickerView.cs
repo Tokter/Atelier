@@ -22,7 +22,7 @@ public class ColorPickerView : GalleryPage
 
         Settings(
             new Switch("Alpha slider").ShowThumbIcon().BindIsChecked(_vm, v => v.IsAlphaEnabled, (v, on) => v.IsAlphaEnabled = on),
-            new Button("Reset").Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
+            new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
 
         Sections(PickerSection(), ToolTipSection(), PartsSection());
     }

@@ -1,5 +1,6 @@
 using System;
 using Atelier.Controls;
+using Atelier.Core.Keybinding;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -47,6 +48,7 @@ public partial class ToolTipsViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("NextStatus", "ToolTips", Label = "Change status", Description = "Cycle the status; the open tooltip follows its binding")]
     private void NextStatus()
     {
         _statusIndex = (_statusIndex + 1) % Statuses.Length;
@@ -54,9 +56,11 @@ public partial class ToolTipsViewModel : PageViewModel
     }
 
     [RelayCommand]
+    [property: Command("RunAction", "ToolTips", Label = "Run action", Description = "Log the action this button stands for")]
     private void RunAction(string action) => LastAction = $"{action} clicked at {DateTime.Now:HH:mm:ss}";
 
     [RelayCommand]
+    [property: Command("Reset", "ToolTips", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         ShowDelayMs = 500;
