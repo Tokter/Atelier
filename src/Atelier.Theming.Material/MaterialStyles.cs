@@ -126,6 +126,26 @@ public static class MaterialStyles
                 .Set(Control.FontSizeProperty, MaterialTypescale.BodyMedium.Size)
                 .Set(Popup.ElevationProperty, MaterialElevation.Level2),
 
+            // Date and time pickers: label-large on-surface-variant titles, headline-large headlines, an outline-variant
+            // divider, on-surface-variant header buttons, and the docked calendar as a large (16 px) surface-container-high
+            // popup at level 3.
+            new Style(PickerStyleKeys.Title, typeof(TextBlock))
+                .Set(TextBlock.FontSizeProperty, MaterialTypescale.LabelLarge.Size)
+                .Set(TextBlock.FontWeightProperty, MaterialTypescale.LabelLarge.Weight)
+                .Set(TextBlock.ForegroundProperty, colors.OnSurfaceVariant),
+            new Style(PickerStyleKeys.Headline, typeof(TextBlock))
+                .Set(TextBlock.FontSizeProperty, MaterialTypescale.HeadlineLarge.Size)
+                .Set(TextBlock.ForegroundProperty, colors.OnSurface),
+            new Style(PickerStyleKeys.Divider, typeof(Atelier.Layout.Border))
+                .Set(Atelier.Layout.Border.BackgroundProperty, colors.OutlineVariant),
+            new Style(PickerStyleKeys.HeaderButton, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
+            new Style(PickerStyleKeys.DockedPopup, typeof(Popup))
+                .Set(Control.CornerRadiusProperty, new CornerRadius(MaterialShape.Large))
+                .Set(Popup.ElevationProperty, MaterialElevation.Level3)
+                .Set(Control.BackgroundProperty, colors.SurfaceContainerHigh)
+                .Set(Popup.BorderThicknessProperty, Thickness.Zero),
+
             // Dialogs: extra-large (28 px) corners, 24 px padding, elevation level 3, no outline.
             new Style(typeof(Dialog))
                 .Set(Control.CornerRadiusProperty, new CornerRadius(MaterialShape.ExtraLarge))

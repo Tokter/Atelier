@@ -102,6 +102,14 @@ public class TextBox : Control
             options: PropertyOptions.AffectsMeasure | PropertyOptions.AffectsRender
         );
 
+    /// <summary>Identifies the <see cref="TrailingIconKind"/> property.</summary>
+    public static readonly BindableProperty<MaterialIconKind> TrailingIconKindProperty =
+        BindableProperty.Register<TextBox, MaterialIconKind>(
+            nameof(TrailingIconKind),
+            MaterialIconKind.None,
+            options: PropertyOptions.AffectsMeasure | PropertyOptions.AffectsRender
+        );
+
     /// <summary>Identifies the <see cref="SupportingText"/> property.</summary>
     public static readonly BindableProperty<string> SupportingTextProperty =
         BindableProperty.Register<TextBox, string>(
@@ -276,6 +284,58 @@ public class TextBox : Control
     public bool HasLeadingIcon => LeadingIconKind != MaterialIconKind.None;
 
     /// <summary>
+    /// Gets or sets the icon button shown after the text, or <see cref="MaterialIconKind.None"/> (the default) for none.
+    /// Clicking it raises <see cref="TrailingIconClick"/> (for example to open a picker or clear the text) and doesn't
+    /// move the caret.
+    /// </summary>
+    public MaterialIconKind TrailingIconKind
+    {
+        get => GetValue(TrailingIconKindProperty);
+        set => SetValue(TrailingIconKindProperty, value);
+    }
+
+    /// <summary>Gets whether a trailing icon is set.</summary>
+    public bool HasTrailingIcon => TrailingIconKind != MaterialIconKind.None;
+
+    /// <summary>Gets whether the pointer is over the trailing icon.</summary>
+    public bool IsTrailingIconHovered { get; private set; }
+
+    /// <summary>Gets whether the trailing icon is being pressed.</summary>
+    public bool IsTrailingIconPressed { get; private set; }
+
+    /// <summary>Occurs when the trailing icon is clicked.</summary>
+    public event EventHandler? TrailingIconClick;
+
+    /// <summary>The size of the trailing icon's touch target and state layer, centered 24 px from the right edge.</summary>
+    public const float TrailingIconTargetSize = 40f;
+
+    /// <summary>
+    /// Gets the bounds of the trailing icon's 40×40 target in the element's coordinates: centered vertically in the field
+    /// (above the supporting text) with its center 24 px from the right edge. Empty without a trailing icon.
+    /// </summary>
+    public Rect GetTrailingIconBounds()
+    {
+        if (!HasTrailingIcon) return Rect.Zero;
+        float fieldHeight = Math.Max(0f, Bounds.Height - (HasSupportingText ? 20f : 0f));
+        float half = TrailingIconTargetSize * 0.5f;
+        return new Rect(Bounds.Width - 24f - half, fieldHeight * 0.5f - half, TrailingIconTargetSize, TrailingIconTargetSize);
+    }
+
+    /// <summary>Raises <see cref="TrailingIconClick"/>, as a click on the trailing icon does.</summary>
+    protected virtual void OnTrailingIconClick() => TrailingIconClick?.Invoke(this, EventArgs.Empty);
+
+    private void SetTrailingIconHovered(bool hovered)
+    {
+        if (IsTrailingIconHovered == hovered) return;
+        IsTrailingIconHovered = hovered;
+        InvalidateVisual();
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>The arrow over the trailing icon, otherwise the I-beam (or the set cursor).</remarks>
+    protected override CursorType GetCursor() => IsTrailingIconHovered ? CursorType.Arrow : base.GetCursor();
+
+    /// <summary>
     /// Gets whether a supporting line is shown below the field: the <see cref="SupportingText"/>, or the first validation
     /// error while a binding reports one (see <see cref="Validation"/>).
     /// </summary>
@@ -320,10 +380,10 @@ public class TextBox : Control
     /// <summary>Gets the x coordinate where the text viewport starts: the left padding plus room for a leading icon.</summary>
     public float GetTextContentStartX() => Padding.Left + (HasLeadingIcon ? 36f : 0f);
 
-    /// <summary>Gets the width of the area the text is shown in (the bounds minus padding and leading icon).</summary>
+    /// <summary>Gets the width of the area the text is shown in (the bounds minus padding and icons).</summary>
     public float GetViewportWidth()
     {
-        float right = Bounds.Width - Padding.Right;
+        float right = Bounds.Width - Padding.Right - (HasTrailingIcon ? 36f : 0f);
         float left = GetTextContentStartX();
         return Math.Max(0f, right - left);
     }
@@ -1267,6 +1327,15 @@ public class TextBox : Control
 
         base.OnPointerPressed(e);
         e.Handled = true;
+
+        if (e.Button == PointerButtons.Left && HasTrailingIcon && GetTrailingIconBounds().Contains(e.Position))
+        {
+            IsTrailingIconPressed = true;
+            CapturePointer();
+            InvalidateVisual();
+            return;
+        }
+
         Focus();
         CapturePointer();
 
@@ -1308,6 +1377,18 @@ public class TextBox : Control
     public override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
+        if (HasTrailingIcon)
+        {
+            var origin = PointToScreen(Point.Zero);
+            var local = new Point(e.ScreenPosition.X - origin.X, e.ScreenPosition.Y - origin.Y);
+            SetTrailingIconHovered(IsEnabled && GetTrailingIconBounds().Contains(local));
+        }
+
+        if (IsTrailingIconPressed)
+        {
+            return;
+        }
+
         if (IsPointerCaptured)
         {
             int idx = EstimateCaretIndex(e.Position.X - GetTextOriginX());
@@ -1322,9 +1403,43 @@ public class TextBox : Control
     public override void OnPointerReleased(PointerEventArgs e)
     {
         base.OnPointerReleased(e);
+        bool iconClicked = IsTrailingIconPressed && IsTrailingIconHovered;
+        if (IsTrailingIconPressed)
+        {
+            IsTrailingIconPressed = false;
+            InvalidateVisual();
+        }
+
         if (IsPointerCaptured)
         {
             ReleasePointerCapture();
+            InvalidateVisual();
+        }
+
+        if (iconClicked)
+        {
+            e.Handled = true;
+            OnTrailingIconClick();
+        }
+    }
+
+    /// <inheritdoc/>
+    public override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        if (!IsTrailingIconPressed)
+        {
+            SetTrailingIconHovered(false);
+        }
+    }
+
+    /// <inheritdoc/>
+    protected override void OnLostPointerCapture()
+    {
+        base.OnLostPointerCapture();
+        if (IsTrailingIconPressed)
+        {
+            IsTrailingIconPressed = false;
             InvalidateVisual();
         }
     }
@@ -1480,7 +1595,7 @@ public class TextBox : Control
             : !string.IsNullOrEmpty(Label) ? Label
             : " ";
         var textSize = TextMeasurer.Measure(displayText, FontSize, FontFamily);
-        float contentW = GetTextContentStartX() + textSize.Width + padding.Right + 4;
+        float contentW = GetTextContentStartX() + textSize.Width + padding.Right + 4 + (HasTrailingIcon ? 36f : 0f);
         bool hasSupportingText = HasSupportingText;
         if (hasSupportingText)
         {

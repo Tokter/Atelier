@@ -66,6 +66,11 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
             DrawLeadingIcon(textBox, container, enabled, ref context);
         }
 
+        if (textBox.HasTrailingIcon)
+        {
+            DrawTrailingIcon(textBox, enabled, hasError, ref context);
+        }
+
         if (textBox.HasLabel)
         {
             Color labelColor = !enabled ? MaterialDrawing.DisabledContent(colors)
@@ -171,6 +176,28 @@ public class MaterialTextBoxRenderer(MaterialColorScheme colors) : ControlRender
         float x = container.Left + LeadingIconX + (LeadingIconSize - glyphWidth) * 0.5f;
         float top = container.Top + (container.Height - LeadingIconSize) * 0.5f;
         float y = top + (LeadingIconSize - (metrics.Ascent + metrics.Descent)) * 0.5f;
+        context.DrawText(glyph, x, y, font, color);
+    }
+
+    // The trailing icon button: on-surface-variant (error while invalid), with a circular state layer on hover and press.
+    private void DrawTrailingIcon(TextBox textBox, bool enabled, bool hasError, ref DrawingContext context)
+    {
+        var target = textBox.GetTrailingIconBounds();
+        var center = new Point(target.X + target.Width * 0.5f, target.Y + target.Height * 0.5f);
+        Color color = !enabled ? MaterialDrawing.DisabledContent(colors) : hasError ? colors.Error : colors.OnSurfaceVariant;
+
+        float stateOpacity = !enabled ? 0f
+            : textBox.IsTrailingIconPressed ? MaterialState.PressedOpacity
+            : textBox.IsTrailingIconHovered ? MaterialState.HoverOpacity
+            : 0f;
+        MaterialDrawing.DrawStateLayerCircle(ref context, center, colors.OnSurfaceVariant, stateOpacity, target.Width * 0.5f);
+
+        string glyph = MaterialIconFontManager.GetGlyph(textBox.TrailingIconKind);
+        var font = context.PaintRegistry.GetFont(LeadingIconSize, MaterialIconFontManager.GetTypeface(0, 400, 0, LeadingIconSize));
+        font.GetFontMetrics(out var metrics);
+        float glyphWidth = font.MeasureText(glyph.AsSpan());
+        float x = center.X - glyphWidth * 0.5f;
+        float y = center.Y - (metrics.Ascent + metrics.Descent) * 0.5f;
         context.DrawText(glyph, x, y, font, color);
     }
 

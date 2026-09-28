@@ -48,6 +48,7 @@ internal static class Program
             .Register<ComboBoxViewModel>(vm => new ComboBoxView(vm))
             .Register<RangeControlsViewModel>(vm => new RangeControlsView(vm))
             .Register<ColorPickerViewModel>(vm => new ColorPickerView(vm))
+            .Register<DateTimePickersViewModel>(vm => new DateTimePickersView(vm))
             .Register<ListsViewModel>(vm => new ListsView(vm))
             .Register<TreeViewViewModel>(vm => new TreeViewView(vm))
             .Register<CardsViewModel>(vm => new CardsView(vm))

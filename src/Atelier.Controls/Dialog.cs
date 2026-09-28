@@ -361,6 +361,8 @@ public class Dialog : Control
         }
 
         _buttonsRow.Visibility = Buttons.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        // The gap above the buttons only while there are buttons, so custom content can bring its own actions.
+        _contentWrapper.Margin = Buttons.Count > 0 ? new Thickness(0, 0, 0, 24) : Thickness.Zero;
         InvalidateMeasure();
     }
 

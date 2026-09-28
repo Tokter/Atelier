@@ -49,6 +49,20 @@ public sealed class Validation
     public static IReadOnlyList<object> GetErrors(BindableObject element) => element.GetValue(ErrorsProperty);
 
     /// <summary>
+    /// Reports validation errors on <paramref name="element"/> from a source other than a binding, such as a control
+    /// that parses its own input; they combine with binding errors and show the same way (e.g. a text box's error state).
+    /// </summary>
+    /// <param name="element">The element the errors apply to.</param>
+    /// <param name="source">Identifies the reporter, so its errors can be replaced or cleared without touching others.</param>
+    /// <param name="errors">The current errors of <paramref name="source"/>; <c>null</c> or empty clears them.</param>
+    public static void SetErrors(BindableObject element, object source, IEnumerable<object>? errors)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(source);
+        SetBindingErrors(element, source, errors == null ? null : new List<object>(errors));
+    }
+
+    /// <summary>
     /// Records the errors reported by one binding on <paramref name="target"/> and recomputes the combined errors.
     /// </summary>
     /// <param name="target">The binding target.</param>

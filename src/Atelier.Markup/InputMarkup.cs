@@ -25,6 +25,22 @@ public static class TextBoxMarkup
     /// <summary>Sets the icon shown before the text. <see cref="MaterialIconKind.None"/> (the default) shows none.</summary>
     public static T LeadingIconKind<T>(this T textBox, MaterialIconKind iconKind) where T : TextBox => textBox.Set(TextBox.LeadingIconKindProperty, iconKind);
 
+    /// <summary>
+    /// Sets the icon button shown after the text, e.g. to clear it or open a picker; handle clicks with
+    /// <see cref="OnTrailingIconClick{T}(T, Action)"/>. <see cref="MaterialIconKind.None"/> (the default) shows none.
+    /// </summary>
+    public static T TrailingIconKind<T>(this T textBox, MaterialIconKind iconKind) where T : TextBox => textBox.Set(TextBox.TrailingIconKindProperty, iconKind);
+
+    /// <summary>Handles <see cref="TextBox.TrailingIconClick"/>, raised when the trailing icon is clicked.</summary>
+    public static T OnTrailingIconClick<T>(this T textBox, EventHandler handler) where T : TextBox
+    {
+        textBox.TrailingIconClick += handler;
+        return textBox;
+    }
+
+    /// <summary>Runs <paramref name="action"/> when the trailing icon is clicked (<see cref="TextBox.TrailingIconClick"/>).</summary>
+    public static T OnTrailingIconClick<T>(this T textBox, Action action) where T : TextBox => textBox.OnTrailingIconClick(MarkupExtensions.ToHandler(action));
+
     /// <summary>Sets the helper text shown below the field. A validation error replaces it.</summary>
     public static T SupportingText<T>(this T textBox, string? supportingText) where T : TextBox =>
         textBox.Set(TextBox.SupportingTextProperty, supportingText ?? string.Empty);
