@@ -13,6 +13,11 @@ namespace Atelier.Core.Keybinding;
 /// Registered descriptors (and the commands they hold) live until they are removed with
 /// <see cref="UnregisterKeybinding(string, string)"/> or <see cref="Clear"/>. Unregister keybindings whose commands
 /// reference short-lived objects such as views or view models.
+/// <para>
+/// Users can change a command's label, icon and shortcut (<see cref="SetCustomization"/>); a customized command is
+/// registered as a <see cref="CustomizedKeybindingDescriptor"/>, so lookups, execution and controls follow the change.
+/// <see cref="ExportCustomizations"/> and <see cref="ImportCustomizations"/> save and restore the changes.
+/// </para>
 /// </remarks>
 public static partial class KeybindingManager
 {
@@ -41,10 +46,11 @@ public static partial class KeybindingManager
             RegisteredKeybindings[keybindingDescriptor.Group] = new Dictionary<string, IKeybindingDescriptor>();
         }
 
-        RegisteredKeybindings[keybindingDescriptor.Group][keybindingDescriptor.Name] = keybindingDescriptor;
+        var registered = ApplyCustomization(keybindingDescriptor);
+        RegisteredKeybindings[keybindingDescriptor.Group][keybindingDescriptor.Name] = registered;
         OnKeybindingsChanged();
-        WarmGestureCache(keybindingDescriptor.Keybinding);
-        ReportConflicts(keybindingDescriptor);
+        WarmGestureCache(registered.Keybinding);
+        ReportConflicts(registered);
     }
 
     /// <summary>
@@ -62,10 +68,11 @@ public static partial class KeybindingManager
             RegisteredKeybindings[keybindingDescriptor.Group] = groupKeybindings;
         }
 
-        groupKeybindings[keybindingDescriptor.Name] = keybindingDescriptor;
+        var registered = ApplyCustomization(keybindingDescriptor);
+        groupKeybindings[keybindingDescriptor.Name] = registered;
         OnKeybindingsChanged();
-        WarmGestureCache(keybindingDescriptor.Keybinding);
-        ReportConflicts(keybindingDescriptor);
+        WarmGestureCache(registered.Keybinding);
+        ReportConflicts(registered);
     }
 
     /// <summary>
@@ -92,7 +99,10 @@ public static partial class KeybindingManager
     /// <summary>
     /// Removes a registered keybinding, releasing its command.
     /// </summary>
-    /// <param name="keybindingDescriptor">The descriptor to remove; matched by group and name, and only if it is the registered instance.</param>
+    /// <param name="keybindingDescriptor">
+    /// The descriptor to remove; matched by group and name, and only if it is the registered instance (or the original
+    /// of the registered, customized one; see <see cref="GetDefault"/>).
+    /// </param>
     /// <returns><c>true</c> if the descriptor was registered and has been removed.</returns>
     public static bool UnregisterKeybinding(IKeybindingDescriptor keybindingDescriptor)
     {
@@ -100,7 +110,7 @@ public static partial class KeybindingManager
 
         return RegisteredKeybindings.TryGetValue(keybindingDescriptor.Group, out var groupKeybindings)
             && groupKeybindings.TryGetValue(keybindingDescriptor.Name, out var registered)
-            && ReferenceEquals(registered, keybindingDescriptor)
+            && (ReferenceEquals(registered, keybindingDescriptor) || ReferenceEquals(GetDefault(registered), keybindingDescriptor))
             && UnregisterKeybinding(keybindingDescriptor.Group, keybindingDescriptor.Name);
     }
 

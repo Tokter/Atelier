@@ -22,6 +22,9 @@ internal static class Program
             return;
         }
 
+        // The user's changes to command labels, icons and shortcuts (the snapshots above use the defaults).
+        Infrastructure.CommandSettings.LoadAndKeepSaved();
+
         // ATELIER_GALLERY_THEME=dark starts in the dark theme.
         Infrastructure.GalleryTheme.IsDark = string.Equals(Environment.GetEnvironmentVariable("ATELIER_GALLERY_THEME"), "dark", StringComparison.OrdinalIgnoreCase);
 
