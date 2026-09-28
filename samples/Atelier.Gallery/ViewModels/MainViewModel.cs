@@ -51,6 +51,7 @@ public partial class MainViewModel : ObservableObject
             new TabsViewModel(),
             new MenusViewModel(),
             new DataGridViewModel(),
+            new FileDialogsViewModel(),
             new TypographyViewModel(),
             new LayoutViewModel(),
             new DialogHostViewModel(),

@@ -162,6 +162,18 @@ public static class MaterialStyles
                 .Set(Control.ForegroundProperty, colors.Primary),
             new Style(DataGridFilterMenu.DividerStyleKey, typeof(Atelier.Layout.Border))
                 .Set(Atelier.Layout.Border.BackgroundProperty, colors.OutlineVariant),
+            // File dialogs: a surface-container-highest path bar, on-surface folder buttons, on-surface-variant tool buttons
+            // and file icons, primary folder icons.
+            new Style(FileDialogView.PathBarStyleKey, typeof(Atelier.Layout.Border))
+                .Set(Atelier.Layout.Border.BackgroundProperty, colors.SurfaceContainerHighest),
+            new Style(FileDialogPathBar.SegmentStyleKey, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.OnSurface),
+            new Style(FileDialogView.ToolButtonStyleKey, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
+            new Style(FileDialogView.FolderIconStyleKey, typeof(Icon))
+                .Set(Control.ForegroundProperty, colors.Primary),
+            new Style(FileDialogView.FileIconStyleKey, typeof(Icon))
+                .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
             new Style(typeof(TabItem))
                 .Set(Control.FontSizeProperty, MaterialTypescale.TitleSmall.Size),
 
