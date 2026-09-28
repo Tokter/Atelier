@@ -53,6 +53,7 @@ internal static class Program
             .Register<TreeViewViewModel>(vm => new TreeViewView(vm))
             .Register<CardsViewModel>(vm => new CardsView(vm))
             .Register<IconsViewModel>(vm => new IconsView(vm))
+            .Register<BadgesViewModel>(vm => new BadgesView(vm))
             .Register<TypographyViewModel>(vm => new TypographyView(vm))
             .Register<LayoutViewModel>(vm => new LayoutView(vm))
             .Register<DialogHostViewModel>(vm => new DialogHostView(vm))

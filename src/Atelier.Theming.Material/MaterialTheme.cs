@@ -57,6 +57,7 @@ public class MaterialTheme : Theme
         renderers.Register(new MaterialClockDialRenderer(colors));
         renderers.Register(new MaterialTimePickerSegmentRenderer(colors));
         renderers.Register(new MaterialTimePeriodSelectorRenderer(colors));
+        renderers.Register(new MaterialBadgeRenderer(colors));
         renderers.Register(new MaterialProgressBarRenderer(colors));
         renderers.Register(new MaterialTextBlockRenderer(colors, renderers));
         renderers.Register(new MaterialBorderRenderer(colors));
