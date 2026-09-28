@@ -64,6 +64,9 @@ public partial class MainViewModel : ObservableObject
             new ThemeEditorViewModel(),
         ];
 
+        // The navigation lists the pages alphabetically.
+        _allPages.Sort((a, b) => string.Compare(a.PageTitle, b.PageTitle, StringComparison.CurrentCultureIgnoreCase));
+
         foreach (var page in _allPages)
         {
             Pages.Add(page);
