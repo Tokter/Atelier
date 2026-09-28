@@ -37,7 +37,8 @@ type-safe markup API instead of XAML, and every control is drawn with SkiaSharp 
   coerced), styles, attached properties, typed data binding and change notifications.
 - **Built for low overhead.** Rendering reuses cached paints, fonts and text blobs, so a steady frame allocates nothing,
   and windows only redraw when something changed.
-- **Reflection-free tooling.** Keybindings and property-grid metadata come from source generators.
+- **Reflection-free tooling.** Commands (`[Command]`: name, label, description, icon and default shortcut), keybindings
+  and property-grid metadata come from source generators.
 
 ---
 
@@ -212,7 +213,7 @@ In Debug builds, press **F12** in any window to open the DevTools beside the win
 | [`Atelier.Theming`](src/Atelier.Theming) | Theme infrastructure and renderer registry |
 | [`Atelier.Theming.Material`](src/Atelier.Theming.Material) | Material Design 3 renderers, color schemes, typography, sizing and default styles |
 | [`Atelier.Markup`](src/Atelier.Markup) | The fluent markup API |
-| [`Atelier.Generators`](src/Atelier.Generators) | Source generators for keybindings and property-grid metadata |
+| [`Atelier.Generators`](src/Atelier.Generators) | Source generators for commands, keybindings and property-grid metadata |
 | [`Atelier.Platform.Silk`](src/Atelier.Platform.Silk) | Windows, OpenGL context, input and clipboard via Silk.NET |
 | [`Atelier.DevTools`](src/Atelier.DevTools) | The F12 developer tools (Debug builds only) |
 | [`Atelier.Gallery`](samples/Atelier.Gallery) | Showcase application for every control |

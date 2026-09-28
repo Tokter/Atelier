@@ -29,7 +29,7 @@ public static partial class KeybindingManager
     /// <remarks>
     /// A descriptor matches when it holds the same command instance; when it resolves to the command for one of
     /// <paramref name="targets"/> (keybindings on command properties, see <see cref="IKeybindingCommandResolver"/>); or,
-    /// for command classes marked with <see cref="KeybindingAttribute"/>, when it holds an instance of the same class.
+    /// for command classes marked with <see cref="CommandAttribute"/>, when it holds an instance of the same class.
     /// Among several matches, <paramref name="preferredGroup"/> wins, then the "Global" group, then the first found.
     /// </remarks>
     /// <param name="command">The command, such as a menu item's.</param>
@@ -64,6 +64,25 @@ public static partial class KeybindingManager
     }
 
     /// <summary>
+    /// Gets the registered command <paramref name="name"/> in <paramref name="group"/> (with its label, description,
+    /// icon and shortcut), or <c>null</c> if there is none.
+    /// </summary>
+    public static IKeybindingDescriptor? FindCommand(string group, string name)
+    {
+        ArgumentNullException.ThrowIfNull(group);
+        ArgumentNullException.ThrowIfNull(name);
+        return RegisteredKeybindings.TryGetValue(group, out var byName) && byName.TryGetValue(name, out var descriptor) ? descriptor : null;
+    }
+
+    /// <summary>
+    /// Gets the registered command that <paramref name="command"/> is (see
+    /// <see cref="FindKeybinding(ICommand, string?, IEnumerable{object?}?)"/>), for its label, description, icon and
+    /// shortcut; <c>null</c> if it isn't registered. Commands without a shortcut are found too.
+    /// </summary>
+    public static IKeybindingDescriptor? FindCommand(ICommand command, string? preferredGroup = null, IEnumerable<object?>? targets = null) =>
+        FindKeybinding(command, preferredGroup, targets);
+
+    /// <summary>
     /// Gets the display text of the shortcut that runs <paramref name="command"/> (see
     /// <see cref="FindKeybinding(ICommand, string?, IEnumerable{object?}?)"/>), such as <c>"Ctrl+S"</c> or
     /// <c>"Ctrl+K, Ctrl+C"</c>, or <c>null</c> if it has none.
@@ -90,7 +109,7 @@ public static partial class KeybindingManager
 
     private static readonly Dictionary<Type, bool> s_keybindingClasses = [];
 
-    // Command classes registered by type ([Keybinding] on the class) match any instance of that class; general command
+    // Command classes registered by type ([Command] or [Keybinding] on the class) match any instance of that class; general command
     // types (like RelayCommand) never match by type.
     private static bool IsKeybindingCommandClass(Type type)
     {
@@ -98,7 +117,7 @@ public static partial class KeybindingManager
         {
             if (!s_keybindingClasses.TryGetValue(type, out bool isClass))
             {
-                isClass = type.IsDefined(typeof(KeybindingAttribute), inherit: false);
+                isClass = type.IsDefined(typeof(CommandAttribute), inherit: false);
                 s_keybindingClasses[type] = isClass;
             }
             return isClass;

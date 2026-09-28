@@ -11,18 +11,19 @@ using Microsoft.CodeAnalysis.Text;
 namespace Atelier.Generators;
 
 /// <summary>
-/// Discovers <c>[Keybinding]</c> command classes and <c>[KeybindingProperty]</c> command properties at compile time and
+/// Discovers <c>[Command]</c> and <c>[Keybinding]</c> command classes, command properties and command-generating methods at compile time and
 /// generates keybinding name constants and a <c>RegisterKeybindings()</c> method, without runtime reflection.
 /// </summary>
 [Generator(LanguageNames.CSharp)]
 public class KeybindingGenerator : IIncrementalGenerator
 {
     private const string KeybindingAttributeMetadataName = "Atelier.Core.Keybinding.KeybindingAttribute";
+    private const string CommandAttributeMetadataName = "Atelier.Core.Keybinding.CommandAttribute";
 
     private static readonly DiagnosticDescriptor NotImplementingICommandRule = new(
         id: "CMD001",
         title: "Type must implement ICommand",
-        messageFormat: "The type '{0}' is marked with [Keybinding] but does not implement System.Windows.Input.ICommand",
+        messageFormat: "The type '{0}' is marked with [Command] or [Keybinding] but does not implement System.Windows.Input.ICommand",
         category: "Atelier.Keybinding",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -30,7 +31,7 @@ public class KeybindingGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor CannotBeAbstractRule = new(
         id: "CMD002",
         title: "Keybinding type cannot be abstract",
-        messageFormat: "The keybinding type '{0}' is marked with [Keybinding] and cannot be abstract",
+        messageFormat: "The keybinding type '{0}' is marked with [Command] or [Keybinding] and cannot be abstract",
         category: "Atelier.Keybinding",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -38,7 +39,7 @@ public class KeybindingGenerator : IIncrementalGenerator
     private static readonly DiagnosticDescriptor MustHaveParameterlessCtorRule = new(
         id: "CMD003",
         title: "Keybinding type must have a parameterless constructor",
-        messageFormat: "The keybinding type '{0}' is marked with [Keybinding] and must have an accessible parameterless constructor to be automatically registered",
+        messageFormat: "The keybinding type '{0}' is marked with [Command] or [Keybinding] and must have an accessible parameterless constructor to be automatically registered",
         category: "Atelier.Keybinding",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -46,18 +47,29 @@ public class KeybindingGenerator : IIncrementalGenerator
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var classKeybindings = context.SyntaxProvider.ForAttributeWithMetadataName(
+        // A class with both [Keybinding] and [Command] is handled once, by the [Keybinding] provider; each reads all of
+        // the class's command attributes.
+        var keybindingClasses = context.SyntaxProvider.ForAttributeWithMetadataName(
             KeybindingAttributeMetadataName,
             predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
             transform: static (ctx, ct) => GetKeybindingClassModel(ctx, ct)
         ).Where(static m => m is not null);
+
+        var commandClasses = context.SyntaxProvider.ForAttributeWithMetadataName(
+            CommandAttributeMetadataName,
+            predicate: static (node, _) => node is ClassDeclarationSyntax or RecordDeclarationSyntax,
+            transform: static (ctx, ct) => HasAttribute(ctx.TargetSymbol, KeybindingAttributeMetadataName) ? null : GetKeybindingClassModel(ctx, ct)
+        ).Where(static m => m is not null);
+
+        var classKeybindings = keybindingClasses.Collect().Combine(commandClasses.Collect())
+            .Select(static (pair, _) => pair.Left.AddRange(pair.Right));
 
         var propertyKeybindings = context.SyntaxProvider.CreateSyntaxProvider(
             predicate: static (node, _) => IsCandidateMember(node),
             transform: static (ctx, ct) => GetKeybindingPropertyModel(ctx, ct)
         ).Where(static m => m is not null);
 
-        var classesCollected = classKeybindings.Collect();
+        var classesCollected = classKeybindings;
         var propertiesCollected = propertyKeybindings.Collect();
 
         var combined = context.CompilationProvider
@@ -95,11 +107,28 @@ public class KeybindingGenerator : IIncrementalGenerator
                 if (dot >= 0)
                     name = name.Substring(dot + 1);
 
-                if (name is "Keybinding" or "KeybindingAttribute" or "KeybindingProperty" or "KeybindingPropertyAttribute")
+                if (IsCommandAttributeName(name))
                 {
                     return true;
                 }
             }
+        }
+        return false;
+    }
+
+    // A syntactic pre-filter; ExtractKeybindingItem checks that the attribute really is Atelier's.
+    private static bool IsCommandAttributeName(string name) =>
+        name is "Command" or "CommandAttribute" or "Keybinding" or "KeybindingAttribute" or "KeybindingProperty" or "KeybindingPropertyAttribute";
+
+    private static bool HasAttribute(ISymbol symbol, string metadataName) =>
+        symbol.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == metadataName);
+
+    // Whether the attribute type is CommandAttribute or derives from it ([Keybinding], [KeybindingProperty]).
+    private static bool IsCommandAttributeType(INamedTypeSymbol? type)
+    {
+        for (var t = type; t != null; t = t.BaseType)
+        {
+            if (t.ToDisplayString() == CommandAttributeMetadataName) return true;
         }
         return false;
     }
@@ -145,16 +174,17 @@ public class KeybindingGenerator : IIncrementalGenerator
             diagnostics.Add(new DiagnosticInfo(MustHaveParameterlessCtorRule, location, typeSymbol.Name));
         }
 
-        // 4. Extract [Keybinding] attributes
+        // 4. Extract the [Command] and [Keybinding] attributes
         var keybindings = new List<KeybindingItemModel>();
-        foreach (var attr in context.Attributes)
+        foreach (var attr in typeSymbol.GetAttributes())
         {
-            if (attr.AttributeClass?.ToDisplayString() != KeybindingAttributeMetadataName)
+            if (!IsCommandAttributeType(attr.AttributeClass))
                 continue;
 
             string name = string.Empty;
             string group = string.Empty;
             string keybinding = string.Empty;
+            string label = string.Empty, description = string.Empty, icon = string.Empty;
 
             if (attr.ConstructorArguments.Length >= 1 && attr.ConstructorArguments[0].Value is string n)
                 name = n;
@@ -165,16 +195,19 @@ public class KeybindingGenerator : IIncrementalGenerator
 
             foreach (var named in attr.NamedArguments)
             {
-                if (named.Key == "Name" && named.Value.Value is string nVal) name = nVal;
-                if (named.Key == "Group" && named.Value.Value is string gVal) group = gVal;
-                if (named.Key == "DefaultKeybinding" && named.Value.Value is string kVal) keybinding = kVal;
+                if (named.Value.Value is not string value) continue;
+                switch (named.Key)
+                {
+                    case "DefaultKeybinding": keybinding = value; break;
+                    case "Label": label = value; break;
+                    case "Description": description = value; break;
+                    case "Icon": icon = value; break;
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(group))
             {
-                string constantName = $"{ToSafeIdentifier(group)}{ToSafeIdentifier(name)}Keybinding";
-                string keyValue = $"{group}_{name}";
-                keybindings.Add(new KeybindingItemModel(name, group, keybinding, constantName, keyValue));
+                keybindings.Add(CreateItem(name, group, keybinding, label, description, icon));
             }
         }
 
@@ -206,7 +239,7 @@ public class KeybindingGenerator : IIncrementalGenerator
                     int dot = name.LastIndexOf('.');
                     if (dot >= 0) name = name.Substring(dot + 1);
 
-                    if (name is not ("Keybinding" or "KeybindingAttribute" or "KeybindingProperty" or "KeybindingPropertyAttribute"))
+                    if (!IsCommandAttributeName(name))
                         continue;
 
                     var item = ExtractKeybindingItem(ctx.SemanticModel, attr, ct);
@@ -260,7 +293,7 @@ public class KeybindingGenerator : IIncrementalGenerator
                     int dot = name.LastIndexOf('.');
                     if (dot >= 0) name = name.Substring(dot + 1);
 
-                    if (name is not ("Keybinding" or "KeybindingAttribute" or "KeybindingProperty" or "KeybindingPropertyAttribute"))
+                    if (!IsCommandAttributeName(name))
                         continue;
 
                     var item = ExtractKeybindingItem(ctx.SemanticModel, attr, ct);
@@ -296,24 +329,38 @@ public class KeybindingGenerator : IIncrementalGenerator
         if (attr.ArgumentList == null || attr.ArgumentList.Arguments.Count == 0)
             return null;
 
+        // [Command] is a common attribute name: only Atelier's (or an attribute derived from it) declares a command. An
+        // attribute of a [property: ...] target on a method doesn't bind to a symbol before the MVVM generator ran, so
+        // only a symbol that resolves to another type rules the attribute out.
+        var symbol = semanticModel.GetSymbolInfo(attr, ct).Symbol ?? semanticModel.GetSymbolInfo(attr, ct).CandidateSymbols.FirstOrDefault();
+        if (symbol?.ContainingType is { } attributeType && !IsCommandAttributeType(attributeType))
+            return null;
+
         string name = string.Empty;
         string group = string.Empty;
         string keybinding = string.Empty;
+        string label = string.Empty, description = string.Empty, icon = string.Empty;
 
         int positionalIndex = 0;
         foreach (var arg in attr.ArgumentList.Arguments)
         {
-            if (arg.NameEquals != null)
+            string? val = GetStringConstant(semanticModel, arg.Expression, ct);
+            string? argumentName = arg.NameEquals?.Name.Identifier.Text ?? arg.NameColon?.Name.Identifier.Text;
+            if (argumentName != null)
             {
-                string named = arg.NameEquals.Name.Identifier.Text;
-                string? val = GetStringConstant(semanticModel, arg.Expression, ct);
-                if (named == "Name" && val != null) name = val;
-                if (named == "Group" && val != null) group = val;
-                if (named == "DefaultKeybinding" && val != null) keybinding = val;
+                if (val == null) continue;
+                switch (argumentName)
+                {
+                    case "Name" or "name": name = val; break;
+                    case "Group" or "group": group = val; break;
+                    case "DefaultKeybinding" or "defaultKeybinding": keybinding = val; break;
+                    case "Label": label = val; break;
+                    case "Description": description = val; break;
+                    case "Icon": icon = val; break;
+                }
             }
             else
             {
-                string? val = GetStringConstant(semanticModel, arg.Expression, ct);
                 if (val != null)
                 {
                     if (positionalIndex == 0) name = val;
@@ -327,9 +374,25 @@ public class KeybindingGenerator : IIncrementalGenerator
         if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(group))
             return null;
 
-        string constantName = $"{ToSafeIdentifier(group)}{ToSafeIdentifier(name)}Keybinding";
-        string keyValue = $"{group}_{name}";
-        return new KeybindingItemModel(name, group, keybinding, constantName, keyValue);
+        return CreateItem(name, group, keybinding, label, description, icon);
+    }
+
+    private static KeybindingItemModel CreateItem(string name, string group, string keybinding, string label, string description, string icon) =>
+        new(name, group, keybinding, $"{ToSafeIdentifier(group)}{ToSafeIdentifier(name)}Keybinding", $"{group}_{name}", label, description, icon);
+
+    // The generated command that runs a command property of the target passed at execution time.
+    private static string PropertyCommandExpression(KeybindingItemModel item, KeybindingPropertyMemberModel member) =>
+        $"new global::Atelier.Core.Keybinding.PropertyKeybindingCommand<{member.ContainingTypeFullName}>(\"{EscapeString(item.Name)}\", static x => x.{member.PropertyName})";
+
+    // The generated code that creates the descriptor of item for commandExpression.
+    private static string DescriptorExpression(KeybindingItemModel item, string commandExpression)
+    {
+        var sb = new StringBuilder("new global::Atelier.Core.Keybinding.KeybindingDescriptor(");
+        sb.Append($"\"{EscapeString(item.Name)}\", \"{EscapeString(item.Group)}\", \"{EscapeString(item.Keybinding)}\", {commandExpression}");
+        if (item.Label.Length > 0) sb.Append($", label: \"{EscapeString(item.Label)}\"");
+        if (item.Description.Length > 0) sb.Append($", description: \"{EscapeString(item.Description)}\"");
+        if (item.Icon.Length > 0) sb.Append($", icon: \"{EscapeString(item.Icon)}\"");
+        return sb.Append(')').ToString();
     }
 
     private static string? GetStringConstant(SemanticModel semanticModel, ExpressionSyntax expr, CancellationToken ct)
@@ -459,14 +522,14 @@ public class KeybindingGenerator : IIncrementalGenerator
         {
             if (seenKeys.Add(item.KeyValue))
             {
-                sb.AppendLine($"            RegisterOrUpdateKeybinding(new KeybindingDescriptor(\"{EscapeString(item.Name)}\", \"{EscapeString(item.Group)}\", \"{EscapeString(item.Keybinding)}\", new {typeFullName}()));");
+                sb.AppendLine($"            RegisterOrUpdateKeybinding({DescriptorExpression(item, $"new {typeFullName}()")});");
             }
         }
         foreach (var (item, member) in propertyKeybindings)
         {
             if (seenKeys.Add(item.KeyValue))
             {
-                sb.AppendLine($"            RegisterOrUpdateKeybinding(new KeybindingDescriptor(\"{EscapeString(item.Name)}\", \"{EscapeString(item.Group)}\", \"{EscapeString(item.Keybinding)}\", new global::Atelier.Core.Keybinding.PropertyKeybindingCommand<{member.ContainingTypeFullName}>(\"{EscapeString(item.Name)}\", static x => x.{member.PropertyName})));");
+                sb.AppendLine($"            RegisterOrUpdateKeybinding({DescriptorExpression(item, PropertyCommandExpression(item, member))});");
             }
         }
 
@@ -535,14 +598,14 @@ public class KeybindingGenerator : IIncrementalGenerator
         {
             if (seenKeys.Add(item.KeyValue))
             {
-                sb.AppendLine($"            global::Atelier.Core.Keybinding.KeybindingManager.RegisterOrUpdateKeybinding(new KeybindingDescriptor(\"{EscapeString(item.Name)}\", \"{EscapeString(item.Group)}\", \"{EscapeString(item.Keybinding)}\", new {typeFullName}()));");
+                sb.AppendLine($"            global::Atelier.Core.Keybinding.KeybindingManager.RegisterOrUpdateKeybinding({DescriptorExpression(item, $"new {typeFullName}()")});");
             }
         }
         foreach (var (item, member) in propertyKeybindings)
         {
             if (seenKeys.Add(item.KeyValue))
             {
-                sb.AppendLine($"            global::Atelier.Core.Keybinding.KeybindingManager.RegisterOrUpdateKeybinding(new KeybindingDescriptor(\"{EscapeString(item.Name)}\", \"{EscapeString(item.Group)}\", \"{EscapeString(item.Keybinding)}\", new global::Atelier.Core.Keybinding.PropertyKeybindingCommand<{member.ContainingTypeFullName}>(\"{EscapeString(item.Name)}\", static x => x.{member.PropertyName})));");
+                sb.AppendLine($"            global::Atelier.Core.Keybinding.KeybindingManager.RegisterOrUpdateKeybinding({DescriptorExpression(item, PropertyCommandExpression(item, member))});");
             }
         }
 
@@ -600,7 +663,7 @@ public class KeybindingGenerator : IIncrementalGenerator
             {
                 if (seenKeys.Add(item.KeyValue))
                 {
-                    sb.AppendLine($"{indent}        global::Atelier.Core.Keybinding.KeybindingManager.RegisterOrUpdateKeybinding(new global::Atelier.Core.Keybinding.KeybindingDescriptor(\"{EscapeString(item.Name)}\", \"{EscapeString(item.Group)}\", \"{EscapeString(item.Keybinding)}\", target.{member.PropertyName}));");
+                    sb.AppendLine($"{indent}        global::Atelier.Core.Keybinding.KeybindingManager.RegisterOrUpdateKeybinding({DescriptorExpression(item, $"target.{member.PropertyName}")});");
                 }
             }
 
@@ -750,14 +813,21 @@ internal sealed class KeybindingItemModel : IEquatable<KeybindingItemModel>
     public string Keybinding { get; }
     public string ConstantName { get; }
     public string KeyValue { get; }
+    public string Label { get; }
+    public string Description { get; }
+    public string Icon { get; }
 
-    public KeybindingItemModel(string name, string group, string keybinding, string constantName, string keyValue)
+    public KeybindingItemModel(string name, string group, string keybinding, string constantName, string keyValue,
+        string label, string description, string icon)
     {
         Name = name;
         Group = group;
         Keybinding = keybinding;
         ConstantName = constantName;
         KeyValue = keyValue;
+        Label = label;
+        Description = description;
+        Icon = icon;
     }
 
     public bool Equals(KeybindingItemModel? other)
@@ -768,7 +838,10 @@ internal sealed class KeybindingItemModel : IEquatable<KeybindingItemModel>
             && Group == other.Group
             && Keybinding == other.Keybinding
             && ConstantName == other.ConstantName
-            && KeyValue == other.KeyValue;
+            && KeyValue == other.KeyValue
+            && Label == other.Label
+            && Description == other.Description
+            && Icon == other.Icon;
     }
 
     public override bool Equals(object? obj) => obj is KeybindingItemModel other && Equals(other);
@@ -782,6 +855,9 @@ internal sealed class KeybindingItemModel : IEquatable<KeybindingItemModel>
             hash = (hash * 397) ^ (Keybinding != null ? Keybinding.GetHashCode() : 0);
             hash = (hash * 397) ^ (ConstantName != null ? ConstantName.GetHashCode() : 0);
             hash = (hash * 397) ^ (KeyValue != null ? KeyValue.GetHashCode() : 0);
+            hash = (hash * 397) ^ (Label != null ? Label.GetHashCode() : 0);
+            hash = (hash * 397) ^ (Description != null ? Description.GetHashCode() : 0);
+            hash = (hash * 397) ^ (Icon != null ? Icon.GetHashCode() : 0);
             return hash;
         }
     }
