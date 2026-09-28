@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    F12 developer tools for Atelier windows. Only Debug builds contain them: in any other configuration this assembly
+    is empty, and Atelier.Platform.Silk references it only in Debug, so release builds ship no DevTools code.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Atelier.Core\Atelier.Core.csproj" />
+    <ProjectReference Include="..\Atelier.Layout\Atelier.Layout.csproj" />
+    <ProjectReference Include="..\Atelier.Rendering\Atelier.Rendering.csproj" />
+    <ProjectReference Include="..\Atelier.Theming\Atelier.Theming.csproj" />
+    <ProjectReference Include="..\Atelier.Controls\Atelier.Controls.csproj" />
+    <ProjectReference Include="..\Atelier.Theming.Material\Atelier.Theming.Material.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems Condition="'$(Configuration)' != 'Debug'">false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Atelier.Tests" />
+  </ItemGroup>
+
+</Project>

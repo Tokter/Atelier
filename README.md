@@ -47,20 +47,22 @@ All screenshots show the included [Gallery](samples/Atelier.Gallery) application
 
 | | |
 |---|---|
-| ![Data grid](docs/screenshots/data-grid.png) | ![Open file dialog](docs/screenshots/file-dialog.png) |
-| **Data grid**: 10,000 virtualized rows, sorting, filter menus, column chooser, cell editing | **File dialogs**: open, save and folder dialogs with a path bar, folder tree and file grid |
-| ![Color picker, dark theme](docs/screenshots/color-picker-dark.png) | ![Date and time pickers, dark theme](docs/screenshots/date-time-pickers-dark.png) |
-| **Color picker**: wheel, RGB/HSL/HSB gradient sliders, alpha and hex | **Date & time pickers**: MD3 docked and modal calendars, clock dial and text input |
-| ![Tabs](docs/screenshots/tabs.png) | ![Buttons](docs/screenshots/buttons.png) |
-| **Tabs**: MD3 primary and secondary tabs, closeable and reorderable browser tabs | **Buttons**: variants, commands, repeat and toggle buttons, toolbars |
-| ![Text fields, dark theme](docs/screenshots/text-fields-dark.png) | ![Cards](docs/screenshots/cards.png) |
-| **Text fields**: outlined and filled, labels, validation, binding | **Cards**: variants, elevation, shape, media and clipping |
-| ![Icons, dark theme](docs/screenshots/icons-dark.png) | ![Typography](docs/screenshots/typography.png) |
-| **Icons**: Material Symbols with fill, weight, grade and optical size | **Typography**: the MD3 type scale and a live playground |
-| ![Layout panels, dark theme](docs/screenshots/layout-dark.png) | ![Popups and dialogs](docs/screenshots/popups-dialogs.png) |
-| **Layout**: stack, wrap, dock, grid, uniform grid and canvas | **Popups & dialogs**: presets, custom content, scoped hosts |
-| ![Property grid](docs/screenshots/property-grid.png) | ![Tooltips](docs/screenshots/tooltips.png) |
-| **Property grid**: generated metadata, validation, custom editors | **Tooltips**: plain text, or rich content with clickable actions |
+| ![F12 developer tools](docs/screenshots/devtools.png) | ![Data grid](docs/screenshots/data-grid.png) |
+| **F12 DevTools**: element tree, element picker, live box model, editable properties and a pixel zoom | **Data grid**: 10,000 virtualized rows, sorting, filter menus, column chooser, cell editing |
+| ![Open file dialog](docs/screenshots/file-dialog.png) | ![Color picker, dark theme](docs/screenshots/color-picker-dark.png) |
+| **File dialogs**: open, save and folder dialogs with a path bar, folder tree and file grid | **Color picker**: wheel, RGB/HSL/HSB gradient sliders, alpha and hex |
+| ![Date and time pickers, dark theme](docs/screenshots/date-time-pickers-dark.png) | ![Tabs](docs/screenshots/tabs.png) |
+| **Date & time pickers**: MD3 docked and modal calendars, clock dial and text input | **Tabs**: MD3 primary and secondary tabs, closeable and reorderable browser tabs |
+| ![Buttons](docs/screenshots/buttons.png) | ![Text fields, dark theme](docs/screenshots/text-fields-dark.png) |
+| **Buttons**: variants, commands, repeat and toggle buttons, toolbars | **Text fields**: outlined and filled, labels, validation, binding |
+| ![Cards](docs/screenshots/cards.png) | ![Icons, dark theme](docs/screenshots/icons-dark.png) |
+| **Cards**: variants, elevation, shape, media and clipping | **Icons**: Material Symbols with fill, weight, grade and optical size |
+| ![Typography](docs/screenshots/typography.png) | ![Layout panels, dark theme](docs/screenshots/layout-dark.png) |
+| **Typography**: the MD3 type scale and a live playground | **Layout**: stack, wrap, dock, grid, uniform grid and canvas |
+| ![Popups and dialogs](docs/screenshots/popups-dialogs.png) | ![Property grid](docs/screenshots/property-grid.png) |
+| **Popups & dialogs**: presets, custom content, scoped hosts | **Property grid**: generated metadata, validation, custom editors |
+| ![Tooltips](docs/screenshots/tooltips.png) | |
+| **Tooltips**: plain text, or rich content with clickable actions | |
 
 ---
 
@@ -172,6 +174,22 @@ element can set the mouse cursor (`.Cursor(CursorType.Hand)`); text boxes show t
   theme style < app style < local value.
 - Focus rings appear for keyboard navigation only.
 
+### F12 developer tools
+
+In Debug builds, press **F12** in any window to open the DevTools beside the window's content (behind a
+`GridSplitter`); press it again to put the window back as it was. Release builds contain none of it.
+
+- **Element tree** of the window and its open popups, with search; hovering a node highlights its element.
+- **Select Element** (Ctrl+Shift+C): the element under the pointer is highlighted live, a click selects it; Escape stops.
+- **Properties**: every bindable property of the selected element, attached ones included, edited in a `PropertyGrid`
+  (thicknesses and corner radii as text: `8`, `8,4` or `1,2,3,4`).
+- **Values**: all values with their source (local, style, inherited, default, animation), filterable.
+- **Layout**: the box model (margin, border, padding, content, spacing) drawn over the window and as a diagram, plus
+  position, desired size, alignment, min/max sizes and layout state.
+- **Zoom**: the selected element magnified pixel by pixel (up to 32×), with a pixel grid, box-model outlines and the
+  color of the pixel under the pointer.
+- Outline every element's bounds, show the frame rate, select the parent or the focused element.
+
 ### Platform
 
 - Borderless windows with native resizing, snapping and shadows on Windows; multiple windows with per-window focus.
@@ -194,6 +212,7 @@ element can set the mouse cursor (`.Cursor(CursorType.Hand)`); text boxes show t
 | [`Atelier.Markup`](src/Atelier.Markup) | The fluent markup API |
 | [`Atelier.Generators`](src/Atelier.Generators) | Source generators for keybindings and property-grid metadata |
 | [`Atelier.Platform.Silk`](src/Atelier.Platform.Silk) | Windows, OpenGL context, input and clipboard via Silk.NET |
+| [`Atelier.DevTools`](src/Atelier.DevTools) | The F12 developer tools (Debug builds only) |
 | [`Atelier.Gallery`](samples/Atelier.Gallery) | Showcase application for every control |
 | [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (1,100+) |
 
@@ -214,12 +233,15 @@ states, with the code that builds it. Useful shortcuts:
 | Ctrl+T | Switch between the light and dark theme |
 | Ctrl+Shift+F | Show the frame-rate overlay |
 | F5 / Ctrl+R | Rebuild the window content (hot reload; F5 resets the demos on the Keybindings page) |
+| F12 | Open or close the developer tools (Debug builds) |
+| Ctrl+Shift+C | Select an element with the pointer in the developer tools |
 
 To render pages to PNG files without opening a window, as for the screenshots above, set
 `ATELIER_GALLERY_SNAPSHOT=<output folder>`. Optionally also set `ATELIER_GALLERY_PAGES=0,3,7`,
 `ATELIER_GALLERY_THEME=dark` and `ATELIER_GALLERY_SIZE=1280x800`. `ATELIER_GALLERY_TOOLTIP=<n>` opens the page's n-th
 tooltip, and `ATELIER_GALLERY_FILE_DIALOG=open|save|folder` shows a file dialog limited to the repository (run it
-from the repository folder).
+from the repository folder), and in Debug builds `ATELIER_GALLERY_DEVTOOLS=<text>[:tab]` opens the developer tools
+with the first element whose description contains the text selected.
 
 ---
 

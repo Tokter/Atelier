@@ -292,7 +292,12 @@ public class SilkWindow : IDisposable, IHostWindow
     {
         if (_contentFactory != null)
         {
-            Content = _contentFactory();
+            var content = _contentFactory();
+#if DEBUG
+            // With the developer tools open, the new view goes under them.
+            if (Atelier.DevTools.DevToolsManager.TryReplaceContent(DevToolsHost, content)) return;
+#endif
+            Content = content;
         }
         else if (_rootElement != null)
         {
@@ -309,6 +314,33 @@ public class SilkWindow : IDisposable, IHostWindow
             ReloadContent();
         });
     }
+
+#if DEBUG
+    private DevToolsHostAdapter? _devToolsHost;
+
+    // The window as the developer tools see it (Debug builds only).
+    private Atelier.DevTools.IDevToolsHost DevToolsHost => _devToolsHost ??= new DevToolsHostAdapter(this);
+
+    /// <summary>Opens or closes the F12 developer tools (Debug builds only).</summary>
+    public void ToggleDevTools() => Atelier.DevTools.DevToolsManager.Toggle(DevToolsHost);
+
+    private sealed class DevToolsHostAdapter(SilkWindow window) : Atelier.DevTools.IDevToolsHost
+    {
+        public UIElement? Content
+        {
+            get => window.Content;
+            set => window.Content = value;
+        }
+
+        public bool ShowFpsOverlay
+        {
+            get => window.ShowFpsOverlay;
+            set => window.ShowFpsOverlay = value;
+        }
+
+        public void InvalidateRender() => window.InvalidateRender();
+    }
+#endif
 
     /// <summary>
     /// Gets the active window: the one that most recently received OS focus, or the main window.
@@ -1462,6 +1494,14 @@ public class SilkWindow : IDisposable, IHostWindow
         }
 
         var keyEventArgs = new KeyEventArgs(atelierKey, keyCode, GetModifiers(keyboard), true);
+#if DEBUG
+        // F12 developer tools (Debug builds only): F12, Ctrl+Shift+C, and Escape while picking an element.
+        if (Atelier.DevTools.DevToolsManager.HandleKey(DevToolsHost, keyEventArgs))
+        {
+            _needsRender = true;
+            return;
+        }
+#endif
         if (PopupManager.HandleKeyDown(keyEventArgs, _rootElement))
         {
             return;

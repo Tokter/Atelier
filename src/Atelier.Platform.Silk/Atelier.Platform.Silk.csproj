@@ -22,6 +22,8 @@
     <ProjectReference Include="..\Atelier.Theming\Atelier.Theming.csproj" />
     <ProjectReference Include="..\Atelier.Controls\Atelier.Controls.csproj" />
     <ProjectReference Include="..\Atelier.Theming.Material\Atelier.Theming.Material.csproj" />
+    <!-- The F12 developer tools exist in Debug builds only. -->
+    <ProjectReference Include="..\Atelier.DevTools\Atelier.DevTools.csproj" Condition="'$(Configuration)' == 'Debug'" />
   </ItemGroup>
 
 </Project>

@@ -332,6 +332,28 @@ public abstract class BindableProperty
     internal static BindableProperty FromId(int id) => _byId[id]!;
 
     /// <summary>
+    /// Gets the registered properties that apply to objects of <paramref name="type"/> (see <see cref="AppliesTo(Type)"/>),
+    /// attached properties included, in registration order. Properties register when their owner type is first used, so
+    /// an attached property of a type the application never used isn't listed. Meant for tools such as inspectors.
+    /// </summary>
+    /// <param name="type">The object type.</param>
+    /// <returns>The properties, each once.</returns>
+    public static IReadOnlyList<BindableProperty> GetPropertiesFor(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        // Static fields may initialize lazily: make sure the type's own properties (and its bases') are registered.
+        for (Type? t = type; t != null && t != typeof(object); t = t.BaseType) System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(t.TypeHandle);
+        var byId = _byId;
+        int last = Math.Min(_nextId, byId.Length - 1); // ids start at 1
+        var result = new List<BindableProperty>();
+        for (int i = 1; i <= last; i++)
+        {
+            if (byId[i] is { } property && property.AppliesTo(type)) result.Add(property);
+        }
+        return result;
+    }
+
+    /// <summary>
     /// Determines whether <paramref name="value"/> can be stored by this property.
     /// </summary>
     /// <param name="value">The candidate value.</param>

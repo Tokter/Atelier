@@ -5,6 +5,7 @@
   <Folder Name="/src/">
     <Project Path="src/Atelier.Controls/Atelier.Controls.csproj" />
     <Project Path="src/Atelier.Core/Atelier.Core.csproj" />
+    <Project Path="src/Atelier.DevTools/Atelier.DevTools.csproj" />
     <Project Path="src/Atelier.Generators/Atelier.Generators.csproj" />
     <Project Path="src/Atelier.Layout/Atelier.Layout.csproj" />
     <Project Path="src/Atelier.Markup/Atelier.Markup.csproj" />

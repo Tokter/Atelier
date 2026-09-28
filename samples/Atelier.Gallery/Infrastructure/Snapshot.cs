@@ -91,7 +91,34 @@ internal static class Snapshot
             {
                 ToolTipService.Show(owner);
             }
-            PopupManager.UpdatePopups(new Size(width, height), root);
+
+            UIElement rendered = root;
+#if DEBUG
+            // ATELIER_GALLERY_DEVTOOLS=text[:tab] opens the developer tools (Debug builds), selects the first element
+            // whose description contains the text, and shows the tab (0 Properties, 1 Values, 2 Layout, 3 Zoom).
+            if (Environment.GetEnvironmentVariable("ATELIER_GALLERY_DEVTOOLS") is { Length: > 0 } devTools)
+            {
+                var host = new SnapshotDevToolsHost { Content = root };
+                var session = Atelier.DevTools.DevToolsManager.Open(host)!;
+                rendered = host.Content!;
+                rendered.UseLayoutRounding = true;
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    rendered.Measure(new Size(width, height));
+                    rendered.Arrange(new Rect(0, 0, width, height));
+                }
+                var parts = devTools.Split(':');
+                session.Panel.FindNext(parts[0]);
+                if (parts.Length > 1 && int.TryParse(parts[1], out int tab)) session.Panel.Tabs.SelectedIndex = tab;
+                if (parts.Length > 2 && float.TryParse(parts[2], System.Globalization.CultureInfo.InvariantCulture, out float zoom)) session.Panel.Zoom.Zoom = zoom;
+                for (int pass = 0; pass < 3; pass++)
+                {
+                    rendered.Measure(new Size(width, height));
+                    rendered.Arrange(new Rect(0, 0, width, height));
+                }
+            }
+#endif
+            PopupManager.UpdatePopups(new Size(width, height), rendered);
 
             using var bitmap = new SKBitmap(width, height);
             using (var canvas = new SKCanvas(bitmap))
@@ -99,8 +126,8 @@ internal static class Snapshot
                 var background = theme.Colors.Surface;
                 canvas.Clear(new SKColor(background.R, background.G, background.B, background.A));
                 var context = new DrawingContext(canvas, registry);
-                VisualTreeRenderer.Render(root, ref context, ThemeVisualPresenter.Instance);
-                PopupManager.RenderPopups(ref context, ThemeVisualPresenter.Instance, root);
+                VisualTreeRenderer.Render(rendered, ref context, ThemeVisualPresenter.Instance);
+                PopupManager.RenderPopups(ref context, ThemeVisualPresenter.Instance, rendered);
             }
             ToolTipService.Close();
 
@@ -153,3 +180,29 @@ internal static class Snapshot
         return parts is { Length: 2 } && int.TryParse(parts[0], out int w) && int.TryParse(parts[1], out int h) ? (w, h) : (1280, 860);
     }
 }
+
+#if DEBUG
+// The snapshot's root as a window for the developer tools.
+internal sealed class SnapshotDevToolsHost : Atelier.DevTools.IDevToolsHost
+{
+    private UIElement? _content;
+
+    public UIElement? Content
+    {
+        get => _content;
+        set
+        {
+            _content?.DetachFromHost();
+            _content = value;
+            _content?.AttachToHost();
+            _content?.ApplyStylesToTree();
+        }
+    }
+
+    public bool ShowFpsOverlay { get; set; }
+
+    public void InvalidateRender()
+    {
+    }
+}
+#endif
