@@ -1213,12 +1213,16 @@ public abstract class UIElement : VisualNode
 
         _previousFinalRect = finalRect;
 
+        // A measure invalidated while arranging (e.g. a scroll viewer that learns its viewport and makes a virtualizing
+        // panel realize other items) needs another pass: stay invalid, or the next arrange would be skipped.
+        bool measureWasValid = IsMeasureValid;
+
         var transform = Transform;
         if (Parent == null && !transform.IsIdentity)
         {
             Bounds = finalRect;
             ArrangeOverride(finalRect.Size);
-            IsArrangeValid = true;
+            IsArrangeValid = IsMeasureValid || !measureWasValid;
             return;
         }
 
@@ -1291,7 +1295,7 @@ public abstract class UIElement : VisualNode
             }
 
             Bounds = UseLayoutRounding ? RoundEdges(x, y, width, height) : new Rect(x, y, width, height);
-            IsArrangeValid = true;
+            IsArrangeValid = IsMeasureValid || !measureWasValid;
             return;
         }
 
@@ -1351,7 +1355,7 @@ public abstract class UIElement : VisualNode
         float yTrans = bboxY - transBounds.Y;
 
         Bounds = new Rect(xTrans, yTrans, finalUnWidth, finalUnHeight);
-        IsArrangeValid = true;
+        IsArrangeValid = IsMeasureValid || !measureWasValid;
     }
 
     /// <summary>

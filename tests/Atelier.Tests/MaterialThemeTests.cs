@@ -288,6 +288,8 @@ public class MaterialContentColorTests
         var renderer = new MaterialTextBlockRenderer(theme.Colors, theme.Renderers);
         var list = new ListBox { ItemsSource = new[] { "a", "b" } };
         list.SelectedIndex = 1;
+        list.Measure(new Size(300, 200)); // the list virtualizes: containers exist once laid out
+        list.Arrange(new Rect(0, 0, 300, 200));
 
         var selectedText = FindText(list.ContainerFromIndex(1)!, "b");
         var otherText = FindText(list.ContainerFromIndex(0)!, "a");

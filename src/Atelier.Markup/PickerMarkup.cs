@@ -18,6 +18,9 @@ public static class DatePickerMarkup
     /// <summary>Sets the field's label. The default is "Date".</summary>
     public static T Label<T>(this T picker, string label) where T : DatePicker => picker.Set(DatePicker.LabelProperty, label);
 
+    /// <summary>Makes the field compact: 32 high, without the label and the format hint (e.g. as a data grid cell editor).</summary>
+    public static T IsCompact<T>(this T picker, bool compact = true) where T : DatePicker => picker.Set(DatePicker.IsCompactProperty, compact);
+
     /// <summary>Sets the pattern the date is shown and typed in, e.g. <c>dd.MM.yyyy</c>; <c>null</c> uses the culture's.</summary>
     public static T DateFormat<T>(this T picker, string? pattern) where T : DatePicker => picker.Set(DatePicker.DateFormatProperty, pattern);
 

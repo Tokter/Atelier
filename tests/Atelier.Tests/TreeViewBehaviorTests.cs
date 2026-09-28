@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using Atelier.Controls;
 using Atelier.Core.Events;
@@ -450,5 +451,46 @@ public class TreeViewBehaviorTests
         host.DetachFromHost();
         host.Remove(tree);
         return new WeakReference<TreeView>(tree);
+    }
+
+    [Fact]
+    public void LargeExpandedTree_OnlyShowsTheRowsInView()
+    {
+        var roots = new List<Node>();
+        for (int i = 0; i < 50; i++)
+        {
+            var children = new Node[100];
+            for (int j = 0; j < 100; j++) children[j] = new Node($"Leaf {i}.{j}");
+            roots.Add(new Node($"Folder {i}", children));
+        }
+        var tree = CreateTree(roots);
+        tree.ExpandAll();
+        Layout(tree, 400, 300);
+
+        Assert.Equal(5050, tree.GetVisibleItems().Count);
+        int attached = tree.GetAllNodes().Count(n => n.Parent != null);
+        Assert.InRange(attached, 5, 40);
+
+        // Rows follow the tree order, with children after their folder.
+        var folder = NodeFor(tree, "Folder 0");
+        var leaf = NodeFor(tree, "Leaf 0.0");
+        Assert.True(leaf.PointToScreen(Point.Zero).Y > folder.PointToScreen(Point.Zero).Y);
+        Assert.Equal(tree.IndentSize, HeaderPart(leaf, 0).Bounds.Width, 1);
+
+        // Keyboard: End reaches the last leaf and scrolls it into view.
+        tree.OnKeyDown(new KeyEventArgs(Key.End));
+        Layout(tree, 400, 300);
+        var last = NodeFor(tree, "Leaf 49.99");
+        Assert.True(last.IsSelected);
+        Assert.NotNull(last.Parent);
+        float top = last.PointToScreen(Point.Zero).Y - tree.ScrollViewer.PointToScreen(Point.Zero).Y;
+        Assert.InRange(top, -0.5f, 300.5f - last.HeaderHeight);
+        Assert.Null(folder.Parent); // scrolled out: its row was recycled
+
+        // Collapsing a folder removes its rows.
+        NodeFor(tree, "Folder 49").IsExpanded = false;
+        Layout(tree, 400, 300);
+        Assert.Equal(4950, tree.GetVisibleItems().Count);
+        Assert.True(NodeFor(tree, "Folder 49").IsSelected); // the selection moves to the collapsed folder
     }
 }

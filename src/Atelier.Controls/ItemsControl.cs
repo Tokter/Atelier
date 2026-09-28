@@ -25,7 +25,12 @@ namespace Atelier.Controls;
 /// The source collection is observed through a weak subscription, so a long-lived view-model collection does not keep a
 /// discarded control alive. Collection changes must be raised on the UI thread.
 /// </para>
-/// <para>There is no UI virtualization: every item gets a container.</para>
+/// <para>
+/// By default every item gets a container. A subclass can switch to UI virtualization with
+/// <see cref="SetVirtualization"/>: then a <see cref="VirtualizingStackPanel"/> creates containers only for the items in
+/// view and reuses them (see <see cref="CreateVirtualContainer"/>), and <see cref="ContainerFromIndex"/> returns
+/// <c>null</c> for items out of view.
+/// </para>
 /// </remarks>
 public class ItemsControl : Control
 {
@@ -87,6 +92,7 @@ public class ItemsControl : Control
     private readonly List<UIElement> _containers = [];
     private WeakCollectionChangedSubscription<ItemsControl>? _sourceSubscription;
     private bool _isSyncingFromSource;
+    private VirtualizingStackPanel? _virtualPanel;
 
     /// <summary>Initializes a new, empty <see cref="ItemsControl"/>.</summary>
     public ItemsControl()
@@ -103,15 +109,87 @@ public class ItemsControl : Control
     /// Returns the container generated for the item at <paramref name="index"/>, or <c>null</c> if the index is out of range.
     /// </summary>
     /// <param name="index">The item index.</param>
+    /// <remarks>While virtualizing, only items in view (after layout) have a container.</remarks>
     public UIElement? ContainerFromIndex(int index) =>
-        (uint)index < (uint)_containers.Count ? _containers[index] : null;
+        _virtualPanel != null ? _virtualPanel.ContainerFromIndex(index)
+        : (uint)index < (uint)_containers.Count ? _containers[index] : null;
 
     /// <summary>
     /// Returns the index of the item whose container is <paramref name="container"/>, or -1 if it isn't one of this
     /// control's containers.
     /// </summary>
     /// <param name="container">The container element.</param>
-    public int IndexFromContainer(UIElement container) => _containers.IndexOf(container);
+    public int IndexFromContainer(UIElement container) =>
+        _virtualPanel != null ? _virtualPanel.IndexFromContainer(container) : _containers.IndexOf(container);
+
+    /// <summary>Gets the virtualizing panel while <see cref="SetVirtualization"/> is on, otherwise <c>null</c>.</summary>
+    protected VirtualizingStackPanel? VirtualPanel => _virtualPanel;
+
+    /// <summary>
+    /// Switches UI virtualization on or off: on, the items show in a <see cref="VirtualizingStackPanel"/> with containers
+    /// from <see cref="CreateVirtualContainer"/> for the items in view only; off, in <see cref="ItemPanel"/> with one
+    /// container per item from <see cref="CreateContainerForItem"/>. <see cref="OnItemsChanged"/> then reports a reset.
+    /// </summary>
+    protected void SetVirtualization(bool enabled)
+    {
+        if (enabled == (_virtualPanel != null)) return;
+
+        if (enabled)
+        {
+            ItemPanel.Clear();
+            _containers.Clear();
+            _virtualPanel = new VirtualizingStackPanel();
+            ScrollViewer.Content = _virtualPanel;
+            _virtualPanel.Generator = new VirtualGenerator(this);
+        }
+        else
+        {
+            _virtualPanel!.Generator = null;
+            _virtualPanel = null;
+            ScrollViewer.Content = ItemPanel;
+            RebuildContainers();
+        }
+        OnItemsChanged(ResetArgs);
+        InvalidateMeasure();
+    }
+
+    /// <summary>Creates an empty container while virtualizing; the base implementation creates a <see cref="ContentControl"/>.</summary>
+    protected virtual UIElement CreateVirtualContainer() => new ContentControl();
+
+    /// <summary>
+    /// Makes a container from <see cref="CreateVirtualContainer"/> show <paramref name="item"/> at <paramref name="index"/>.
+    /// Called for a new item and again with the same item when its index moved. The base implementation sets the content
+    /// to the visual from <see cref="CreateContainerForItem"/>.
+    /// </summary>
+    protected virtual void PrepareVirtualContainer(UIElement container, object item, int index)
+    {
+        if (container is ContentControl host && !ReferenceEquals(host.DataContext, item))
+        {
+            host.Content = CreateContainerForItem(item);
+            host.DataContext = item;
+        }
+    }
+
+    /// <summary>Releases a container from its item before it is reused; the base implementation clears the content.</summary>
+    protected virtual void ClearVirtualContainer(UIElement container)
+    {
+        if (container is ContentControl host)
+        {
+            host.Content = null;
+            host.ClearValue(DataContextProperty);
+        }
+    }
+
+    private sealed class VirtualGenerator(ItemsControl owner) : IVirtualItemsGenerator
+    {
+        public int ItemCount => owner.Items.Count;
+
+        public UIElement CreateContainer() => owner.CreateVirtualContainer();
+
+        public void PrepareContainer(UIElement container, int index) => owner.PrepareVirtualContainer(container, owner.Items[index], index);
+
+        public void ClearContainer(UIElement container) => owner.ClearVirtualContainer(container);
+    }
 
     private void OnItemsSourceChanged(IEnumerable? oldSource, IEnumerable? newSource)
     {
@@ -206,6 +284,14 @@ public class ItemsControl : Control
 
     private void ApplyItemsChange(NotifyCollectionChangedEventArgs e)
     {
+        if (_virtualPanel != null)
+        {
+            _virtualPanel.OnItemsChanged(e);
+            OnItemsChanged(e);
+            InvalidateMeasure();
+            return;
+        }
+
         switch (e.Action)
         {
             case NotifyCollectionChangedAction.Add:
@@ -264,6 +350,12 @@ public class ItemsControl : Control
 
     private void RebuildContainers()
     {
+        if (_virtualPanel != null)
+        {
+            _virtualPanel.Reset();
+            return;
+        }
+
         ItemPanel.Clear();
         _containers.Clear();
         for (int i = 0; i < Items.Count; i++)
@@ -480,6 +572,21 @@ public class ListBox : ItemsControl
     public static readonly BindableProperty<bool> IsTextSearchEnabledProperty =
         BindableProperty.Register<ListBox, bool>(nameof(IsTextSearchEnabled), true);
 
+    /// <summary>Identifies the <see cref="IsVirtualizing"/> bindable property.</summary>
+    public static readonly BindableProperty<bool> IsVirtualizingProperty =
+        BindableProperty.Register<ListBox, bool>(nameof(IsVirtualizing), true, (s, o, n) => ((ListBox)s).SetVirtualization(n));
+
+    /// <summary>
+    /// Gets or sets whether only the items in view get containers, which are reused while scrolling (UI virtualization).
+    /// Default <c>true</c>, which keeps long lists fast; <see cref="ItemsControl.ContainerFromIndex"/> then returns
+    /// <c>null</c> for items out of view. Item heights may differ; items not yet seen count with the average height.
+    /// </summary>
+    public bool IsVirtualizing
+    {
+        get => GetValue(IsVirtualizingProperty);
+        set => SetValue(IsVirtualizingProperty, value);
+    }
+
     /// <summary>
     /// Gets or sets the selected item, or <c>null</c> for no selection. Default <c>null</c>.
     /// </summary>
@@ -526,6 +633,7 @@ public class ListBox : ItemsControl
     internal ComboBox? OwnerComboBox { get; set; }
 
     private ListBoxItem? _selectedContainer;
+    private bool _isSelectionResolved; // the selection refers to an actual item (not pending or none)
     private bool _isSyncingSelection;
     private bool _isFocusingFromPointer;
     private int _pendingScrollIndex = -1;
@@ -535,6 +643,7 @@ public class ListBox : ItemsControl
     public ListBox()
     {
         IsFocusable = true;
+        SetVirtualization(IsVirtualizing);
     }
 
     /// <inheritdoc/>
@@ -636,7 +745,7 @@ public class ListBox : ItemsControl
                 break;
             }
 
-            float height = ContainerFromIndex(next)!.Bounds.Height;
+            float height = VirtualPanel?.GetItemHeight(next) ?? ContainerFromIndex(next)!.Bounds.Height;
             if (height <= 0 || viewport <= 0)
             {
                 // Not laid out yet: move a single item.
@@ -661,9 +770,18 @@ public class ListBox : ItemsControl
     /// <param name="index">The item index; out-of-range values are ignored.</param>
     public void ScrollIntoView(int index)
     {
-        if (index < 0 || index >= ContainerCount) return;
+        if (index < 0 || index >= Items.Count) return;
 
-        if (!IsArrangeValid || !ContainerFromIndex(index)!.IsArrangeValid)
+        // Virtualized positions are known without layout (estimated for items not seen yet): scroll now, and once more
+        // after the next arrange, when the heights around the item are measured.
+        if (VirtualPanel != null && ScrollViewer.Viewport.Height > 0)
+        {
+            ScrollIntoViewCore(index);
+            _pendingScrollIndex = index;
+            return;
+        }
+
+        if (!IsArrangeValid || (VirtualPanel == null && !ContainerFromIndex(index)!.IsArrangeValid))
         {
             _pendingScrollIndex = index;
             return;
@@ -674,6 +792,12 @@ public class ListBox : ItemsControl
 
     private void ScrollIntoViewCore(int index)
     {
+        if (VirtualPanel != null)
+        {
+            VirtualPanel.ScrollIntoView(index);
+            return;
+        }
+
         var container = ContainerFromIndex(index)!;
         float itemTop = container.Bounds.Y;
         float itemBottom = itemTop + container.Bounds.Height;
@@ -701,9 +825,19 @@ public class ListBox : ItemsControl
         {
             int index = _pendingScrollIndex;
             _pendingScrollIndex = -1;
-            if (index < ContainerCount)
+            if (index < Items.Count)
             {
                 ScrollIntoViewCore(index);
+
+                // Scrolling a virtualized list realizes other items. This arrange would leave them for a later pass
+                // that never comes (this element counts as arranged), so lay the viewer out again now. The second
+                // round corrects the position with the heights just measured.
+                for (int round = 0; round < 2 && VirtualPanel != null && !ScrollViewer.IsMeasureValid; round++)
+                {
+                    ScrollViewer.Measure(finalSize);
+                    ScrollViewer.Arrange(new Rect(Point.Zero, finalSize));
+                    ScrollIntoViewCore(index);
+                }
             }
         }
 
@@ -721,6 +855,38 @@ public class ListBox : ItemsControl
             ItemValue = item,
             Content = base.CreateContainerForItem(item)
         };
+    }
+
+    /// <inheritdoc/>
+    protected override UIElement CreateVirtualContainer() => new ListBoxItem { ParentListBox = this };
+
+    /// <inheritdoc/>
+    /// <remarks>Keeps the content when only the index moved.</remarks>
+    protected override void PrepareVirtualContainer(UIElement container, object item, int index)
+    {
+        var listBoxItem = (ListBoxItem)container;
+        if (listBoxItem.Content == null || !ReferenceEquals(listBoxItem.ItemValue, item))
+        {
+            listBoxItem.ItemValue = item;
+            listBoxItem.Content = base.CreateContainerForItem(item);
+        }
+        listBoxItem.Index = index;
+
+        bool selected = index == SelectedIndex;
+        listBoxItem.IsSelected = selected;
+        if (selected) _selectedContainer = listBoxItem;
+        else if (_selectedContainer == listBoxItem) _selectedContainer = null;
+    }
+
+    /// <inheritdoc/>
+    protected override void ClearVirtualContainer(UIElement container)
+    {
+        var listBoxItem = (ListBoxItem)container;
+        listBoxItem.Content = null;
+        listBoxItem.ItemValue = null;
+        listBoxItem.Index = -1;
+        listBoxItem.IsSelected = false;
+        if (_selectedContainer == listBoxItem) _selectedContainer = null;
     }
 
     internal void OnContainerClicked(ListBoxItem container)
@@ -764,12 +930,12 @@ public class ListBox : ItemsControl
             ((ListBoxItem)ContainerFromIndex(i)!).Index = i;
         }
 
-        if (_pendingScrollIndex >= ContainerCount)
+        if (_pendingScrollIndex >= Items.Count)
         {
             _pendingScrollIndex = -1;
         }
 
-        bool wasResolved = _selectedContainer != null;
+        bool wasResolved = _isSelectionResolved;
         if (e.Action != NotifyCollectionChangedAction.Add && e.Action != NotifyCollectionChangedAction.Move
             && _selectedContainer != null && _selectedContainer.Parent == null)
         {
@@ -880,6 +1046,7 @@ public class ListBox : ItemsControl
 
     private void UpdateSelectedContainer()
     {
+        _isSelectionResolved = SelectedIndex >= 0 && SelectedIndex < Items.Count;
         var container = ContainerFromIndex(SelectedIndex) as ListBoxItem;
         if (container == _selectedContainer) return;
 

@@ -62,6 +62,9 @@ public class MaterialTheme : Theme
         renderers.Register(new MaterialTabItemRenderer(colors));
         renderers.Register(new MaterialMenuItemRenderer(colors));
         renderers.Register(new MaterialSeparatorRenderer(colors));
+        renderers.Register(new MaterialDataGridRenderer(colors));
+        renderers.Register(new MaterialDataGridRowRenderer(colors));
+        renderers.Register(new MaterialDataGridColumnHeaderRenderer(colors));
         renderers.Register(new MaterialProgressBarRenderer(colors));
         renderers.Register(new MaterialTextBlockRenderer(colors, renderers));
         renderers.Register(new MaterialBorderRenderer(colors));

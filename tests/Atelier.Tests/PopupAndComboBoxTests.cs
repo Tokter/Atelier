@@ -563,13 +563,10 @@ public class PopupAndComboBoxTests
         Assert.NotNull(listBox);
 
         // Every ListBoxItem in the popup listbox should have a StackPanel containing the dot border
-        var itemPanel = listBox.ScrollViewer.Content as StackPanel;
-        Assert.NotNull(itemPanel);
-        Assert.Equal(3, itemPanel.Children.Count);
-
-        for (int i = 0; i < itemPanel.Children.Count; i++)
+        Assert.Equal(3, listBox.Items.Count);
+        for (int i = 0; i < listBox.Items.Count; i++)
         {
-            var itemContainer = itemPanel.Children[i] as ListBoxItem;
+            var itemContainer = listBox.ContainerFromIndex(i) as ListBoxItem;
             Assert.NotNull(itemContainer);
             Assert.IsType<StackPanel>(itemContainer.Content);
             var templatePanel = (StackPanel)itemContainer.Content;

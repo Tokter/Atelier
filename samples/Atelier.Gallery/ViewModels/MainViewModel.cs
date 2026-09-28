@@ -50,6 +50,7 @@ public partial class MainViewModel : ObservableObject
             new BadgesViewModel(),
             new TabsViewModel(),
             new MenusViewModel(),
+            new DataGridViewModel(),
             new TypographyViewModel(),
             new LayoutViewModel(),
             new DialogHostViewModel(),

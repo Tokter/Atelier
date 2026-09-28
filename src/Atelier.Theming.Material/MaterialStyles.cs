@@ -149,6 +149,19 @@ public static class MaterialStyles
                 .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
             new Style(TabControl.AddButtonStyleKey, typeof(Button))
                 .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
+            // Data grids: extra-small (4 px) corners, title-small headers.
+            new Style(typeof(DataGrid))
+                .Set(Control.CornerRadiusProperty, new CornerRadius(MaterialShape.ExtraSmall)),
+            new Style(typeof(DataGridColumnHeader))
+                .Set(Control.FontSizeProperty, MaterialTypescale.TitleSmall.Size)
+                .Set(Control.FontWeightProperty, MaterialTypescale.TitleSmall.Weight),
+            // Header filter buttons: on-surface-variant, primary while the column is filtered; the filter menu divider.
+            new Style(DataGridColumnHeader.FilterButtonStyleKey, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
+            new Style(DataGridColumnHeader.ActiveFilterButtonStyleKey, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.Primary),
+            new Style(DataGridFilterMenu.DividerStyleKey, typeof(Atelier.Layout.Border))
+                .Set(Atelier.Layout.Border.BackgroundProperty, colors.OutlineVariant),
             new Style(typeof(TabItem))
                 .Set(Control.FontSizeProperty, MaterialTypescale.TitleSmall.Size),
 

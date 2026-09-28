@@ -77,6 +77,9 @@ public static class ListBoxMarkup
     /// <summary>Sets whether typing selects the next item whose text starts with the typed characters (on by default).</summary>
     public static T IsTextSearchEnabled<T>(this T listBox, bool isEnabled = true) where T : ListBox => listBox.Set(ListBox.IsTextSearchEnabledProperty, isEnabled);
 
+    /// <summary>Sets whether only the items in view get containers (on by default).</summary>
+    public static T IsVirtualizing<T>(this T listBox, bool isVirtualizing = true) where T : ListBox => listBox.Set(ListBox.IsVirtualizingProperty, isVirtualizing);
+
     /// <summary>Handles <see cref="ListBox.SelectionChanged"/>, raised with the newly selected item (or <c>null</c>).</summary>
     public static T OnSelectionChanged<T>(this T listBox, EventHandler<object?> handler) where T : ListBox
     {
@@ -197,6 +200,9 @@ public static class ComboBoxMarkup
 
     /// <summary>Sets whether typing selects the next option whose text starts with the typed characters (on by default).</summary>
     public static T IsTextSearchEnabled<T>(this T comboBox, bool isEnabled = true) where T : ComboBox => comboBox.Set(ComboBox.IsTextSearchEnabledProperty, isEnabled);
+
+    /// <summary>Makes the field compact: 32 high with less padding and no minimum width (e.g. as a data grid cell editor).</summary>
+    public static T IsCompact<T>(this T comboBox, bool compact = true) where T : ComboBox => comboBox.Set(ComboBox.IsCompactProperty, compact);
 
     #endregion
 

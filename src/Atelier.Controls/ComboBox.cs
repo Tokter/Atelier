@@ -88,6 +88,13 @@ public class ComboBox : Control
     public static readonly BindableProperty<bool> IsTextSearchEnabledProperty =
         BindableProperty.Register<ComboBox, bool>(nameof(IsTextSearchEnabled), true);
 
+    /// <summary>Identifies the <see cref="IsCompact"/> bindable property.</summary>
+    public static readonly BindableProperty<bool> IsCompactProperty =
+        BindableProperty.Register<ComboBox, bool>(nameof(IsCompact), false, (s, o, n) => ((ComboBox)s).ApplyCompact(n));
+
+    /// <summary>The height of a compact combo box.</summary>
+    public const float CompactHeight = 32f;
+
     /// <summary>
     /// Gets or sets the collection the items are taken from. Default <c>null</c>. Changes of an
     /// <see cref="INotifyCollectionChanged"/> source are mirrored into <see cref="Items"/> (weakly subscribed).
@@ -141,6 +148,32 @@ public class ComboBox : Control
     {
         get => GetValue(IsTextSearchEnabledProperty);
         set => SetValue(IsTextSearchEnabledProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets whether the field is compact: 32 high with less padding and no minimum width, e.g. as a
+    /// <see cref="DataGrid"/> cell editor or in a toolbar. Default <c>false</c>.
+    /// </summary>
+    public bool IsCompact
+    {
+        get => GetValue(IsCompactProperty);
+        set => SetValue(IsCompactProperty, value);
+    }
+
+    // Local values beat the theme style's padding and minimum height.
+    private void ApplyCompact(bool compact)
+    {
+        if (compact)
+        {
+            Padding = new Thickness(12, 0);
+            MinHeight = 0;
+        }
+        else
+        {
+            ClearValue(PaddingProperty);
+            ClearValue(MinHeightProperty);
+        }
+        InvalidateMeasure();
     }
 
     /// <summary>Gets the items shown in the drop-down; filled from <see cref="ItemsSource"/> or edited directly.</summary>
@@ -547,13 +580,15 @@ public class ComboBox : Control
             contentH = TextMeasurer.GetFontSpacing(FontSize, FontFamily);
         }
 
-        float width = Math.Max(160f, contentW + ChevronWidth + padding.Horizontal);
+        bool compact = IsCompact;
+        float minWidth = compact ? 0f : 160f;
+        float width = Math.Max(minWidth, contentW + ChevronWidth + padding.Horizontal);
         if (!float.IsInfinity(availableSize.Width))
         {
-            width = Math.Min(width, Math.Max(160f, availableSize.Width));
+            width = Math.Min(width, Math.Max(minWidth, availableSize.Width));
         }
 
-        return new Size(width, Math.Max(40f, contentH + padding.Vertical));
+        return new Size(width, compact ? CompactHeight : Math.Max(40f, contentH + padding.Vertical));
     }
 
     private float GetItemsTextWidth()

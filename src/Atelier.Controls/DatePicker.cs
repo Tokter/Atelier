@@ -49,7 +49,11 @@ public class DatePicker : Control
 
     /// <summary>Identifies the <see cref="Label"/> property.</summary>
     public static readonly BindableProperty<string> LabelProperty =
-        BindableProperty.Register<DatePicker, string>(nameof(Label), "Date", (s, o, n) => ((DatePicker)s)._textBox.Label = n);
+        BindableProperty.Register<DatePicker, string>(nameof(Label), "Date", (s, o, n) => ((DatePicker)s).ApplyCompact());
+
+    /// <summary>Identifies the <see cref="IsCompact"/> property.</summary>
+    public static readonly BindableProperty<bool> IsCompactProperty =
+        BindableProperty.Register<DatePicker, bool>(nameof(IsCompact), false, (s, o, n) => ((DatePicker)s).ApplyCompact());
 
     /// <summary>Identifies the <see cref="DateFormat"/> property.</summary>
     public static readonly BindableProperty<string?> DateFormatProperty =
@@ -135,6 +139,21 @@ public class DatePicker : Control
     public string Label { get => GetValue(LabelProperty); set => SetValue(LabelProperty, value); }
 
     /// <summary>
+    /// Gets or sets whether the field is compact: 32 high, without the label and the format hint below it, e.g. as a
+    /// <see cref="DataGrid"/> cell editor or in a toolbar. The default is <c>false</c>.
+    /// </summary>
+    public bool IsCompact { get => GetValue(IsCompactProperty); set => SetValue(IsCompactProperty, value); }
+
+    private void ApplyCompact()
+    {
+        bool compact = IsCompact;
+        _textBox.Label = compact ? string.Empty : Label;
+        if (compact) _textBox.FieldHeight = 32;
+        else _textBox.ClearValue(TextBox.FieldHeightProperty);
+        OnDateFormatChanged();
+    }
+
+    /// <summary>
     /// Gets or sets the pattern the date is shown and typed in, such as <c>dd.MM.yyyy</c>; <c>null</c> (the default) uses
     /// the culture's numeric short date (see <see cref="PickerFormat.GetDatePattern"/>).
     /// </summary>
@@ -178,7 +197,7 @@ public class DatePicker : Control
     {
         string placeholder = PickerFormat.GetDatePlaceholder(Pattern);
         _textBox.Placeholder = placeholder;
-        _textBox.SupportingText = placeholder;
+        _textBox.SupportingText = IsCompact ? string.Empty : placeholder;
         ShowText(SelectedDate);
     }
 

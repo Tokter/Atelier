@@ -172,8 +172,10 @@ public class TreeView : Control
     /// <summary>Gets the selected node, or <c>null</c>.</summary>
     public TreeViewItem? SelectedNode => _selectedNode;
 
-    private readonly StackPanel _rootItemsPanel = new() { Orientation = Orientation.Vertical };
+    private readonly VirtualizingStackPanel _rows = new();
     private readonly List<TreeViewItem> _rootItems = [];
+    private readonly List<TreeViewItem> _shownRows = []; // the nodes shown, in display order
+    private bool _rowsDirty = true;
     private WeakCollectionChangedSubscription<TreeView>? _sourceSubscription;
     private TreeViewItem? _selectedNode;
     private TreeViewItem? _pendingScrollTarget;
@@ -193,7 +195,8 @@ public class TreeView : Control
     public TreeView()
     {
         IsFocusable = true;
-        ScrollViewer.Content = _rootItemsPanel;
+        _rows.Generator = new RowGenerator(this);
+        ScrollViewer.Content = _rows;
         ScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
         ScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         AddChild(ScrollViewer);
@@ -208,8 +211,8 @@ public class TreeView : Control
         _sourceSubscription?.Dispose();
         _sourceSubscription = null;
 
-        ResetNodes(newSource, _rootItems, _rootItemsPanel, null, 0, reuse: true);
-        InvalidateMeasure();
+        ResetNodes(newSource, _rootItems, null, 0, reuse: true);
+        InvalidateRows();
 
         if (newSource is INotifyCollectionChanged incc)
         {
@@ -221,7 +224,7 @@ public class TreeView : Control
     private void OnItemsSourceCollectionChanged(NotifyCollectionChangedEventArgs e)
     {
         Atelier.Core.Threading.Dispatcher.VerifyAccess("TreeView.ItemsSource collection change");
-        ApplyCollectionChange(ItemsSource, e, _rootItems, _rootItemsPanel, null, 0);
+        ApplyCollectionChange(ItemsSource, e, _rootItems, null, 0);
     }
 
     /// <summary>
@@ -230,16 +233,16 @@ public class TreeView : Control
     /// </summary>
     public void RebuildTree()
     {
-        ResetNodes(ItemsSource, _rootItems, _rootItemsPanel, null, 0, reuse: true);
-        InvalidateMeasure();
+        ResetNodes(ItemsSource, _rootItems, null, 0, reuse: true);
+        InvalidateRows();
     }
 
     // Template or selector changed: every node's visuals and children must be recreated.
     private void RegenerateTree()
     {
         if (ItemsSource == null) return;
-        ResetNodes(ItemsSource, _rootItems, _rootItemsPanel, null, 0, reuse: false);
-        InvalidateMeasure();
+        ResetNodes(ItemsSource, _rootItems, null, 0, reuse: false);
+        InvalidateRows();
     }
 
     /// <summary>Adds a manually created root node (and its existing children) to the tree.</summary>
@@ -247,9 +250,8 @@ public class TreeView : Control
     public void AddRootItem(TreeViewItem item)
     {
         _rootItems.Add(item);
-        _rootItemsPanel.Add(item);
         item.AttachToTree(this, null, 0);
-        InvalidateMeasure();
+        InvalidateRows();
     }
 
     /// <summary>Removes a root node added with <see cref="AddRootItem"/>; clears the selection if it was inside it.</summary>
@@ -258,19 +260,98 @@ public class TreeView : Control
     {
         if (_rootItems.Remove(item))
         {
-            _rootItemsPanel.Remove(item);
             OnNodeRemoved(item);
             item.AttachToTree(null, null, 0);
-            InvalidateMeasure();
+            InvalidateRows();
         }
     }
 
-    // Applies one collection notification to a node list and its panel (roots or a node's children).
+    #region Rows
+
+    // The shown rows changed (nodes added, removed, expanded, collapsed or hidden): rebuilt at the next measure.
+    internal void InvalidateRows()
+    {
+        _rowsDirty = true;
+        InvalidateMeasure();
+    }
+
+    private void EnsureRows()
+    {
+        if (!_rowsDirty) return;
+        _rowsDirty = false;
+        _shownRows.Clear();
+        CollectShownRows(_rootItems, _shownRows);
+        _rows.Reset();
+    }
+
+    private static void CollectShownRows(List<TreeViewItem> nodes, List<TreeViewItem> rows)
+    {
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var node = nodes[i];
+            if (node.Visibility != Visibility.Visible) continue;
+            rows.Add(node);
+            if (node.IsExpanded) CollectShownRows(node.RealizedChildren, rows);
+        }
+    }
+
+    /// <summary>Gets the virtualizing panel that shows the rows of the nodes in view.</summary>
+    public VirtualizingStackPanel RowsPanel => _rows;
+
+    // Hosts a node's row while it is in view; the panel reuses hosts for other nodes while scrolling.
+    private sealed class TreeViewRowHost : UIElement
+    {
+        private TreeViewItem? _node;
+
+        public TreeViewItem? Node
+        {
+            get => _node;
+            set
+            {
+                if (_node == value) return;
+                if (_node != null) RemoveChild(_node);
+                _node = value;
+                if (value != null)
+                {
+                    value.Parent?.RemoveChild(value);
+                    AddChild(value);
+                }
+                InvalidateMeasure();
+            }
+        }
+
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            if (_node == null) return Size.Zero;
+            _node.Measure(availableSize);
+            return _node.DesiredSize;
+        }
+
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            _node?.Arrange(new Rect(Point.Zero, finalSize));
+            return finalSize;
+        }
+    }
+
+    private sealed class RowGenerator(TreeView tree) : IVirtualItemsGenerator
+    {
+        public int ItemCount => tree._shownRows.Count;
+
+        public UIElement CreateContainer() => new TreeViewRowHost();
+
+        public void PrepareContainer(UIElement container, int index) => ((TreeViewRowHost)container).Node = tree._shownRows[index];
+
+        public void ClearContainer(UIElement container) => ((TreeViewRowHost)container).Node = null;
+    }
+
+    #endregion
+
+    // Applies one collection notification to a node list (roots or a node's children).
     internal void ApplyCollectionChange(
         IEnumerable? source,
         NotifyCollectionChangedEventArgs e,
         List<TreeViewItem> nodes,
-        Panel panel,
         TreeViewItem? parent,
         int level)
     {
@@ -282,7 +363,6 @@ public class TreeView : Control
                 {
                     var node = CreateTreeViewItem(e.NewItems[i]!, level, parent);
                     nodes.Insert(e.NewStartingIndex + i, node);
-                    panel.InsertChild(e.NewStartingIndex + i, node);
                 }
                 break;
 
@@ -290,7 +370,7 @@ public class TreeView : Control
                 when e.OldItems != null && e.OldStartingIndex >= 0 && e.OldStartingIndex + e.OldItems.Count <= nodes.Count:
                 for (int i = 0; i < e.OldItems.Count; i++)
                 {
-                    RemoveNodeAt(nodes, panel, e.OldStartingIndex);
+                    RemoveNodeAt(nodes, e.OldStartingIndex);
                 }
                 break;
 
@@ -300,10 +380,9 @@ public class TreeView : Control
                 for (int i = 0; i < e.NewItems.Count; i++)
                 {
                     int index = e.NewStartingIndex + i;
-                    RemoveNodeAt(nodes, panel, index);
+                    RemoveNodeAt(nodes, index);
                     var node = CreateTreeViewItem(e.NewItems[i]!, level, parent);
                     nodes.Insert(index, node);
-                    panel.InsertChild(index, node);
                 }
                 break;
 
@@ -314,24 +393,22 @@ public class TreeView : Control
                 var node = nodes[e.OldStartingIndex];
                 nodes.RemoveAt(e.OldStartingIndex);
                 nodes.Insert(e.NewStartingIndex, node);
-                panel.InsertChild(e.NewStartingIndex, node);
                 break;
             }
 
             default:
                 // Reset, or a notification without usable indices.
-                ResetNodes(source, nodes, panel, parent, level, reuse: true);
+                ResetNodes(source, nodes, parent, level, reuse: true);
                 break;
         }
 
-        InvalidateMeasure();
+        InvalidateRows();
     }
 
-    private void RemoveNodeAt(List<TreeViewItem> nodes, Panel panel, int index)
+    private void RemoveNodeAt(List<TreeViewItem> nodes, int index)
     {
         var node = nodes[index];
         nodes.RemoveAt(index);
-        panel.Remove(node);
         DiscardNode(node);
     }
 
@@ -339,7 +416,6 @@ public class TreeView : Control
     internal void ResetNodes(
         IEnumerable? source,
         List<TreeViewItem> nodes,
-        Panel panel,
         TreeViewItem? parent,
         int level,
         bool reuse)
@@ -357,7 +433,6 @@ public class TreeView : Control
         }
 
         nodes.Clear();
-        panel.Clear();
 
         if (source != null)
         {
@@ -376,7 +451,6 @@ public class TreeView : Control
 
                 node.ResetMark = true;
                 nodes.Add(node);
-                panel.Add(node);
             }
         }
 
@@ -460,7 +534,7 @@ public class TreeView : Control
     private void RefreshNodeVisuals()
     {
         RefreshNodeVisuals(_rootItems);
-        InvalidateMeasure();
+        InvalidateRows();
     }
 
     private static void RefreshNodeVisuals(List<TreeViewItem> nodes)
@@ -717,7 +791,7 @@ public class TreeView : Control
     #endregion
 
     /// <summary>
-    /// Scrolls so the header of <paramref name="node"/> is visible. If layout is pending (for example right after its
+    /// Scrolls so the row of <paramref name="node"/> is visible (if it is shown). If layout is pending (for example right after its
     /// ancestors were expanded), scrolling happens after the next arrange, when the node's position is known.
     /// </summary>
     /// <param name="node">A node of this tree.</param>
@@ -725,34 +799,20 @@ public class TreeView : Control
     {
         if (node.ParentTreeView != this) return;
 
-        if (!IsArrangeValid || !node.IsArrangeValid)
+        // Row positions are known without layout (estimated for rows not seen yet): scroll now, and once more after the
+        // next arrange, when the heights around the row are measured.
+        if (!_rowsDirty && ScrollViewer.Viewport.Height > 0)
         {
-            _pendingScrollTarget = node;
-            return;
+            ScrollIntoViewCore(node);
         }
-
-        ScrollIntoViewCore(node);
+        _pendingScrollTarget = node;
     }
 
     private void ScrollIntoViewCore(TreeViewItem node)
     {
-        var screenPt = node.PointToScreen(Point.Zero);
-        var svScreenPt = ScrollViewer.PointToScreen(Point.Zero);
-        float nodeRelativeY = screenPt.Y - svScreenPt.Y + ScrollViewer.ScrollOffsetY;
-        float nodeHeight = node.HeaderHeight;
-
-        float viewTop = ScrollViewer.ScrollOffsetY;
-        float viewHeight = ScrollViewer.Viewport.Height > 0 ? ScrollViewer.Viewport.Height : Bounds.Height;
-        float viewBottom = viewTop + viewHeight;
-
-        if (nodeRelativeY < viewTop)
-        {
-            ScrollViewer.ScrollOffsetY = Math.Max(0, nodeRelativeY);
-        }
-        else if (nodeRelativeY + nodeHeight > viewBottom && viewHeight > 0)
-        {
-            ScrollViewer.ScrollOffsetY = Math.Min(ScrollViewer.MaxScrollY, nodeRelativeY + nodeHeight - viewHeight);
-        }
+        EnsureRows();
+        int index = _shownRows.IndexOf(node);
+        if (index >= 0) _rows.ScrollIntoView(index);
     }
 
     /// <summary>Expands every node that has children, generating the whole tree.</summary>
@@ -911,6 +971,7 @@ public class TreeView : Control
     /// <inheritdoc/>
     protected override Size MeasureOverride(Size availableSize)
     {
+        EnsureRows();
         ScrollViewer.Measure(availableSize);
         return ScrollViewer.DesiredSize;
     }
@@ -926,6 +987,16 @@ public class TreeView : Control
             if (target.ParentTreeView == this)
             {
                 ScrollIntoViewCore(target);
+
+                // Scrolling realizes other rows. This arrange would leave them for a later pass that never comes (this
+                // element counts as arranged), so lay the viewer out again now; the second round corrects the position
+                // with the heights just measured.
+                for (int round = 0; round < 2 && !ScrollViewer.IsMeasureValid; round++)
+                {
+                    ScrollViewer.Measure(finalSize);
+                    ScrollViewer.Arrange(new Rect(Point.Zero, finalSize));
+                    ScrollIntoViewCore(target);
+                }
             }
         }
 

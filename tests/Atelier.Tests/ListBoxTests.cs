@@ -60,7 +60,12 @@ public class CountingObservableCollection<T> : ObservableCollection<T>
 
 public class ListBoxTests
 {
-    private static ListBoxItem Container(ListBox listBox, int index) => (ListBoxItem)listBox.ContainerFromIndex(index)!;
+    // Lists virtualize: containers exist once laid out (and only for items in view).
+    private static ListBoxItem Container(ListBox listBox, int index)
+    {
+        if (listBox.ContainerFromIndex(index) == null) Layout(listBox);
+        return (ListBoxItem)listBox.ContainerFromIndex(index)!;
+    }
 
     private static void Layout(UIElement element, float width = 300, float height = 400)
     {
@@ -134,7 +139,8 @@ public class ListBoxTests
         source.Items.Remove("a");
         source.Raise(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, (object)"a")); // index -1
         Assert.Equal(new object[] { "b", "c" }, listBox.Items);
-        Assert.Equal(2, listBox.ScrollViewer.Content is Panel p ? p.Children.Count : -1);
+        Assert.Equal("c", ContainerText(listBox, 1));
+        Assert.Null(listBox.ContainerFromIndex(2));
     }
 
     [Fact]
@@ -143,17 +149,45 @@ public class ListBoxTests
         var source = new ObservableCollection<string>();
         for (int i = 0; i < 1000; i++) source.Add($"Item {i}");
         var listBox = new ListBox { ItemsSource = source };
+        Layout(listBox);
 
-        var before = new UIElement[1000];
-        for (int i = 0; i < 1000; i++) before[i] = listBox.ContainerFromIndex(i)!;
+        // Only the items in view (plus a few) have containers.
+        int realized = 0;
+        while (listBox.ContainerFromIndex(realized) != null) realized++;
+        Assert.InRange(realized, 5, 30);
+        Assert.Null(listBox.ContainerFromIndex(500));
 
-        source.Insert(500, "New");
+        var before = new UIElement[realized];
+        for (int i = 0; i < realized; i++) before[i] = listBox.ContainerFromIndex(i)!;
+
+        source.Insert(3, "New");
 
         Assert.Equal(1001, listBox.Items.Count);
-        for (int i = 0; i < 500; i++) Assert.Same(before[i], listBox.ContainerFromIndex(i));
-        for (int i = 500; i < 1000; i++) Assert.Same(before[i], listBox.ContainerFromIndex(i + 1));
-        Assert.Equal("New", Container(listBox, 500).ItemValue);
-        Assert.Equal(1000, Container(listBox, 1000).Index);
+        for (int i = 0; i < 3; i++) Assert.Same(before[i], listBox.ContainerFromIndex(i));
+        for (int i = 3; i < realized; i++) Assert.Same(before[i], listBox.ContainerFromIndex(i + 1));
+        Assert.Equal(realized, Container(listBox, realized).Index);
+        Assert.Equal("Item 3", Container(listBox, 4).ItemValue);
+        Layout(listBox);
+        Assert.Equal("New", Container(listBox, 3).ItemValue);
+
+        // Scrolling far down reuses the containers.
+        listBox.ScrollIntoView(900);
+        Layout(listBox);
+        Assert.Equal("Item 899", Container(listBox, 900).ItemValue);
+        Assert.Null(listBox.ContainerFromIndex(0));
+        Assert.Contains(listBox.ContainerFromIndex(900), before);
+    }
+
+    [Fact]
+    public void IsVirtualizingOff_CreatesAContainerPerItem()
+    {
+        var listBox = new ListBox { IsVirtualizing = false, ItemsSource = new[] { "a", "b", "c" } };
+        Assert.Equal("c", ((TextBlock)((ListBoxItem)listBox.ContainerFromIndex(2)!).Content!).Text);
+
+        listBox.SelectedIndex = 1;
+        listBox.IsVirtualizing = true;
+        Assert.Null(listBox.ContainerFromIndex(0));
+        Assert.True(Container(listBox, 1).IsSelected);
     }
 
     [Fact]
