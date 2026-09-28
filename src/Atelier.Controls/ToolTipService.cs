@@ -79,10 +79,16 @@ public static class ToolTipService
 
     /// <summary>
     /// Gets what the tooltip of <paramref name="element"/> shows right now: its <see cref="ToolTipProperty"/>, or for a
-    /// <see cref="TextBlock"/> with <see cref="TextBlock.ShowsToolTipWhenTrimmed"/>, its full text while it is trimmed.
+    /// <see cref="TextBlock"/> with <see cref="TextBlock.ShowsToolTipWhenTrimmed"/>, its full text while it is trimmed, or
+    /// for a button with a registered command, <see cref="ButtonBase.CommandToolTip"/> (its description and shortcut).
     /// </summary>
     public static object? GetEffectiveToolTip(UIElement element) =>
-        GetToolTip(element) ?? (element is TextBlock { ShowsToolTipWhenTrimmed: true, IsTextTrimmed: true } text ? text.Text : null);
+        GetToolTip(element) ?? element switch
+        {
+            TextBlock { ShowsToolTipWhenTrimmed: true, IsTextTrimmed: true } text => text.Text,
+            ButtonBase button => button.CommandToolTip,
+            _ => null,
+        };
 
     /// <summary>Sets the tooltip of <paramref name="element"/>: a string, an element or any object; <c>null</c> removes it.</summary>
     public static void SetToolTip(UIElement element, object? toolTip) => element.SetValue(ToolTipProperty, toolTip);

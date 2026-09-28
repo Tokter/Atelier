@@ -99,7 +99,7 @@ public class MenuItem : ButtonBase
     private readonly Popup _popup;
     private readonly MenuItemsPresenter _presenter = new();
     private DispatcherTimer? _hoverTimer;
-    private bool _isObservingKeybindings;
+    private bool _isObservingAccessKeys;
     private bool _isUpdatingChecks;
 
     static MenuItem()
@@ -141,10 +141,16 @@ public class MenuItem : ButtonBase
         Command = command;
     }
 
-    /// <summary>Gets or sets the header: a string (with an optional <c>_</c> access key), an element, or any object.</summary>
+    /// <summary>
+    /// Gets or sets the header: a string (with an optional <c>_</c> access key), an element, or any object; <c>null</c>
+    /// shows the label of the command (see <see cref="ButtonBase.CommandInfo"/>), if any.
+    /// </summary>
     public object? Header { get => GetValue(HeaderProperty); set => SetValue(HeaderProperty, value); }
 
-    /// <summary>Gets or sets the icon before the header: a <see cref="MaterialIconKind"/> or an element; <c>null</c> for none.</summary>
+    /// <summary>
+    /// Gets or sets the icon before the header: a <see cref="MaterialIconKind"/>, an icon name or SVG string (see
+    /// <see cref="IconSource"/>), or an element; <c>null</c> shows the icon of the command (see <see cref="ButtonBase.CommandInfo"/>), if any.
+    /// </summary>
     public object? Icon { get => GetValue(IconProperty); set => SetValue(IconProperty, value); }
 
     /// <summary>
@@ -217,7 +223,7 @@ public class MenuItem : ButtonBase
     public bool HasExplicitAccessKey => AccessKeyIndex >= 0;
 
     /// <summary>Gets whether a checked item with an icon shows the check as a background behind the icon.</summary>
-    public bool ShowsCheckBehindIcon => IsCheckable && IsChecked && Icon != null;
+    public bool ShowsCheckBehindIcon => IsCheckable && IsChecked && HasIcon;
 
     /// <summary>Gets the bounds of the icon column, in the item's coordinates.</summary>
     public Rect IconBounds { get; private set; }
@@ -246,7 +252,7 @@ public class MenuItem : ButtonBase
         _popup.Placement = topLevel ? PlacementMode.Bottom : PlacementMode.Right;
         _popup.VerticalOffset = topLevel ? 0 : -8;
         RebuildHeader();
-        UpdateGestureText();
+        UpdateCommandInfo(); // the menu decides the preferred group and adds its target's DataContexts
         UpdateParts();
     }
 
@@ -288,7 +294,7 @@ public class MenuItem : ButtonBase
         }
         else
         {
-            switch (Header)
+            switch (Header ?? CommandInfo?.Label)
             {
                 case null:
                     content = null;
@@ -311,7 +317,7 @@ public class MenuItem : ButtonBase
 
     private char? FindAccessKey()
     {
-        string? text = HeaderTextBlock?.Text ?? (Header as string);
+        string? text = HeaderTextBlock?.Text ?? ((Header ?? CommandInfo?.Label) as string);
         if (string.IsNullOrEmpty(text)) return null;
         if (AccessKeyIndex >= 0 && AccessKeyIndex < text.Length) return char.ToUpperInvariant(text[AccessKeyIndex]);
         foreach (char c in text)
@@ -321,11 +327,16 @@ public class MenuItem : ButtonBase
         return null;
     }
 
+    /// <summary>Gets whether the item shows an icon: its own <see cref="Icon"/>, or else its command's.</summary>
+    public bool HasIcon => _iconHost.Content != null;
+
     private void OnIconChanged()
     {
-        _iconHost.Content = Icon switch
+        object? icon = Icon ?? (CommandInfo is { Icon: { Length: > 0 } commandIcon } && IconSource.IsValid(commandIcon) ? commandIcon : null);
+        _iconHost.Content = icon switch
         {
             MaterialIconKind kind => new Icon(kind, IconSize),
+            string source => Controls.Icon.FromSource(source, IconSize),
             var other => other,
         };
         UpdateParts();
@@ -360,11 +371,11 @@ public class MenuItem : ButtonBase
     private void UpdateParts()
     {
         bool topLevel = IsTopLevel;
-        bool checkMark = IsCheckable && IsChecked && Icon == null;
+        bool checkMark = IsCheckable && IsChecked && !HasIcon;
         _checkMark.Kind = string.IsNullOrEmpty(GroupName) ? MaterialIconKind.Check : MaterialIconKind.FiberManualRecord;
         _checkMark.Size = string.IsNullOrEmpty(GroupName) ? IconSize : 14;
         _checkMark.Visibility = checkMark ? Visibility.Visible : Visibility.Collapsed;
-        _iconHost.Visibility = Icon != null ? Visibility.Visible : Visibility.Collapsed;
+        _iconHost.Visibility = HasIcon ? Visibility.Visible : Visibility.Collapsed;
         _arrow.Visibility = HasItems && !topLevel ? Visibility.Visible : Visibility.Collapsed;
         _gesture.Visibility = !topLevel && _gesture.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         MinHeight = topLevel ? 32 : 40;
@@ -372,10 +383,31 @@ public class MenuItem : ButtonBase
         InvalidateVisual();
     }
 
+    /// <inheritdoc/>
+    /// <remarks>A menu item shows its command in its header and icon instead (see <see cref="Header"/> and <see cref="Icon"/>).</remarks>
+    protected override bool ShowsCommandContent => false;
+
+    /// <inheritdoc/>
+    /// <remarks>Menu items show the shortcut themselves, so they have no command tooltip.</remarks>
+    public override string? CommandToolTip => null;
+
+    /// <inheritdoc/>
+    /// <remarks>The <see cref="Menu.KeybindingGroup"/> of the menu.</remarks>
+    protected override string? CommandGroup => Root?.KeybindingGroup;
+
+    /// <inheritdoc/>
+    /// <remarks>Refreshes the header, icon and shortcut text that come from the command.</remarks>
+    protected override void OnCommandInfoChanged()
+    {
+        if (Header == null) RebuildHeader();
+        if (Icon == null) OnIconChanged();
+        UpdateGestureText();
+    }
+
     private void UpdateGestureText()
     {
-        string text = InputGestureText ?? (Command is { } command
-            ? KeybindingManager.GetGestureText(command, Root?.KeybindingGroup, CommandTargets()) ?? string.Empty
+        string text = InputGestureText ?? (CommandInfo is { Keybinding: { Length: > 0 } keybinding }
+            ? KeybindingGesture.FormatForDisplay(keybinding)
             : string.Empty);
         if (_gesture.Text == text) return;
         _gesture.Text = text;
@@ -383,7 +415,7 @@ public class MenuItem : ButtonBase
     }
 
     // The objects the command may belong to: the DataContexts from this item up, and around the menu's target.
-    private IEnumerable<object?> CommandTargets()
+    protected override IEnumerable<object?> CommandTargets()
     {
         object? last = null;
         for (VisualNode? node = this; node != null; node = node.Parent)
@@ -420,45 +452,32 @@ public class MenuItem : ButtonBase
             _gesture.Opacity = _arrow.Opacity = IsEnabled ? 1f : 0.38f;
             if (!IsEnabled && IsSubmenuOpen) CloseSubmenu();
         }
-        else if (ReferenceEquals(property, CommandProperty) || ReferenceEquals(property, DataContextProperty))
-        {
-            UpdateGestureText();
-        }
     }
 
     /// <inheritdoc/>
     protected override void OnAttachedToVisualTree()
     {
-        base.OnAttachedToVisualTree();
-        if (!_isObservingKeybindings)
+        base.OnAttachedToVisualTree(); // looks up the command again (see OnCommandInfoChanged)
+        if (!_isObservingAccessKeys)
         {
-            KeybindingManager.KeybindingsChanged += OnKeybindingsChanged;
             MenuManager.AccessKeysVisibleChanged += OnAccessKeysVisibleChanged;
-            _isObservingKeybindings = true;
+            _isObservingAccessKeys = true;
         }
-        UpdateGestureText();
     }
 
     /// <inheritdoc/>
     protected override void OnDetachedFromVisualTree()
     {
-        if (_isObservingKeybindings)
+        if (_isObservingAccessKeys)
         {
-            KeybindingManager.KeybindingsChanged -= OnKeybindingsChanged;
             MenuManager.AccessKeysVisibleChanged -= OnAccessKeysVisibleChanged;
-            _isObservingKeybindings = false;
+            _isObservingAccessKeys = false;
         }
         StopHoverTimer();
         base.OnDetachedFromVisualTree();
     }
 
     private void OnAccessKeysVisibleChanged(object? sender, EventArgs e) => InvalidateVisual();
-
-    private void OnKeybindingsChanged(object? sender, EventArgs e)
-    {
-        if (Dispatcher.CheckAccess()) UpdateGestureText();
-        else Dispatcher.Post(UpdateGestureText);
-    }
 
     #endregion
 
@@ -641,7 +660,7 @@ public class MenuItem : ButtonBase
 
     #region Layout
 
-    private bool IconColumn => IsTopLevel ? Icon != null : ParentPresenter?.HasIconColumn ?? (Icon != null || IsCheckable);
+    private bool IconColumn => IsTopLevel ? HasIcon : ParentPresenter?.HasIconColumn ?? (HasIcon || IsCheckable);
 
     private bool ArrowColumn => !IsTopLevel && (ParentPresenter?.HasSubmenuColumn ?? HasItems);
 

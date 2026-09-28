@@ -20,7 +20,7 @@ namespace Atelier.Core.Keybinding;
 /// <example>
 /// <code>
 /// [RelayCommand]
-/// [property: Command("ToggleTheme", "Global", Label = "Toggle theme", Icon = "DarkMode",
+/// [property: Command("ToggleTheme", "Global", Label = "Toggle theme", Icon = MaterialIcons.DarkMode,
 ///     Description = "Switch between the light and dark theme", DefaultKeybinding = "Ctrl+T")]
 /// private void ToggleTheme() { ... }
 /// </code>
@@ -53,8 +53,9 @@ public class CommandAttribute : Attribute
     public string Description { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the name of the command's icon, such as a <c>MaterialIconKind</c> value (<c>"DarkMode"</c>). It is a
-    /// name rather than an enum value because the icon sets live in the controls library.
+    /// Gets or sets the command's icon: a <c>MaterialIconKind</c> name such as <c>MaterialIcons.DarkMode</c> (the constants
+    /// offer code completion), SVG path data or a whole SVG document. It is text rather than an enum value because the
+    /// icon sets live in the controls library.
     /// </summary>
     public string Icon { get; set; } = string.Empty;
 

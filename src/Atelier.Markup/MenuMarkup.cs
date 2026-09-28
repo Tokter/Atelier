@@ -44,7 +44,10 @@ public static class MenuItemMarkup
     /// <summary>Sets the header; an underscore marks the access key, e.g. <c>"_Open"</c>.</summary>
     public static T Header<T>(this T item, object? header) where T : MenuItem => item.Set(MenuItem.HeaderProperty, header);
 
-    /// <summary>Sets the icon before the header: a <see cref="MaterialIconKind"/> or an element.</summary>
+    /// <summary>
+    /// Sets the icon before the header: a <see cref="MaterialIconKind"/>, an icon name or SVG (see <see cref="IconSource"/>), or
+    /// an element. Without one, the item shows its command's icon.
+    /// </summary>
     public static T Icon<T>(this T item, object? icon) where T : MenuItem => item.Set(MenuItem.IconProperty, icon);
 
     /// <summary>Sets the shortcut text shown on the right, instead of the command's keybinding.</summary>

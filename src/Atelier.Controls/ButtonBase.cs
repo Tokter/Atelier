@@ -41,7 +41,7 @@ public enum ClickMode
 /// <see cref="TextBlock"/>.
 /// </para>
 /// </remarks>
-public abstract class ButtonBase : ContentControl
+public abstract partial class ButtonBase : ContentControl
 {
     /// <summary>Identifies the <see cref="Command"/> property.</summary>
     public static readonly BindableProperty<ICommand?> CommandProperty =
@@ -294,6 +294,10 @@ public abstract class ButtonBase : ContentControl
         {
             CancelPress();
         }
+        else if (ReferenceEquals(property, DataContextProperty))
+        {
+            UpdateCommandInfo(); // a command property of the new DataContext may be a registered command
+        }
     }
 
     #region Command state
@@ -315,6 +319,7 @@ public abstract class ButtonBase : ContentControl
             ObserveCommand(newCommand);
         }
         UpdateIsEnabledCore();
+        UpdateCommandInfo();
     }
 
     /// <inheritdoc/>
@@ -322,6 +327,8 @@ public abstract class ButtonBase : ContentControl
     {
         ObserveCommand(Command);
         UpdateIsEnabledCore(); // CanExecute may have changed while the control was not displayed
+        ObserveCommandRegistrations(true);
+        UpdateCommandInfo(); // registrations may have changed too
         base.OnAttachedToVisualTree();
     }
 
@@ -331,6 +338,7 @@ public abstract class ButtonBase : ContentControl
     {
         ObserveCommand(null);
         CancelPress();
+        ObserveCommandRegistrations(false);
         base.OnDetachedFromVisualTree();
     }
 

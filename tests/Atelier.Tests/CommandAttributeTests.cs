@@ -59,7 +59,7 @@ public class CommandAttributeTests
         Assert.Equal("Save", descriptor!.Name);
         Assert.Equal("Documents", descriptor.Group);
         Assert.Equal("Save the document", descriptor.Description);
-        Assert.Equal("ContentSave", descriptor.Icon);
+        Assert.Equal("Save", descriptor.Icon);
         Assert.Equal("Ctrl+S", descriptor.Keybinding);
         Assert.Equal("Save", descriptor.Label); // made from the name
 
@@ -78,7 +78,7 @@ public class CommandAttributeTests
         var export = KeybindingManager.FindCommand("Documents", "Export");
         Assert.NotNull(export);
         Assert.Equal("Export as PDF", export!.Label);
-        Assert.Equal("FilePdfBox", export.Icon);
+        Assert.Equal("PictureAsPdf", export.Icon);
         Assert.Equal("Ctrl+Shift+E", export.Keybinding);
     }
 
@@ -107,11 +107,11 @@ public partial class DocumentViewModel : ObservableObject
     public int Saves { get; private set; }
 
     [RelayCommand]
-    [property: Command("Save", "Documents", Description = "Save the document", Icon = "ContentSave", DefaultKeybinding = "Ctrl+S")]
+    [property: Command("Save", "Documents", Description = "Save the document", Icon = "Save", DefaultKeybinding = "Ctrl+S")]
     private void Save() => Saves++;
 
     [RelayCommand]
-    [property: Keybinding("Export", "Documents", "Ctrl+Shift+E", Label = "Export as PDF", Icon = "FilePdfBox")]
+    [property: Keybinding("Export", "Documents", "Ctrl+Shift+E", Label = "Export as PDF", Icon = "PictureAsPdf")]
     private void Export() { }
 
     [Command("Close", "Documents", Label = "Close document", DefaultKeybinding = "Ctrl+W")]

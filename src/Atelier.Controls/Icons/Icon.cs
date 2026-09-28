@@ -52,6 +52,22 @@ public class Icon : Control
             (s, o, n) => ((Icon)s).OnPathDataChanged(n)
         );
 
+    /// <summary>Identifies the <see cref="Source"/> property.</summary>
+    public static readonly BindableProperty<string?> SourceProperty =
+        BindableProperty.Register<Icon, string?>(
+            nameof(Source),
+            null,
+            (s, o, n) => ((Icon)s).OnSourceChanged(n)
+        );
+
+    /// <summary>Identifies the <see cref="ViewBox"/> property.</summary>
+    public static readonly BindableProperty<Rect?> ViewBoxProperty =
+        BindableProperty.Register<Icon, Rect?>(
+            nameof(ViewBox),
+            null,
+            options: PropertyOptions.AffectsRender
+        );
+
     /// <summary>Identifies the <see cref="StrokeWidth"/> property.</summary>
     public static readonly BindableProperty<float> StrokeWidthProperty =
         BindableProperty.Register<Icon, float>(
@@ -200,6 +216,28 @@ public class Icon : Control
     }
 
     /// <summary>
+    /// Gets or sets the icon as text: a <see cref="MaterialIconKind"/> name (<c>"DarkMode"</c>), SVG path data or a whole
+    /// SVG document (see <see cref="IconSource"/>). Setting it sets <see cref="Kind"/>, or <see cref="Data"/> and
+    /// <see cref="ViewBox"/>; an empty or invalid source shows nothing.
+    /// </summary>
+    public string? Source
+    {
+        get => GetValue(SourceProperty);
+        set => SetValue(SourceProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the area of <see cref="Data"/>'s coordinates the icon shows, like an SVG <c>viewBox</c>: it is
+    /// scaled uniformly into the icon's size and centered, keeping the geometry's padding. When <c>null</c> (the default)
+    /// the geometry's own bounds are fitted instead.
+    /// </summary>
+    public Rect? ViewBox
+    {
+        get => GetValue(ViewBoxProperty);
+        set => SetValue(ViewBoxProperty, value);
+    }
+
+    /// <summary>
     /// Gets or sets the stroke width when rendering custom vector geometry (not negative).
     /// When 0 (default), the path is filled. When > 0, the path outline is stroked.
     /// </summary>
@@ -263,6 +301,12 @@ public class Icon : Control
         }
     }
 
+    /// <summary>Initializes an icon from a Material icon name, SVG path data or an SVG document (see <see cref="Source"/>).</summary>
+    /// <param name="source">The icon (see <see cref="IconSource"/>).</param>
+    /// <param name="size">The size in dp.</param>
+    /// <returns>The icon.</returns>
+    public static Icon FromSource(string? source, float size = 24f) => new() { Source = source, Size = size };
+
     private static float ClampAxis(float value, float min, float max, float fallback) =>
         float.IsNaN(value) ? fallback : Math.Clamp(value, min, max);
 
@@ -272,6 +316,22 @@ public class Icon : Control
         {
             _ownedPath = null;
             oldVal.Dispose();
+        }
+    }
+
+    private void OnSourceChanged(string? source)
+    {
+        if (IconSource.TryResolve(source, out var kind, out var path, out var viewBox))
+        {
+            Kind = kind;
+            Data = path; // shared by IconSource, so not owned
+            ViewBox = viewBox;
+        }
+        else
+        {
+            ClearValue(KindProperty);
+            ClearValue(DataProperty);
+            ClearValue(ViewBoxProperty);
         }
     }
 

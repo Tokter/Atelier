@@ -8,7 +8,8 @@ using SkiaSharp;
 namespace Atelier.Theming.Material.Renderers;
 
 /// <summary>
-/// Draws <see cref="Icon"/>s: custom geometry scaled into the bounds, or a Material Symbols glyph from the variable icon
+/// Draws <see cref="Icon"/>s: custom geometry scaled into the bounds (its <see cref="Icon.ViewBox"/> if set), or a Material
+/// Symbols glyph from the variable icon
 /// font, in the icon's content color.
 /// </summary>
 /// <remarks>
@@ -51,10 +52,13 @@ public class MaterialIconRenderer(MaterialColorScheme colors, RendererRegistry? 
         context.DrawText(glyph, x, y, font, color);
     }
 
-    // Scales the path uniformly into the bounds and centers it; strokes keep their width in pixels.
+    // Scales the view box (or else the path's bounds) uniformly into the bounds and centers it; strokes keep their width
+    // in pixels.
     private static void DrawPath(Icon icon, SKPath path, in Rect bounds, Color color, ref DrawingContext context)
     {
-        var pathBounds = path.Bounds;
+        var pathBounds = icon.ViewBox is { Width: > 0, Height: > 0 } viewBox
+            ? SKRect.Create(viewBox.X, viewBox.Y, viewBox.Width, viewBox.Height)
+            : path.Bounds;
         if (pathBounds.Width <= 0 || pathBounds.Height <= 0) return;
 
         float scale = Math.Min(bounds.Width / pathBounds.Width, bounds.Height / pathBounds.Height);

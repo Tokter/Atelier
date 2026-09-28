@@ -36,6 +36,12 @@ public static class ButtonBaseMarkup
     /// <summary>Sets the parameter passed to the <see cref="ButtonBase.Command"/>.</summary>
     public static T CommandParameter<T>(this T button, object? parameter) where T : ButtonBase => button.Set(ButtonBase.CommandParameterProperty, parameter);
 
+    /// <summary>
+    /// Sets what the button shows of its registered command while it has no content of its own: icon and label (the
+    /// default), only the icon, or only the label.
+    /// </summary>
+    public static T CommandDisplay<T>(this T button, CommandDisplay display) where T : ButtonBase => button.Set(ButtonBase.CommandDisplayProperty, display);
+
     /// <summary>Sets when a click happens: on release (the default), on press, or on hover.</summary>
     public static T ClickMode<T>(this T button, ClickMode clickMode) where T : ButtonBase => button.Set(ButtonBase.ClickModeProperty, clickMode);
 }

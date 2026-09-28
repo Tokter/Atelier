@@ -24,6 +24,15 @@ public static class IconMarkup
     /// <summary>Shows custom vector geometry given as SVG path data, e.g. <c>"M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"</c>. Invalid data shows nothing.</summary>
     public static T PathData<T>(this T icon, string? svgPathData) where T : Icon => icon.Set(Icon.PathDataProperty, svgPathData);
 
+    /// <summary>
+    /// Sets the icon as text: a <see cref="MaterialIconKind"/> name (<c>"DarkMode"</c>), SVG path data or a whole SVG
+    /// document (see <see cref="IconSource"/>).
+    /// </summary>
+    public static T Source<T>(this T icon, string? source) where T : Icon => icon.Set(Icon.SourceProperty, source);
+
+    /// <summary>Sets the area of the geometry's coordinates the icon shows, like an SVG <c>viewBox</c>; <c>null</c> fits the geometry's bounds.</summary>
+    public static T ViewBox<T>(this T icon, Rect? viewBox) where T : Icon => icon.Set(Icon.ViewBoxProperty, viewBox);
+
     /// <summary>Strokes custom geometry with lines of <paramref name="strokeWidth"/> pixels instead of filling it. 0 (the default) fills it.</summary>
     public static T StrokeWidth<T>(this T icon, float strokeWidth) where T : Icon => icon.Set(Icon.StrokeWidthProperty, strokeWidth);
 
@@ -88,6 +97,13 @@ public static class IconMarkup
         [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
         where T : Icon where TDataContext : class =>
         icon.BindToDataContext(Icon.KindProperty, getter, setter, updateSourceTrigger, getterExpression);
+
+    /// <summary>Binds the icon name or SVG (see <see cref="Icon.Source"/>) to a value of <paramref name="source"/>.</summary>
+    public static T BindSource<T, TSource>(this T icon, TSource source, Func<TSource, string?> getter, Action<TSource, string?>? setter = null,
+        UpdateSourceTrigger updateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
+        [CallerArgumentExpression(nameof(getter))] string? getterExpression = null)
+        where T : Icon where TSource : class =>
+        icon.BindToSource(Icon.SourceProperty, source, getter, setter, updateSourceTrigger, getterExpression);
 
     /// <summary>Binds the SVG path data to a value of <paramref name="source"/>.</summary>
     public static T BindPathData<T, TSource>(this T icon, TSource source, Func<TSource, string?> getter, Action<TSource, string?>? setter = null,

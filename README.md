@@ -38,7 +38,7 @@ type-safe markup API instead of XAML, and every control is drawn with SkiaSharp 
 - **Built for low overhead.** Rendering reuses cached paints, fonts and text blobs, so a steady frame allocates nothing,
   and windows only redraw when something changed.
 - **Reflection-free tooling.** Commands (`[Command]`: name, label, description, icon and default shortcut), keybindings
-  and property-grid metadata come from source generators.
+  and property-grid metadata come from source generators, as do the `MaterialIcons` name constants for icons given as text.
 
 ---
 
@@ -135,7 +135,7 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 
 | Control | Highlights |
 |---|---|
-| `Button`, `RepeatButton`, `ToggleButton` | Filled, tonal, elevated, outlined and text variants; commands with `CanExecute`; click modes; repeat delay and interval; two- and three-state toggles |
+| `Button`, `RepeatButton`, `ToggleButton` | Filled, tonal, elevated, outlined and text variants; commands with `CanExecute`; a registered command's icon, label and tooltip (description and shortcut) when no content is set; click modes; repeat delay and interval; two- and three-state toggles |
 | `CheckBox`, `RadioButton`, `Switch` | Three states, rich content, named and unnamed radio groups, thumb icons, value-matching radio binding |
 | `TextBox` | Outlined and filled variants, floating label, placeholder, leading icon, supporting text, `INotifyDataErrorInfo` validation, max length, password mode, undo/redo, clipboard and word navigation |
 | `ComboBox` | Items or bound collections, typed item templates, text search, keyboard navigation, max drop-down height, compact mode |
@@ -144,7 +144,7 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `TreeView` | Data-bound or item-built trees, children selector, typed templates, configurable expander icons; the shown nodes form one virtualized list |
 | `DataGrid` | Virtualized rows; text, template and check box columns; multi-column sorting; Pixel, Auto and Star widths; resizing, reordering and a column chooser with saved layouts; a filter row and spreadsheet-style filter menus; single, check box and extended selection of rows or cells; F2 editing with custom editors and validation; Ctrl+C as tab-separated text; row context menus and empty placeholders |
 | `OpenFileDialog`, `SaveFileDialog`, `FolderBrowserDialog` | The same dialog on every platform, with WPF's properties (`Filter`, `Multiselect`, `CheckFileExists`, `OverwritePrompt`, `InitialDirectory`, ...): path bar with clickable folders, folder tree, file grid with optional attribute columns, new folder and rename; any file system through `IFileSystemProvider` |
-| `Menu`, `MenuItem`, `ContextMenu` | Menu bars (also in the title bar), submenus and context menus; icons, check and radio items, separators; shortcut text from the command's keybinding; `CanExecute` disables or hides items; access keys; menus built from data with a children selector and item templates |
+| `Menu`, `MenuItem`, `ContextMenu` | Menu bars (also in the title bar), submenus and context menus; icons, check and radio items, separators; header, icon and shortcut text from the command's [Command] declaration; `CanExecute` disables or hides items; access keys; menus built from data with a children selector and item templates |
 | `TabControl` | MD3 primary and secondary tabs with a sliding indicator; browser-style tabs that close, add and reorder by dragging; header and content templates |
 | `DatePicker`, `TimePicker` | MD3 docked and modal calendars and date input; clock dial and text input with 12- and 24-hour clocks; typed dates and times, ranges and validation; compact mode |
 | `ColorPicker` | Hue/saturation wheel, RGB, HSL and HSB sliders that show their gradients, alpha, hex and channel inputs |
@@ -156,7 +156,7 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `TransitioningContentControl` | Fade, slide, zoom, slide-and-fade and composite transitions with configurable duration and easing |
 | `PropertyGrid` | Categories, sorting, filtering, validation, custom editors per type or predicate, a resizable label column; metadata generated at compile time |
 | `GridSplitter` | Resizes grid columns or rows by dragging or with the arrow keys; keeps star proportions; min/max limits, snapping, preview mode, Escape to cancel, double-click to restore |
-| `Icon`, `Image`, `TextBlock` | Material Symbols with variable axes and custom SVG paths; stretch modes; wrapping, trimming, max lines and line height |
+| `Icon`, `Image`, `TextBlock` | Material Symbols with variable axes, SVG path data or whole SVG documents (`Source`: an icon name or SVG); stretch modes; wrapping, trimming, max lines and line height |
 | `TitleBar`, `Toolbar`, `KeybindingHandler` | Custom window chrome, action bars, scoped keyboard shortcuts with chords |
 
 ### Layout

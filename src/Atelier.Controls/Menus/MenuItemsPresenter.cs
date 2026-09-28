@@ -87,7 +87,7 @@ public class MenuItemsPresenter : ItemsControl
         bool icons = false, arrows = false;
         foreach (var item in MenuItems)
         {
-            icons |= item.Icon != null || item.IsCheckable;
+            icons |= item.HasIcon || item.IsCheckable;
             arrows |= item.HasItems;
         }
         if (icons == HasIconColumn && arrows == HasSubmenuColumn) return;

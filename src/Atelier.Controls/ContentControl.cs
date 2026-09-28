@@ -202,7 +202,14 @@ public class ContentControl : Control
     }
 
     /// <summary>
-    /// Replaces the child view with one matching the current <see cref="Content"/>.
+    /// Gets what the control shows: <see cref="Content"/> by default. Derived controls can show something else while
+    /// there is no content, such as a button showing its command's label; call <see cref="UpdateContentDisplay"/> when
+    /// it changes.
+    /// </summary>
+    protected virtual object? DisplayedContent => Content;
+
+    /// <summary>
+    /// Replaces the child view with one matching the current <see cref="DisplayedContent"/> (usually <see cref="Content"/>).
     /// </summary>
     protected virtual void UpdateContentDisplay()
     {
@@ -214,7 +221,7 @@ public class ContentControl : Control
             ReleaseView(oldView, oldContent);
         }
 
-        var content = Content;
+        var content = DisplayedContent;
         if (content != null)
         {
             var view = ResolveContentView(content);

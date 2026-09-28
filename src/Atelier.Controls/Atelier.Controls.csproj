@@ -5,6 +5,8 @@
     <ProjectReference Include="..\Atelier.Layout\Atelier.Layout.csproj" />
     <ProjectReference Include="..\Atelier.Rendering\Atelier.Rendering.csproj" />
     <ProjectReference Include="..\Atelier.Theming\Atelier.Theming.csproj" />
+    <!-- Generates MaterialIcons (the icon names as string constants) from MaterialIconKind. -->
+    <ProjectReference Include="..\Atelier.Generators\Atelier.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <PropertyGroup>
