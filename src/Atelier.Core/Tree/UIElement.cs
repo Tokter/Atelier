@@ -64,6 +64,11 @@ public abstract class UIElement : VisualNode
     public static readonly BindableProperty<bool> IsEnabledProperty =
         BindableProperty.Register<UIElement, bool>(nameof(IsEnabled), true, options: PropertyOptions.AffectsRender, inherits: true);
 
+    /// <summary>Identifies the <see cref="ZIndex"/> bindable property.</summary>
+    public static readonly BindableProperty<int> ZIndexProperty =
+        BindableProperty.Register<UIElement, int>(nameof(ZIndex), 0, (s, o, n) => (((UIElement)s).Parent as UIElement)?.InvalidateVisual(),
+            options: PropertyOptions.AffectsRender);
+
     /// <summary>Identifies the <see cref="ClipToBounds"/> bindable property.</summary>
     public static readonly BindableProperty<bool> ClipToBoundsProperty =
         BindableProperty.Register<UIElement, bool>(nameof(ClipToBounds), false, options: PropertyOptions.AffectsRender);
@@ -195,6 +200,57 @@ public abstract class UIElement : VisualNode
     /// background and shadow are not clipped). The default is <c>false</c>. Changing it invalidates rendering.
     /// </summary>
     public bool ClipToBounds { get => GetValue(ClipToBoundsProperty); set => SetValue(ClipToBoundsProperty, value); }
+
+    /// <summary>
+    /// Gets or sets the drawing order among the siblings: children with a higher value are drawn above (and hit before)
+    /// those with a lower one; equal values keep the child order. Layout isn't affected. The default is 0.
+    /// </summary>
+    public int ZIndex { get => GetValue(ZIndexProperty); set => SetValue(ZIndexProperty, value); }
+
+    /// <summary>
+    /// Gets the lowest and highest <see cref="ZIndex"/> of the children, and whether they differ (otherwise the children
+    /// are simply drawn in order). Doesn't allocate.
+    /// </summary>
+    public bool GetChildZIndexRange(out int min, out int max)
+    {
+        min = int.MaxValue;
+        max = int.MinValue;
+        var children = Children;
+        for (int i = 0; i < children.Count; i++)
+        {
+            if (children[i] is UIElement child)
+            {
+                int z = child.ZIndex;
+                if (z < min) min = z;
+                if (z > max) max = z;
+            }
+        }
+        return min < max;
+    }
+
+    /// <summary>Gets the smallest child <see cref="ZIndex"/> above <paramref name="z"/>, or <paramref name="z"/> if there is none.</summary>
+    public int NextHigherZIndex(int z)
+    {
+        int next = int.MaxValue;
+        var children = Children;
+        for (int i = 0; i < children.Count; i++)
+        {
+            if (children[i] is UIElement child && child.ZIndex > z && child.ZIndex < next) next = child.ZIndex;
+        }
+        return next == int.MaxValue ? z : next;
+    }
+
+    // The largest child ZIndex below z, or z if there is none.
+    private int NextLowerZIndex(int z)
+    {
+        int next = int.MinValue;
+        var children = Children;
+        for (int i = 0; i < children.Count; i++)
+        {
+            if (children[i] is UIElement child && child.ZIndex < z && child.ZIndex > next) next = child.ZIndex;
+        }
+        return next == int.MinValue ? z : next;
+    }
     /// <summary>
     /// Gets or sets the key of the style to apply, looked up in this element's and its ancestors' <see cref="Styles"/>
     /// and then in <see cref="StyleManager.GlobalStyles"/>. The default is <c>null</c>, which selects the implicit style
@@ -1386,16 +1442,33 @@ public abstract class UIElement : VisualNode
             }
         }
 
-        // Check children in reverse order (topmost first)
-        for (int i = Children.Count - 1; i >= 0; i--)
+        // Check children topmost first: the highest ZIndex, and within it the last child.
+        if (GetChildZIndexRange(out int minZ, out int maxZ))
         {
-            if (Children[i] is UIElement child)
+            for (int z = maxZ; ; z = NextLowerZIndex(z))
             {
-                if (child.IsOverlayElement) continue;
-                var hit = child.HitTest(localPoint);
-                if (hit != null)
+                for (int i = Children.Count - 1; i >= 0; i--)
                 {
-                    return hit;
+                    if (Children[i] is UIElement child && child.ZIndex == z && !child.IsOverlayElement && child.HitTest(localPoint) is { } hit)
+                    {
+                        return hit;
+                    }
+                }
+                if (z == minZ) break;
+            }
+        }
+        else
+        {
+            for (int i = Children.Count - 1; i >= 0; i--)
+            {
+                if (Children[i] is UIElement child)
+                {
+                    if (child.IsOverlayElement) continue;
+                    var hit = child.HitTest(localPoint);
+                    if (hit != null)
+                    {
+                        return hit;
+                    }
                 }
             }
         }

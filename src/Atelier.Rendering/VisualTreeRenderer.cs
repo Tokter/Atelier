@@ -69,26 +69,43 @@ public static class VisualTreeRenderer
 
         try
         {
-            // Render children (clipped to bounds/corners if ClipToBounds is enabled)
+            // Render children (clipped to bounds/corners if ClipToBounds is enabled), by ZIndex when they differ.
             var children = element.Children;
-            for (int i = 0; i < children.Count; i++)
+            if (element.GetChildZIndexRange(out int minZ, out int maxZ))
             {
-                UIElement? child = null;
-                try
+                for (int z = minZ; ; z = element.NextHigherZIndex(z))
                 {
-                    if (i < children.Count)
+                    for (int i = 0; i < children.Count; i++)
                     {
-                        child = children[i] as UIElement;
+                        if (children[i] is UIElement child && child.ZIndex == z)
+                        {
+                            RenderElement(child, ref context, presenter, isRoot: false);
+                        }
                     }
+                    if (z == maxZ) break;
                 }
-                catch (ArgumentOutOfRangeException)
+            }
+            else
+            {
+                for (int i = 0; i < children.Count; i++)
                 {
-                    break;
-                }
+                    UIElement? child = null;
+                    try
+                    {
+                        if (i < children.Count)
+                        {
+                            child = children[i] as UIElement;
+                        }
+                    }
+                    catch (ArgumentOutOfRangeException)
+                    {
+                        break;
+                    }
 
-                if (child != null)
-                {
-                    RenderElement(child, ref context, presenter, isRoot: false);
+                    if (child != null)
+                    {
+                        RenderElement(child, ref context, presenter, isRoot: false);
+                    }
                 }
             }
         }

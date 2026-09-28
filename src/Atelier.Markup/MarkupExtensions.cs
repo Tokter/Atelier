@@ -180,6 +180,9 @@ public static class MarkupExtensions
     /// <summary>Clips the element's children to its bounds, including the rounded corners of a <see cref="Border"/>.</summary>
     public static T ClipToBounds<T>(this T element, bool clip = true) where T : UIElement => element.Set(UIElement.ClipToBoundsProperty, clip);
 
+    /// <summary>Sets the drawing order among the siblings: higher values are drawn above lower ones (layout is unchanged).</summary>
+    public static T ZIndex<T>(this T element, int zIndex) where T : UIElement => element.Set(UIElement.ZIndexProperty, zIndex);
+
     /// <summary>
     /// Sets whether the layout of this element and its descendants snaps to whole pixels for crisp edges. Windows turn
     /// it on for their content by default.

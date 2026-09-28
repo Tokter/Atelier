@@ -48,6 +48,7 @@ public partial class MainViewModel : ObservableObject
             new CardsViewModel(),
             new IconsViewModel(),
             new BadgesViewModel(),
+            new TabsViewModel(),
             new TypographyViewModel(),
             new LayoutViewModel(),
             new DialogHostViewModel(),

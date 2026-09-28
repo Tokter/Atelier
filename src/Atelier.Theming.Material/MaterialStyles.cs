@@ -138,6 +138,14 @@ public static class MaterialStyles
                 .Set(TextBlock.ForegroundProperty, colors.OnSurface),
             new Style(PickerStyleKeys.Divider, typeof(Atelier.Layout.Border))
                 .Set(Atelier.Layout.Border.BackgroundProperty, colors.OutlineVariant),
+            // Tabs: on-surface-variant close and "+" buttons, and title-small labels.
+            new Style(TabItem.CloseButtonStyleKey, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
+            new Style(TabControl.AddButtonStyleKey, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
+            new Style(typeof(TabItem))
+                .Set(Control.FontSizeProperty, MaterialTypescale.TitleSmall.Size),
+
             new Style(PickerStyleKeys.HeaderButton, typeof(Button))
                 .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
             new Style(PickerStyleKeys.DockedPopup, typeof(Popup))
