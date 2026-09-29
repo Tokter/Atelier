@@ -264,7 +264,8 @@ public class ShortcutRecorder : ContentControl
             return;
         }
 
-        e.Handled = true; // while recording, every key belongs to the shortcut
+        if (e.Key == Key.Tab && (e.Modifiers & ~ModifierKeys.Shift) == 0) return; // Tab moves the focus (ending the recording)
+        e.Handled = true; // while recording, every other key belongs to the shortcut
         if (IsModifierKey(e.Key) || e.IsRepeat) return;
 
         if (e.Modifiers == ModifierKeys.None && e.Key == Key.Escape)

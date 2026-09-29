@@ -1452,23 +1452,20 @@ public class SilkWindow : IDisposable, IHostWindow
             _nextRepeatTime = now + KeyRepeatIntervalMs;
 
             var atelierKey = MapKey(_repeatingKey);
-            if (atelierKey == Core.Events.Key.Tab)
-            {
-                if (_rootElement != null)
-                    CycleFocus(_repeatingKeyboard);
-            }
-            else if (atelierKey != Core.Events.Key.None)
+            if (atelierKey != Core.Events.Key.None)
             {
                 var keyEventArgs = new KeyEventArgs(atelierKey, _repeatingKeyCode, GetModifiers(_repeatingKeyboard), isDown: true, isRepeat: true);
                 if (!PopupManager.HandleKeyDown(keyEventArgs, _rootElement))
                 {
                     FocusManager.DispatchKeyDown(keyEventArgs, _rootElement);
                 }
+                if (atelierKey == Core.Events.Key.Tab && !keyEventArgs.Handled && _rootElement != null)
+                    CycleFocus(_repeatingKeyboard);
             }
         }
     }
 
-    // Tab moves the focus forward, Shift+Tab back. Shift is read each time, so it can change while Tab is held.
+    // Tab moves the focus forward, Shift+Tab back (when the focused element didn't handle it). Shift is read each time, so it can change while Tab is held.
     private void CycleFocus(IKeyboard keyboard)
     {
         bool shift = keyboard.IsKeyPressed(SilkKey.ShiftLeft) || keyboard.IsKeyPressed(SilkKey.ShiftRight);
@@ -1492,12 +1489,6 @@ public class SilkWindow : IDisposable, IHostWindow
             _nextRepeatTime = (ulong)Environment.TickCount64 + InitialKeyRepeatDelayMs;
         }
 
-        if (atelierKey == Core.Events.Key.Tab && _rootElement != null)
-        {
-            CycleFocus(keyboard);
-            return;
-        }
-
         var keyEventArgs = new KeyEventArgs(atelierKey, keyCode, GetModifiers(keyboard), true);
 #if DEBUG
         // Escape while picking an element with the developer tools (Debug builds only); their shortcuts are commands.
@@ -1513,6 +1504,14 @@ public class SilkWindow : IDisposable, IHostWindow
         }
 
         FocusManager.DispatchKeyDown(keyEventArgs, _rootElement);
+
+        // Tab moves the focus unless the focused element (or a shortcut around it, like a node editor's) used it.
+        if (atelierKey == Core.Events.Key.Tab)
+        {
+            if (!keyEventArgs.Handled && _rootElement != null) CycleFocus(keyboard);
+            return;
+        }
+
         MenuManager.HandleKeyDown(keyEventArgs, _rootElement); // Alt, F10, Alt+letter, the menu key
 
         // Shortcuts that work anywhere in the window, such as the developer tools' F12 (KeybindingManager.WindowGroups).
