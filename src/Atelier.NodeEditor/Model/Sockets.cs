@@ -95,6 +95,7 @@ public sealed class InputSocketViewModel : SocketViewModel
             if (SetUndoableProperty(ref _value, value, Node?.Graph?.Undo, $"Change {Name}", v => Value = v))
             {
                 OnPropertyChanged(nameof(EffectiveValue));
+                Node?.Graph?.OnContentChanged();
             }
         }
     }

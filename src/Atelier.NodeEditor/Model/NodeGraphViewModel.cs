@@ -30,12 +30,24 @@ public class NodeGraphViewModel : NodeGraphObject
 {
     private readonly ObservableCollection<NodeViewModel> _nodes = [];
     private readonly ObservableCollection<LinkViewModel> _links = [];
+    private readonly UndoStack? _undo;
+    private NodeCatalog _catalog = new();
+    private NodeGroupLibrary? _groups;
 
     /// <summary>Initializes an empty graph.</summary>
     public NodeGraphViewModel()
     {
         Nodes = new ReadOnlyObservableCollection<NodeViewModel>(_nodes);
         Links = new ReadOnlyObservableCollection<LinkViewModel>(_links);
+        _undo = new UndoStack();
+    }
+
+    // The graph inside a group definition: it shares its root graph's undo history, catalog and groups.
+    internal NodeGraphViewModel(NodeGroupDefinition owner)
+    {
+        Nodes = new ReadOnlyObservableCollection<NodeViewModel>(_nodes);
+        Links = new ReadOnlyObservableCollection<LinkViewModel>(_links);
+        Owner = owner;
     }
 
     /// <summary>Gets the nodes, back to front.</summary>
@@ -44,22 +56,56 @@ public class NodeGraphViewModel : NodeGraphObject
     /// <summary>Gets the links.</summary>
     public ReadOnlyObservableCollection<LinkViewModel> Links { get; }
 
-    /// <summary>Gets the undo history.</summary>
-    public UndoStack Undo { get; } = new();
+    /// <summary>Gets the group definition whose inside this graph is, or <c>null</c> for a root graph.</summary>
+    public NodeGroupDefinition? Owner { get; }
 
-    /// <summary>Gets or sets the kinds of nodes users can add.</summary>
-    public NodeCatalog Catalog { get; set; } = new();
+    /// <summary>Gets the root graph: this graph, or the root graph of the groups it's inside.</summary>
+    public NodeGraphViewModel Root => Owner?.Library.Root ?? this;
+
+    /// <summary>Gets the undo history, shared by a root graph and the graphs inside its groups.</summary>
+    public UndoStack Undo => _undo ?? Root.Undo;
+
+    /// <summary>Gets or sets the kinds of nodes users can add; graphs inside groups use their root graph's.</summary>
+    public NodeCatalog Catalog
+    {
+        get => Owner != null ? Root.Catalog : _catalog;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            if (Owner != null) throw new InvalidOperationException("Graphs inside groups use their root graph's catalog.");
+            _catalog = value;
+        }
+    }
+
+    /// <summary>Gets the reusable sub-graphs (node groups) of the root graph and the graphs inside them.</summary>
+    public NodeGroupLibrary Groups => Owner != null ? Root.Groups : _groups ??= new NodeGroupLibrary(this);
+
+    /// <summary>
+    /// Occurs when the graph's content changes: nodes or links are added or removed, an input's own value changes, a node
+    /// is muted or unmuted, or a computing node asks to be computed again. Group nodes use it to update.
+    /// </summary>
+    public event EventHandler? ContentChanged;
 
     /// <summary>Gets the selected nodes.</summary>
     public IEnumerable<NodeViewModel> SelectedNodes => _nodes.Where(n => n.IsSelected);
 
-    /// <summary>Removes all nodes and links and forgets the undo history (for example before loading another graph).</summary>
+    /// <summary>
+    /// Removes all nodes and links; a root graph also removes its groups and forgets the undo history (for example
+    /// before loading another graph).
+    /// </summary>
     public void Clear()
     {
         foreach (var link in _links.ToList()) RemoveLink(link);
         foreach (var node in _nodes.ToList()) RemoveNodeFromList(node);
-        Undo.Clear();
+        if (Owner == null)
+        {
+            _groups?.ClearAll();
+            Undo.Clear();
+        }
+        OnContentChanged();
     }
+
+    internal void OnContentChanged() => ContentChanged?.Invoke(this, EventArgs.Empty);
 
     /// <summary>Gets the selected links.</summary>
     public IEnumerable<LinkViewModel> SelectedLinks => _links.Where(l => l.IsSelected);
@@ -90,7 +136,7 @@ public class NodeGraphViewModel : NodeGraphObject
     /// <returns><c>false</c> if nothing was selected.</returns>
     public bool DeleteSelection()
     {
-        var nodes = SelectedNodes.ToList();
+        var nodes = SelectedNodes.Where(n => n.CanRemove).ToList();
         var links = SelectedLinks.Where(l => !l.From.Node!.IsSelected && !l.To.Node!.IsSelected).ToList();
         if (nodes.Count == 0 && links.Count == 0) return false;
         using (Undo.Group(nodes.Count == 1 && links.Count == 0 ? $"Delete {nodes[0].Title}" : "Delete"))
@@ -110,7 +156,7 @@ public class NodeGraphViewModel : NodeGraphObject
     public IReadOnlyList<NodeViewModel> Duplicate(IEnumerable<NodeViewModel> nodes, Point offset)
     {
         ArgumentNullException.ThrowIfNull(nodes);
-        var originals = nodes.Where(n => n.Graph == this).Distinct().ToList();
+        var originals = nodes.Where(n => n.Graph == this && n.CanRemove).Distinct().ToList();
         var copies = new Dictionary<NodeViewModel, NodeViewModel>();
         if (originals.Count == 0) return [];
 
@@ -144,12 +190,18 @@ public class NodeGraphViewModel : NodeGraphObject
     }
 
     /// <summary>Adds <paramref name="node"/> on top of the others.</summary>
+    /// <exception cref="InvalidOperationException">The node is in a graph already, has links, or is a group node that would
+    /// end up inside its own group.</exception>
     /// <returns>The node.</returns>
     public T AddNode<T>(T node) where T : NodeViewModel
     {
         ArgumentNullException.ThrowIfNull(node);
         if (node.Graph != null) throw new InvalidOperationException($"The node '{node}' is already in a graph.");
         if (node.HasLinks) throw new InvalidOperationException($"The node '{node}' has links from another graph.");
+        if (node is GroupNodeViewModel group && Owner != null && group.Definition.Contains(Owner))
+        {
+            throw new InvalidOperationException($"The group '{group.Definition.Name}' can't be used inside itself.");
+        }
         int index = _nodes.Count;
         InsertNode(node, index);
         Undo.Push(new DelegateUndoAction($"Add {node.Title}", () => RemoveNodeFromList(node), () => InsertNode(node, index)));
@@ -165,7 +217,7 @@ public class NodeGraphViewModel : NodeGraphObject
     public bool RemoveNode(NodeViewModel node)
     {
         ArgumentNullException.ThrowIfNull(node);
-        if (node.Graph != this) return false;
+        if (node.Graph != this || !node.CanRemove) return false;
         using (Undo.Group($"Delete {node.Title}"))
         {
             RemoveNodeRecorded(node);
@@ -181,7 +233,7 @@ public class NodeGraphViewModel : NodeGraphObject
         {
             foreach (var node in nodes.ToList())
             {
-                if (node.Graph == this) RemoveNodeRecorded(node);
+                if (node.Graph == this && node.CanRemove) RemoveNodeRecorded(node);
             }
         }
     }
@@ -420,12 +472,14 @@ public class NodeGraphViewModel : NodeGraphObject
     {
         node.Graph = this;
         _nodes.Insert(Math.Min(index, _nodes.Count), node);
+        OnContentChanged();
     }
 
     private void RemoveNodeFromList(NodeViewModel node)
     {
         _nodes.Remove(node);
         node.Graph = null;
+        OnContentChanged();
     }
 
     private void InsertLink(LinkViewModel link, int index)
@@ -433,6 +487,7 @@ public class NodeGraphViewModel : NodeGraphObject
         link.To.Link = link;
         link.From.AddLink(link);
         _links.Insert(Math.Min(index, _links.Count), link);
+        OnContentChanged();
     }
 
     private void RemoveLink(LinkViewModel link)
@@ -440,5 +495,6 @@ public class NodeGraphViewModel : NodeGraphObject
         _links.Remove(link);
         link.From.RemoveLink(link);
         if (link.To.Link == link) link.To.Link = null;
+        OnContentChanged();
     }
 }

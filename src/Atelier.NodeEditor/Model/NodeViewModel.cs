@@ -26,6 +26,7 @@ public class NodeViewModel : NodeGraphObject
     private bool _isSelected;
     private object? _content;
     private string? _error;
+    private NodeGraphViewModel? _graph;
 
     /// <summary>Initializes a node.</summary>
     public NodeViewModel(string title = "Node")
@@ -42,7 +43,28 @@ public class NodeViewModel : NodeGraphObject
     public string? TypeId { get; set; }
 
     /// <summary>Gets the graph the node is in, or <c>null</c>.</summary>
-    public NodeGraphViewModel? Graph { get; internal set; }
+    public NodeGraphViewModel? Graph
+    {
+        get => _graph;
+        internal set
+        {
+            if (_graph == value) return;
+            var old = _graph;
+            _graph = value;
+            OnGraphChanged(old, value);
+        }
+    }
+
+    /// <summary>
+    /// Gets whether the node can be deleted, duplicated and copied; <c>false</c> for the Group Input and Group Output
+    /// nodes inside groups.
+    /// </summary>
+    protected internal virtual bool CanRemove => true;
+
+    /// <summary>Called when the node is added to a graph or removed from one.</summary>
+    protected virtual void OnGraphChanged(NodeGraphViewModel? oldGraph, NodeGraphViewModel? newGraph)
+    {
+    }
 
     /// <summary>Gets or sets the text in the title bar.</summary>
     public string Title
@@ -86,7 +108,10 @@ public class NodeViewModel : NodeGraphObject
     public bool IsMuted
     {
         get => _isMuted;
-        set => SetUndoableProperty(ref _isMuted, value, Graph?.Undo, value ? "Mute" : "Unmute", v => IsMuted = v);
+        set
+        {
+            if (SetUndoableProperty(ref _isMuted, value, Graph?.Undo, value ? "Mute" : "Unmute", v => IsMuted = v)) Graph?.OnContentChanged();
+        }
     }
 
     /// <summary>Gets or sets whether the node is selected (not recorded for undo).</summary>
@@ -140,6 +165,44 @@ public class NodeViewModel : NodeGraphObject
         output.Node = this;
         _outputs.Add(output);
         return output;
+    }
+
+    /// <summary>Inserts <paramref name="input"/> at <paramref name="index"/>, for nodes whose sockets change (like group nodes).</summary>
+    protected void InsertInput(int index, InputSocketViewModel input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        if (input.Node != null) throw new InvalidOperationException($"The input '{input}' already belongs to a node.");
+        input.Node = this;
+        _inputs.Insert(Math.Clamp(index, 0, _inputs.Count), input);
+    }
+
+    /// <summary>Inserts <paramref name="output"/> at <paramref name="index"/>, for nodes whose sockets change.</summary>
+    protected void InsertOutput(int index, OutputSocketViewModel output)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        if (output.Node != null) throw new InvalidOperationException($"The output '{output}' already belongs to a node.");
+        output.Node = this;
+        _outputs.Insert(Math.Clamp(index, 0, _outputs.Count), output);
+    }
+
+    /// <summary>Removes <paramref name="socket"/>, which must not be connected (disconnect it through the graph first, for undo).</summary>
+    /// <exception cref="InvalidOperationException">The socket is connected.</exception>
+    protected void RemoveSocket(SocketViewModel socket)
+    {
+        ArgumentNullException.ThrowIfNull(socket);
+        if (socket.Node != this) return;
+        if (socket.IsConnected) throw new InvalidOperationException($"The socket '{socket}' is connected.");
+        if (socket is InputSocketViewModel input) _inputs.Remove(input);
+        else _outputs.Remove((OutputSocketViewModel)socket);
+        socket.Node = null;
+    }
+
+    /// <summary>Moves <paramref name="socket"/> to position <paramref name="index"/> among the node's inputs or outputs.</summary>
+    protected void MoveSocket(SocketViewModel socket, int index)
+    {
+        ArgumentNullException.ThrowIfNull(socket);
+        if (socket is InputSocketViewModel input && _inputs.IndexOf(input) is var i and >= 0) _inputs.Move(i, Math.Clamp(index, 0, _inputs.Count - 1));
+        else if (socket is OutputSocketViewModel output && _outputs.IndexOf(output) is var o and >= 0) _outputs.Move(o, Math.Clamp(index, 0, _outputs.Count - 1));
     }
 
     /// <summary>Adds an output named <paramref name="name"/> of <paramref name="type"/>.</summary>

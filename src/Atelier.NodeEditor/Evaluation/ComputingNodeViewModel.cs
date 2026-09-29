@@ -39,7 +39,11 @@ public abstract class ComputingNodeViewModel : NodeViewModel
     protected internal abstract void Compute(ComputeContext context);
 
     /// <summary>Asks for <see cref="Compute"/> to run again, for changes the evaluator doesn't see, such as a setting in the node's content.</summary>
-    protected void Invalidate() => Invalidated?.Invoke(this, EventArgs.Empty);
+    protected void Invalidate()
+    {
+        Invalidated?.Invoke(this, EventArgs.Empty);
+        Graph?.OnContentChanged();
+    }
 }
 
 /// <summary>What <see cref="ComputingNodeViewModel.Compute"/> reads its inputs from and writes its outputs to.</summary>

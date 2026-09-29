@@ -107,8 +107,14 @@ public sealed class GraphEvaluator : IDisposable
         _dirty.Clear();
     }
 
+    // Computes every node of a graph once, in dependency order (for the graphs inside groups).
+    internal static void EvaluateAll(NodeGraphViewModel graph)
+    {
+        foreach (var node in graph.GetTopologicalOrder()) Compute(node);
+    }
+
     // Computes one node; returns the outputs whose values changed.
-    private static List<OutputSocketViewModel> Compute(NodeViewModel node)
+    internal static List<OutputSocketViewModel> Compute(NodeViewModel node)
     {
         var before = node.Outputs.Select(o => o.Value).ToList();
         if (node.IsMuted)
