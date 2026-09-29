@@ -32,6 +32,7 @@
     <ProjectReference Include="..\..\src\Atelier.Theming.Material\Atelier.Theming.Material.csproj" />
     <ProjectReference Include="..\..\src\Atelier.Controls\Atelier.Controls.csproj" />
     <ProjectReference Include="..\..\src\Atelier.Markup\Atelier.Markup.csproj" />
+    <ProjectReference Include="..\..\src\Atelier.NodeEditor\Atelier.NodeEditor.csproj" />
     <ProjectReference Include="..\..\src\Atelier.DevTools\Atelier.DevTools.csproj" Condition="'$(Configuration)' == 'Debug'" />
     <ProjectReference Include="..\..\src\Atelier.Generators\Atelier.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>

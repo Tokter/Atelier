@@ -9,6 +9,7 @@
     <Project Path="src/Atelier.Generators/Atelier.Generators.csproj" />
     <Project Path="src/Atelier.Layout/Atelier.Layout.csproj" />
     <Project Path="src/Atelier.Markup/Atelier.Markup.csproj" />
+    <Project Path="src/Atelier.NodeEditor/Atelier.NodeEditor.csproj" />
     <Project Path="src/Atelier.Platform.Silk/Atelier.Platform.Silk.csproj" />
     <Project Path="src/Atelier.Rendering/Atelier.Rendering.csproj" />
     <Project Path="src/Atelier.Theming.Material/Atelier.Theming.Material.csproj" />
