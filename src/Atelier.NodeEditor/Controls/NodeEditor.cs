@@ -91,6 +91,8 @@ public class NodeEditor : KeybindingHandler
     private readonly OverlayLayer _overlay;
     private Rect? _selectionBox;
     private LinkViewModel? _hiddenLink;
+    private LinkViewModel? _insertTarget;
+    private IReadOnlyList<Point>? _stroke;
     private readonly Dictionary<NodeViewModel, NodeView> _views = [];
 
     static NodeEditor()
@@ -266,14 +268,55 @@ public class NodeEditor : KeybindingHandler
     /// <paramref name="viewPoint"/> (the view's center when <c>null</c>).
     /// </summary>
     /// <returns>The menu, or <c>null</c> without a graph.</returns>
-    public AddNodeMenu? ShowAddNodeMenu(Point? viewPoint = null)
+    public AddNodeMenu? ShowAddNodeMenu(Point? viewPoint = null) => ShowAddNodeMenu(viewPoint, null);
+
+    /// <summary>
+    /// Opens the <see cref="AddNodeMenu"/> at the pointer, listing only the node types that can connect to
+    /// <paramref name="connectTo"/> (when set): the picked node is added at <paramref name="viewPoint"/> and connected to
+    /// it, as one undo step (see <see cref="AddConnectedNode"/>).
+    /// </summary>
+    /// <returns>The menu, or <c>null</c> without a graph.</returns>
+    public AddNodeMenu? ShowAddNodeMenu(Point? viewPoint, SocketViewModel? connectTo)
     {
         if (Graph is not { } graph) return null;
         var at = viewPoint ?? new Point(Bounds.Width / 2, Bounds.Height / 2);
-        var menu = new AddNodeMenu(graph.Catalog);
-        menu.TypePicked += (_, type) => AddNode(type, at);
+        var menu = new AddNodeMenu(graph.Catalog, (connectTo as OutputSocketViewModel)?.Type, (connectTo as InputSocketViewModel)?.Type);
+        menu.TypePicked += (_, type) =>
+        {
+            if (connectTo != null) AddConnectedNode(type, at, connectTo);
+            else AddNode(type, at);
+        };
         menu.Show(this);
         return menu;
+    }
+
+    /// <summary>
+    /// Adds a node of <paramref name="type"/> next to <paramref name="viewPoint"/> and connects it to
+    /// <paramref name="socket"/>, as one undo step: an output feeds the node's first input that accepts it (the node goes
+    /// to the right of the point), an input is fed by the node's first output it accepts (the node goes to the left).
+    /// </summary>
+    /// <returns>The new node, or <c>null</c> without a graph.</returns>
+    public NodeViewModel? AddConnectedNode(NodeType type, Point viewPoint, SocketViewModel socket)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(socket);
+        if (Graph is not { } graph) return null;
+        using (graph.Undo.Group($"Add {type.Title}"))
+        {
+            if (AddNode(type, viewPoint) is not { } node) return null;
+            var point = ViewToGraph(viewPoint);
+            node.Position = new Point(socket is OutputSocketViewModel ? point.X : point.X - node.Width, point.Y - NodeView.DefaultHeaderHeight);
+            switch (socket)
+            {
+                case OutputSocketViewModel output when node.Inputs.FirstOrDefault(i => graph.CanConnect(output, i) == ConnectResult.Ok) is { } input:
+                    graph.Connect(output, input);
+                    break;
+                case InputSocketViewModel input when node.Outputs.FirstOrDefault(o => graph.CanConnect(o, input) == ConnectResult.Ok) is { } output:
+                    graph.Connect(output, input);
+                    break;
+            }
+            return node;
+        }
     }
 
     /// <summary>Opens the editor's context menu (see <see cref="CreateContextMenu"/>) at the pointer.</summary>
@@ -313,7 +356,7 @@ public class NodeEditor : KeybindingHandler
             menu.Items.Add(add);
             menu.Items.Add(new Separator());
         }
-        AddCommands(NodeEditorCommands.Delete, NodeEditorCommands.Duplicate, NodeEditorCommands.ToggleCollapse, NodeEditorCommands.ToggleMute);
+        AddCommands(NodeEditorCommands.Delete, NodeEditorCommands.DeleteReconnect, NodeEditorCommands.Duplicate, NodeEditorCommands.ToggleCollapse, NodeEditorCommands.ToggleMute);
         menu.Items.Add(new Separator());
         AddCommands(NodeEditorCommands.SelectAll, NodeEditorCommands.FrameAll, NodeEditorCommands.FrameSelected);
         menu.Items.Add(new Separator());
@@ -336,6 +379,27 @@ public class NodeEditor : KeybindingHandler
 
     /// <summary>Gets the box being drawn by box selection, in the editor's coordinates, or <c>null</c>.</summary>
     public Rect? SelectionBox { get => _selectionBox; internal set { _selectionBox = value; _overlay.InvalidateVisual(); } }
+
+    /// <summary>Gets the link a node being moved would be inserted into if dropped now (drawn highlighted), or <c>null</c>.</summary>
+    public LinkViewModel? InsertTarget { get => _insertTarget; internal set { _insertTarget = value; _links.InvalidateVisual(); } }
+
+    /// <summary>Gets the stroke being drawn by the cut or reroute tool, in the editor's coordinates, or <c>null</c>.</summary>
+    public IReadOnlyList<Point>? Stroke { get => _stroke; internal set { _stroke = value; _overlay.InvalidateVisual(); } }
+
+    // Whether the stroke cuts links (drawn in the error color) rather than adding reroute points.
+    internal bool StrokeCuts { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether dropping a node that has no links onto a link inserts it there (and makes room for it, moving
+    /// the nodes after it to the right). The default is <c>true</c>.
+    /// </summary>
+    public bool AutoInsert { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether dropping a new link on empty space opens the add-node menu with the node types it can
+    /// connect to; the picked node is added there and connected. The default is <c>true</c>.
+    /// </summary>
+    public bool SearchOnLinkDrop { get; set; } = true;
 
     /// <summary>Gets the socket a link is being dragged from, or <c>null</c>.</summary>
     public SocketViewModel? DraggedFrom { get; private set; }

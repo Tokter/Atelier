@@ -49,6 +49,41 @@ public static class LinkGeometry
         return best;
     }
 
+    /// <summary>
+    /// Finds where the line through <paramref name="stroke"/>'s points first crosses the curve from
+    /// <paramref name="start"/> to <paramref name="end"/> (measured along 24 straight pieces of it).
+    /// </summary>
+    /// <returns><c>false</c> if they don't cross.</returns>
+    public static bool TryIntersect(IReadOnlyList<Point> stroke, Point start, Point end, float scale, out Point hit)
+    {
+        ArgumentNullException.ThrowIfNull(stroke);
+        var previous = start;
+        for (int i = 1; i <= Segments; i++)
+        {
+            var next = GetPoint(start, end, i / (float)Segments, scale);
+            for (int j = 1; j < stroke.Count; j++)
+            {
+                if (SegmentsIntersect(previous, next, stroke[j - 1], stroke[j], out hit)) return true;
+            }
+            previous = next;
+        }
+        hit = default;
+        return false;
+    }
+
+    private static bool SegmentsIntersect(Point a, Point b, Point c, Point d, out Point hit)
+    {
+        hit = default;
+        float rx = b.X - a.X, ry = b.Y - a.Y, sx = d.X - c.X, sy = d.Y - c.Y;
+        float denominator = rx * sy - ry * sx;
+        if (MathF.Abs(denominator) < 1e-6f) return false; // parallel
+        float t = ((c.X - a.X) * sy - (c.Y - a.Y) * sx) / denominator;
+        float u = ((c.X - a.X) * ry - (c.Y - a.Y) * rx) / denominator;
+        if (t < 0 || t > 1 || u < 0 || u > 1) return false;
+        hit = new Point(a.X + t * rx, a.Y + t * ry);
+        return true;
+    }
+
     private static float DistanceToSegment(Point p, Point a, Point b)
     {
         float dx = b.X - a.X, dy = b.Y - a.Y;

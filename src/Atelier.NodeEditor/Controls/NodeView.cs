@@ -105,6 +105,7 @@ public class NodeView : Control
         Grid.SetColumn(_commands, 2);
         _header.Add(_commands);
         AddChild(_header);
+        if (IsReroute) _header.Visibility = Visibility.Collapsed;
 
         _content = new ContentControl();
         AddChild(_content);
@@ -144,6 +145,9 @@ public class NodeView : Control
             return Color.Lerp(color, Color.FromArgb(color.A, gray, gray, gray), 0.8f);
         }
     }
+
+    /// <summary>Gets whether the node is a reroute point, drawn as a dot (see <see cref="RerouteNodeViewModel"/>).</summary>
+    public bool IsReroute => Node is RerouteNodeViewModel;
 
     /// <summary>Gets the node's own area within the view, without the <see cref="SocketOverhang"/> on either side.</summary>
     public Rect BodyBounds => new(SocketOverhang, 0, Math.Max(0, Bounds.Width - 2 * SocketOverhang), Bounds.Height);
@@ -185,6 +189,7 @@ public class NodeView : Control
     /// <inheritdoc/>
     protected override Size MeasureOverride(Size availableSize)
     {
+        if (IsReroute) return new Size(RerouteNodeViewModel.Size + 2 * SocketOverhang, RerouteNodeViewModel.Size);
         float width = Node.Width;
         float fullWidth = width + 2 * SocketOverhang;
         float height = HeaderHeight;
@@ -207,6 +212,11 @@ public class NodeView : Control
     /// <inheritdoc/>
     protected override Size ArrangeOverride(Size finalSize)
     {
+        if (IsReroute)
+        {
+            UpdateAnchors(0, 0);
+            return finalSize;
+        }
         float width = Math.Max(0, finalSize.Width - 2 * SocketOverhang);
         float headerHeight = HeaderHeight;
         _header.Arrange(new Rect(SocketOverhang, 0, width, headerHeight));
@@ -243,6 +253,12 @@ public class NodeView : Control
     private void UpdateAnchors(float width, float headerHeight)
     {
         var position = Node.Position;
+        if (Node is RerouteNodeViewModel reroute)
+        {
+            foreach (var socket in Node.Inputs.Cast<SocketViewModel>().Concat(Node.Outputs)) socket.Anchor = reroute.Center;
+            _editor?.InvalidateLinks();
+            return;
+        }
         bool collapsed = Node.IsCollapsed;
         foreach (var row in _inputRows)
         {
@@ -326,6 +342,7 @@ public class NodeView : Control
         foreach (var row in _outputRows.Concat(_inputRows)) RemoveChild(row);
         _outputRows.Clear();
         _inputRows.Clear();
+        if (IsReroute) return;
         foreach (var output in Node.Outputs)
         {
             var row = new SocketRow(output, null);

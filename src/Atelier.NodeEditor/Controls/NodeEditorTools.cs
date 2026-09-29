@@ -7,12 +7,17 @@ namespace Atelier.Nodes;
 /// <summary>
 /// Connects sockets by dragging, like Blender: from an output to an input, or from an unconnected input back to an
 /// output. Dragging from a connected input picks its link up: drop it on another input to move it, or anywhere else to
-/// remove it. The link snaps to the nearest socket it can connect to, which is outlined.
+/// remove it. The link snaps to the nearest socket it can connect to, which is outlined. A new link dropped on empty
+/// space opens the add-node menu with the node types it can connect to (see <see cref="NodeEditor.SearchOnLinkDrop"/>).
 /// </summary>
 public sealed class ConnectCommand : DragCommand
 {
     /// <summary>How close to a socket (in pixels) a drag must start, or a link be dropped, to use it.</summary>
     public const float SocketRadius = 12f;
+
+    /// <inheritdoc/>
+    /// <remarks>Only drags that start at a socket.</remarks>
+    public override bool IsContextual => true;
 
     /// <inheritdoc/>
     public override bool CanExecute(object? parameter) => parameter is NodeEditor { Graph: not null };
@@ -22,7 +27,8 @@ public sealed class ConnectCommand : DragCommand
     {
         if (start.Target is not NodeEditor { Graph: { } graph } editor) return null;
         var position = editor.PointToClient(start.ScreenPosition);
-        if (editor.SocketAt(position, SocketRadius) is not { } socket) return null;
+        // Reroute points are moved by dragging them; links go into them from other sockets.
+        if (editor.SocketAt(position, SocketRadius, s => s.Node is not RerouteNodeViewModel) is not { } socket) return null;
 
         return socket switch
         {
@@ -48,6 +54,12 @@ public sealed class ConnectCommand : DragCommand
             Update(screenPosition, modifiers);
             Clear();
             if (pickedUp != null && _target == pickedUp.To) return; // dropped back where it was
+            if (pickedUp == null && _target == null)
+            {
+                // A new link dropped on empty space: offer the nodes it can connect to.
+                if (editor.SearchOnLinkDrop) editor.ShowAddNodeMenu(editor.PointToClient(screenPosition), from);
+                return;
+            }
 
             using (graph.Undo.Group(pickedUp != null ? "Reconnect" : "Connect"))
             {
@@ -88,8 +100,27 @@ public sealed class ConnectCommand : DragCommand
 /// when <see cref="NodeEditor.SnapToGrid"/> is on, or off while Ctrl is held. The move is one undo step; Escape puts the
 /// nodes back.
 /// </summary>
-public sealed class MoveNodesCommand : DragCommand
+/// <remarks>
+/// A single node without links dropped onto a link (under the pointer) is inserted into it (see
+/// <see cref="NodeEditor.AutoInsert"/>), and the nodes after it move right to make room. With <see cref="Detach"/>, the
+/// nodes are first taken out of their links, their neighbors connected directly (see
+/// <see cref="NodeGraphViewModel.Detach"/>), like Blender's Alt+drag.
+/// </remarks>
+public sealed class MoveNodesCommand(bool detach = false) : DragCommand
 {
+    /// <inheritdoc/>
+    /// <remarks>Only drags that start on a node.</remarks>
+    public override bool IsContextual => true;
+
+    /// <summary>How far (in pixels) from the pointer a link can be to insert the dropped node into it.</summary>
+    public const float InsertDistance = 12f;
+
+    /// <summary>The room left between an inserted node and the node after it, in graph units.</summary>
+    public const float InsertSpacing = 40f;
+
+    /// <summary>Gets whether the nodes are taken out of their links before they move.</summary>
+    public bool Detach { get; } = detach;
+
     /// <inheritdoc/>
     public override bool CanExecute(object? parameter) => parameter is NodeEditor { Graph: not null };
 
@@ -101,7 +132,7 @@ public sealed class MoveNodesCommand : DragCommand
 
         if (!node.IsSelected) editor.SelectOnly(node);
         var nodes = graph.SelectedNodes.ToList();
-        return new Operation(editor, graph, nodes, start.ScreenPosition);
+        return new Operation(editor, graph, nodes, start.ScreenPosition, Detach);
     }
 
     private sealed class Operation : IDragOperation
@@ -110,15 +141,23 @@ public sealed class MoveNodesCommand : DragCommand
         private readonly NodeGraphViewModel _graph;
         private readonly List<(NodeViewModel Node, Point From)> _nodes;
         private readonly Point _start;
+        private readonly UndoStack.UndoGroup _group;
         private readonly IDisposable _suspended;
 
-        public Operation(NodeEditor editor, NodeGraphViewModel graph, List<NodeViewModel> nodes, Point start)
+        public Operation(NodeEditor editor, NodeGraphViewModel graph, List<NodeViewModel> nodes, Point start, bool detach)
         {
             _editor = editor;
             _graph = graph;
             _nodes = nodes.Select(n => (n, n.Position)).ToList();
             _start = start;
-            _suspended = graph.Undo.Suspend(); // the whole move becomes one step at the end
+            _group = graph.Undo.Group(nodes.Count == 1 ? $"Move {nodes[0].Title}" : "Move");
+            if (detach)
+            {
+                bool detached = false;
+                foreach (var node in nodes) detached |= graph.Detach(node);
+                if (detached) _group.Name = nodes.Count == 1 ? $"Detach {nodes[0].Title}" : "Detach";
+            }
+            _suspended = graph.Undo.Suspend(); // the positions are recorded once, at the end
         }
 
         public void Update(Point screenPosition, ModifierKeys modifiers)
@@ -126,23 +165,56 @@ public sealed class MoveNodesCommand : DragCommand
             var delta = (screenPosition - _start) / _editor.Zoom;
             bool snap = _editor.SnapToGrid ^ modifiers.HasFlag(ModifierKeys.Control);
             foreach (var (node, from) in _nodes) node.Position = _editor.Snap(from + delta, snap);
+            _editor.InsertTarget = FindInsertTarget(_editor.PointToClient(screenPosition));
         }
 
         public void Complete(Point screenPosition, ModifierKeys modifiers)
         {
             Update(screenPosition, modifiers);
+            var target = _editor.InsertTarget;
+            _editor.InsertTarget = null;
             _suspended.Dispose();
+
             var moves = _nodes.Select(n => (n.Node, n.From, To: n.Node.Position)).Where(m => m.From != m.To).ToList();
-            if (moves.Count == 0) return;
-            _graph.Undo.Push(new DelegateUndoAction(moves.Count == 1 ? $"Move {moves[0].Node.Title}" : "Move",
-                () => { foreach (var m in moves) m.Node.Position = m.From; },
-                () => { foreach (var m in moves) m.Node.Position = m.To; }));
+            if (moves.Count > 0)
+            {
+                _graph.Undo.Push(new DelegateUndoAction(_group.Name,
+                    () => { foreach (var m in moves) m.Node.Position = m.From; },
+                    () => { foreach (var m in moves) m.Node.Position = m.To; }));
+            }
+            if (target != null && _graph.InsertIntoLink(_nodes[0].Node, target))
+            {
+                _group.Name = $"Insert {_nodes[0].Node.Title}";
+                MakeRoom(_nodes[0].Node, target.To.Node!);
+            }
+            _group.Dispose();
         }
 
         public void Cancel()
         {
+            _editor.InsertTarget = null;
             foreach (var (node, from) in _nodes) node.Position = from;
             _suspended.Dispose();
+            _group.Discard(); // also undoes a detach
+        }
+
+        // The link under the pointer that the single, unlinked node being moved can go into.
+        private LinkViewModel? FindInsertTarget(Point pointer)
+        {
+            if (!_editor.AutoInsert || _nodes.Count != 1) return null;
+            var node = _nodes[0].Node;
+            if (node.HasLinks) return null;
+            var link = _editor.LinkAt(pointer, InsertDistance);
+            return link != null && _graph.CanInsertIntoLink(node, link) ? link : null;
+        }
+
+        // Moves the node after the inserted one, and the nodes after that, right until there's room.
+        private void MakeRoom(NodeViewModel inserted, NodeViewModel next)
+        {
+            float shift = inserted.Position.X + inserted.Width + InsertSpacing - next.Position.X;
+            if (shift <= 0) return;
+            var after = _graph.GetDownstream(next).Append(next).Where(n => n.Position.X >= inserted.Position.X).ToList();
+            foreach (var node in after) node.Position = new Point(node.Position.X + shift, node.Position.Y);
         }
     }
 }
@@ -163,6 +235,10 @@ public enum BoxSelectMode
 /// <summary>Selects the nodes a box dragged over the background touches; the selection follows the box as it's drawn.</summary>
 public sealed class BoxSelectCommand(BoxSelectMode mode) : DragCommand
 {
+    /// <inheritdoc/>
+    /// <remarks>Only drags that start on the background.</remarks>
+    public override bool IsContextual => true;
+
     /// <summary>Gets how the box changes the selection.</summary>
     public BoxSelectMode Mode { get; } = mode;
 
@@ -215,6 +291,88 @@ public sealed class BoxSelectCommand(BoxSelectMode mode) : DragCommand
             editor.SelectionBox = null;
             foreach (var node in graph.Nodes) node.IsSelected = _before.Contains(node);
             foreach (var link in _linksBefore) link.IsSelected = true;
+        }
+    }
+}
+
+/// <summary>
+/// A tool that draws a stroke by dragging and then acts on the links it crosses: <see cref="CutLinksCommand"/> removes
+/// them, <see cref="AddRerouteCommand"/> puts reroute points where it crosses them. Escape cancels the stroke.
+/// </summary>
+public abstract class LinkStrokeCommand : DragCommand
+{
+    private const float MinimumStep = 3f;
+
+    /// <inheritdoc/>
+    public override bool CanExecute(object? parameter) => parameter is NodeEditor { Graph: not null };
+
+    /// <inheritdoc/>
+    public override IDragOperation? BeginDrag(DragStart start) =>
+        start.Target is NodeEditor { Graph: { } graph } editor ? new Operation(this, editor, graph, editor.PointToClient(start.ScreenPosition)) : null;
+
+    /// <summary>Whether the stroke cuts links (drawn in the error color) rather than adding to them.</summary>
+    private protected abstract bool Cuts { get; }
+
+    /// <summary>Acts on the links the stroke crossed, each with the first point (in graph coordinates) where it did.</summary>
+    private protected abstract void Apply(NodeGraphViewModel graph, IReadOnlyList<(LinkViewModel Link, Point At)> crossed);
+
+    private sealed class Operation(LinkStrokeCommand command, NodeEditor editor, NodeGraphViewModel graph, Point start) : IDragOperation
+    {
+        private readonly List<Point> _points = [start];
+
+        public void Update(Point screenPosition, ModifierKeys modifiers)
+        {
+            var point = editor.PointToClient(screenPosition);
+            var step = point - _points[^1];
+            if (step.X * step.X + step.Y * step.Y < MinimumStep * MinimumStep) return;
+            _points.Add(point);
+            editor.StrokeCuts = command.Cuts;
+            editor.Stroke = _points.ToList();
+        }
+
+        public void Complete(Point screenPosition, ModifierKeys modifiers)
+        {
+            Update(screenPosition, modifiers);
+            editor.Stroke = null;
+            var crossed = new List<(LinkViewModel, Point)>();
+            foreach (var link in graph.Links)
+            {
+                if (LinkGeometry.TryIntersect(_points, editor.GraphToView(link.From.Anchor), editor.GraphToView(link.To.Anchor), editor.Zoom, out var hit))
+                {
+                    crossed.Add((link, editor.ViewToGraph(hit)));
+                }
+            }
+            if (crossed.Count > 0) command.Apply(graph, crossed);
+        }
+
+        public void Cancel() => editor.Stroke = null;
+    }
+}
+
+/// <summary>Removes the links a stroke drawn by dragging crosses, as one undo step (Blender's Ctrl+right drag).</summary>
+public sealed class CutLinksCommand : LinkStrokeCommand
+{
+    private protected override bool Cuts => true;
+
+    private protected override void Apply(NodeGraphViewModel graph, IReadOnlyList<(LinkViewModel Link, Point At)> crossed)
+    {
+        using (graph.Undo.Group(crossed.Count == 1 ? "Cut link" : "Cut links"))
+        {
+            foreach (var (link, _) in crossed) graph.Disconnect(link);
+        }
+    }
+}
+
+/// <summary>Puts a reroute point on each link a stroke drawn by dragging crosses, where it crosses, as one undo step (Blender's Shift+right drag).</summary>
+public sealed class AddRerouteCommand : LinkStrokeCommand
+{
+    private protected override bool Cuts => false;
+
+    private protected override void Apply(NodeGraphViewModel graph, IReadOnlyList<(LinkViewModel Link, Point At)> crossed)
+    {
+        using (graph.Undo.Group(crossed.Count == 1 ? "Add reroute" : "Add reroutes"))
+        {
+            foreach (var (link, at) in crossed) graph.InsertReroute(link, at);
         }
     }
 }

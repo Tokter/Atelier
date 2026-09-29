@@ -256,6 +256,58 @@ public class NodeGraphViewModel : NodeGraphObject
         return true;
     }
 
+    /// <summary>Puts a reroute point centered at <paramref name="center"/> into <paramref name="link"/>, as one undo step.</summary>
+    /// <returns>The reroute point, or <c>null</c> if the link isn't in the graph.</returns>
+    public RerouteNodeViewModel? InsertReroute(LinkViewModel link, Point center)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        if (!_links.Contains(link)) return null;
+        var reroute = new RerouteNodeViewModel(link.From.Type) { Center = center };
+        using (Undo.Group("Add reroute"))
+        {
+            AddNode(reroute);
+            var (from, to) = (link.From, link.To);
+            Disconnect(link);
+            Connect(from, reroute.Inputs[0]);
+            Connect(reroute.Outputs[0], to);
+        }
+        return reroute;
+    }
+
+    /// <summary>Gets whether <see cref="InsertIntoLink"/> would put <paramref name="node"/> into <paramref name="link"/>.</summary>
+    public bool CanInsertIntoLink(NodeViewModel node, LinkViewModel link)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        ArgumentNullException.ThrowIfNull(link);
+        return node.Graph == this && _links.Contains(link) && !node.HasLinks
+            && node.Inputs.Any(i => i.Type.CanConnectFrom(link.From.Type))
+            && node.Outputs.Any(o => link.To.Type.CanConnectFrom(o.Type));
+    }
+
+    /// <summary>
+    /// Takes <paramref name="node"/> out of its links, like Blender's detach: each input its outputs fed is fed by what
+    /// fed the node instead (the first of its inputs' links with a type that input accepts), and all of the node's
+    /// links are removed. One undo step.
+    /// </summary>
+    /// <returns><c>false</c> if the node had no links.</returns>
+    public bool Detach(NodeViewModel node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (node.Graph != this || !node.HasLinks) return false;
+
+        var feeding = node.Inputs.Where(i => i.Link != null).Select(i => i.Link!.From).ToList();
+        var fed = node.Outputs.SelectMany(o => o.Links).Select(l => l.To).ToList();
+        using (Undo.Group($"Detach {node.Title}"))
+        {
+            foreach (var link in LinksOf(node).ToList()) Disconnect(link);
+            foreach (var input in fed)
+            {
+                if (feeding.FirstOrDefault(output => input.Type.CanConnectFrom(output.Type)) is { } output) Connect(output, input);
+            }
+        }
+        return true;
+    }
+
     /// <summary>Gets <paramref name="node"/>'s links: those of its inputs, then those of its outputs.</summary>
     public IEnumerable<LinkViewModel> LinksOf(NodeViewModel node)
     {

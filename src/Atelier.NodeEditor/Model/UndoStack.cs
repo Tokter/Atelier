@@ -87,12 +87,12 @@ public sealed class UndoStack
     /// Starts a group: the changes recorded until the returned object is disposed become one step named
     /// <paramref name="name"/>. Groups can nest; an empty group records nothing.
     /// </summary>
-    public IDisposable Group(string name)
+    public UndoGroup Group(string name)
     {
         var group = new CompositeAction(name);
         _groups.Push(group);
         _lastChange = null;
-        return new GroupScope(this, group);
+        return new UndoGroup(this, group);
     }
 
     /// <summary>Records a change that has already been made; ignored while <see cref="IsApplying"/> or <see cref="IsSuspended"/>.</summary>
@@ -201,7 +201,7 @@ public sealed class UndoStack
 
     private sealed class CompositeAction(string name) : IUndoAction
     {
-        public string Name { get; } = name;
+        public string Name { get; set; } = name;
         public List<IUndoAction> Actions { get; } = [];
 
         public void Undo()
@@ -238,15 +238,63 @@ public sealed class UndoStack
         }
     }
 
-    private sealed class GroupScope(UndoStack stack, CompositeAction group) : IDisposable
+    // Ends a group without recording it, reverting its changes (newest first).
+    private void DiscardGroup(CompositeAction group)
     {
-        private bool _disposed;
+        if (_groups.Count == 0 || _groups.Peek() != group)
+        {
+            throw new InvalidOperationException("Undo groups must be ended in the reverse order they were started.");
+        }
+        _groups.Pop();
+        _lastChange = null;
+        IsApplying = true;
+        try
+        {
+            group.Undo();
+        }
+        finally
+        {
+            IsApplying = false;
+        }
+    }
 
+    /// <summary>
+    /// A group of changes started by <see cref="Group"/>: disposing it records them as one step, <see cref="Discard"/>
+    /// reverts them and records nothing (for a tool that is canceled).
+    /// </summary>
+    public sealed class UndoGroup : IDisposable
+    {
+        private readonly UndoStack _stack;
+        private readonly CompositeAction _group;
+        private bool _ended;
+
+        internal UndoGroup(UndoStack stack, object group)
+        {
+            _stack = stack;
+            _group = (CompositeAction)group;
+        }
+
+        /// <summary>Gets or sets the name of the step, e.g. when a tool finds out what it did only at its end.</summary>
+        public string Name
+        {
+            get => _group.Name;
+            set => _group.Name = value ?? string.Empty;
+        }
+
+        /// <summary>Ends the group, recording its changes as one step (if there are any).</summary>
         public void Dispose()
         {
-            if (_disposed) return;
-            _disposed = true;
-            stack.EndGroup(group);
+            if (_ended) return;
+            _ended = true;
+            _stack.EndGroup(_group);
+        }
+
+        /// <summary>Ends the group, reverting its changes; nothing is recorded.</summary>
+        public void Discard()
+        {
+            if (_ended) return;
+            _ended = true;
+            _stack.DiscardGroup(_group);
         }
     }
 }

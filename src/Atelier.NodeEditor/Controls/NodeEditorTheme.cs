@@ -137,6 +137,10 @@ internal sealed class LinkLayerRenderer : ControlRenderer<LinkLayer>
 
             bool muted = link.From.Node!.IsMuted || link.To.Node!.IsMuted;
             float opacity = muted ? 0.4f : 1f;
+            if (link == editor.InsertTarget)
+            {
+                context.DrawRoundPathOutline(path, editor.SelectionColor.WithAlpha(editor.SelectionColor.Af * 0.6f), width + 6);
+            }
             if (link.IsSelected)
             {
                 context.DrawRoundPathOutline(path, editor.SelectionColor.WithAlpha(editor.SelectionColor.Af * opacity), width + 4);
@@ -176,6 +180,15 @@ internal sealed class OverlayLayerRenderer : ControlRenderer<OverlayLayer>
     public override void Render(OverlayLayer layer, ref DrawingContext context)
     {
         var editor = layer.Editor;
+        if (editor.Stroke is { Count: >= 2 } stroke)
+        {
+            using var line = new SKPathBuilder();
+            line.MoveTo(stroke[0].X, stroke[0].Y);
+            for (int i = 1; i < stroke.Count; i++) line.LineTo(stroke[i].X, stroke[i].Y);
+            using var strokePath = line.Detach();
+            context.DrawRoundPathOutline(strokePath, Color.Black.WithAlpha(0.35f), 3.5f);
+            context.DrawRoundPathOutline(strokePath, editor.StrokeCuts ? editor.ErrorColor : editor.SelectionColor, 1.5f);
+        }
         if (editor.SelectionBox is { } box)
         {
             context.DrawRect(box, editor.SelectionColor.WithAlpha(0.12f));
@@ -212,6 +225,12 @@ internal sealed class NodeViewRenderer : ControlRenderer<NodeView>
 
     public override void Render(NodeView view, ref DrawingContext context)
     {
+        if (view.Node is RerouteNodeViewModel reroute)
+        {
+            RenderReroute(view, reroute, ref context);
+            return;
+        }
+
         var body = view.BodyBounds;
         if (body.Width <= 0 || body.Height <= 0) return;
 
@@ -249,6 +268,20 @@ internal sealed class NodeViewRenderer : ControlRenderer<NodeView>
         {
             context.DrawText(message, new Point(body.X, body.Bottom + 6 + ErrorFontSize), error, ErrorFontSize, null, FontWeight.Normal);
         }
+    }
+
+    // A reroute point: a dot in its type's color, ringed in the selection color when selected.
+    private static void RenderReroute(NodeView view, RerouteNodeViewModel reroute, ref DrawingContext context)
+    {
+        var center = new Point(view.Bounds.Width * 0.5f, view.Bounds.Height * 0.5f);
+        float radius = view.IsHovered ? SocketView.HoverRadius : SocketView.Radius + 0.5f;
+        if (reroute.IsSelected)
+        {
+            var selection = view.Editor?.SelectionColor ?? NodeEditor.SelectionColorProperty.DefaultValue;
+            context.DrawCircleOutline(center, radius + 3, selection, 2f);
+        }
+        context.DrawCircle(center, radius, reroute.Type.Color);
+        context.DrawCircleOutline(center, radius + 0.5f, SocketView.OutlineColorProperty.DefaultValue, 1f);
     }
 
     private static void DrawCollapsedSocket(ref DrawingContext context, SocketViewModel? socket, Point center)

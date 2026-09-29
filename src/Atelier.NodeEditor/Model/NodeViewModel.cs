@@ -69,8 +69,11 @@ public class NodeViewModel : NodeGraphObject
     public float Width
     {
         get => _width;
-        set => SetUndoableProperty(ref _width, Math.Max(40, value), Graph?.Undo, "Resize", v => Width = v);
+        set => SetUndoableProperty(ref _width, Math.Max(MinWidth, value), Graph?.Undo, "Resize", v => Width = v);
     }
+
+    /// <summary>Gets the smallest <see cref="Width"/>; 40 unless overridden.</summary>
+    protected virtual float MinWidth => 40;
 
     /// <summary>Gets or sets whether only the title bar is shown, with the connected sockets on its edges.</summary>
     public bool IsCollapsed

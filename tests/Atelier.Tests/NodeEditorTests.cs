@@ -222,7 +222,7 @@ public class NodeEditorTests
         var editor = Show(new NodeGraphViewModel());
         try
         {
-            KeybindingManager.SetCustomization(NodeEditor.CommandGroup, "Pan", new CommandCustomization(Keybinding: "Shift+RightDrag"));
+            KeybindingManager.SetCustomization(NodeEditor.CommandGroup, "Pan", new CommandCustomization(Keybinding: "Alt+RightDrag"));
             KeybindingManager.SetCustomization(NodeEditor.CommandGroup, "ZoomIn", new CommandCustomization(Keybinding: "Ctrl+WheelUp"));
 
             Press(editor, new Point(100, 100), PointerButtons.Middle);
@@ -230,8 +230,8 @@ public class NodeEditorTests
             Release(editor, new Point(150, 100), PointerButtons.Middle);
             Assert.Equal(Point.Zero, editor.Offset); // no longer bound
 
-            Press(editor, new Point(100, 100), PointerButtons.Right, ModifierKeys.Shift);
-            Move(editor, new Point(150, 100), ModifierKeys.Shift);
+            Press(editor, new Point(100, 100), PointerButtons.Right, ModifierKeys.Alt);
+            Move(editor, new Point(150, 100), ModifierKeys.Alt);
             Release(editor, new Point(150, 100), PointerButtons.Right);
             Assert.Equal(new Point(50, 0), editor.Offset);
 

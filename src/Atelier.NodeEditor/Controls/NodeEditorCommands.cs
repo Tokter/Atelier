@@ -39,6 +39,15 @@ public static class NodeEditorCommands
     /// <summary>Gets the command that moves nodes by dragging one (drag a node).</summary>
     public static MoveNodesCommand MoveNodes { get; } = new();
 
+    /// <summary>Gets the command that takes the dragged nodes out of their links and moves them (Alt+drag a node).</summary>
+    public static MoveNodesCommand MoveDetached { get; } = new(detach: true);
+
+    /// <summary>Gets the command that removes the links a stroke crosses (Ctrl+right drag).</summary>
+    public static CutLinksCommand CutLinks { get; } = new();
+
+    /// <summary>Gets the command that puts reroute points on the links a stroke crosses (Shift+right drag).</summary>
+    public static AddRerouteCommand AddReroute { get; } = new();
+
     /// <summary>Gets the command that selects the nodes in a box (drag over the background).</summary>
     public static BoxSelectCommand BoxSelect { get; } = new(BoxSelectMode.Replace);
 
@@ -62,6 +71,9 @@ public static class NodeEditorCommands
 
     /// <summary>Gets the command that deletes the selected nodes and links (Delete).</summary>
     public static NodeEditorCommand Delete { get; } = new(HasSelection, e => e.Graph!.DeleteSelection());
+
+    /// <summary>Gets the command that deletes the selected nodes, connecting their neighbors directly (Ctrl+X).</summary>
+    public static NodeEditorCommand DeleteReconnect { get; } = new(e => e.Graph?.SelectedNodes.Any() == true, DeleteWithReconnect);
 
     /// <summary>Gets the command that duplicates the selected nodes and selects the copies (Shift+D).</summary>
     public static NodeEditorCommand Duplicate { get; } = new(e => e.Graph?.SelectedNodes.Any() == true, DuplicateSelection);
@@ -95,9 +107,12 @@ public static class NodeEditorCommands
         // Drag tools sharing a gesture start where they apply: sockets first, then nodes, then the background.
         Add("Connect", "LeftDrag", Connect, "Connect sockets", "Drag from a socket to connect it, or from a connected input to move its link", MaterialIcons.Timeline);
         Add("MoveNodes", "LeftDrag", MoveNodes, "Move nodes", "Drag a node to move the selected nodes; Ctrl toggles snapping", MaterialIcons.OpenWith);
+        Add("MoveDetached", "Alt+LeftDrag", MoveDetached, "Detach and move", "Drag a node to take it out of its links, connecting its neighbors directly", MaterialIcons.CallSplit);
         Add("BoxSelect", "LeftDrag", BoxSelect, "Box select", "Drag over the background to select the nodes in a box", MaterialIcons.SelectAll);
         Add("BoxSelectExtend", "Shift+LeftDrag", BoxSelectExtend, "Box select (add)", "Drag to add the nodes in a box to the selection", MaterialIcons.LibraryAdd);
         Add("BoxSelectSubtract", "Ctrl+LeftDrag", BoxSelectSubtract, "Box select (remove)", "Drag to remove the nodes in a box from the selection", MaterialIcons.Deselect);
+        Add("CutLinks", "Ctrl+RightDrag", CutLinks, "Cut links", "Drag across links to remove them", MaterialIcons.ContentCut);
+        Add("AddReroute", "Shift+RightDrag", AddReroute, "Add reroute", "Drag across links to put reroute points on them", MaterialIcons.Commit);
         Add("Pan", "MiddleDrag", Pan, "Pan", "Move the view by dragging", MaterialIcons.PanTool);
         Add("Select", "LeftClick", Select, "Select", "Select the node or link under the pointer", MaterialIcons.AdsClick);
         Add("SelectExtend", "Shift+LeftClick", SelectExtend, "Add to selection", "Add the node or link under the pointer to the selection, or remove it", MaterialIcons.AddBox);
@@ -106,6 +121,7 @@ public static class NodeEditorCommands
         Add("AddNode", "Shift+A", AddNode, "_Add node…", "Search for a node to add at the pointer", MaterialIcons.AddCircle);
         Add("ContextMenu", "RightClick", ContextMenu, "Context menu", "Open the node editor's menu", MaterialIcons.Menu);
         Add("Delete", "Delete", Delete, "_Delete", "Delete the selected nodes and links", MaterialIcons.Delete);
+        Add("DeleteReconnect", "Ctrl+X", DeleteReconnect, "Delete with reconnect", "Delete the selected nodes, connecting what fed them to what they fed", MaterialIcons.LinkOff);
         Add("Duplicate", "Shift+D", Duplicate, "D_uplicate", "Copy the selected nodes with the links into them", MaterialIcons.ContentCopy);
         Add("ToggleCollapse", "H", ToggleCollapse, "_Collapse", "Collapse or expand the selected nodes", MaterialIcons.UnfoldLess);
         Add("ToggleMute", "M", ToggleMute, "_Mute", "Mute or unmute the selected nodes: muted nodes pass their inputs through", MaterialIcons.Block);
@@ -150,6 +166,20 @@ public static class NodeEditorCommands
             return;
         }
         if (!extend) graph.ClearSelection();
+    }
+
+    private static void DeleteWithReconnect(NodeEditor editor)
+    {
+        var graph = editor.Graph!;
+        var nodes = graph.SelectedNodes.ToList();
+        using (graph.Undo.Group(nodes.Count == 1 ? $"Delete {nodes[0].Title}" : "Delete"))
+        {
+            foreach (var node in nodes)
+            {
+                graph.Detach(node);
+                graph.RemoveNode(node);
+            }
+        }
     }
 
     private static void DuplicateSelection(NodeEditor editor)
