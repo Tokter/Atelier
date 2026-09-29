@@ -18,11 +18,18 @@ public class MainView : KeybindingHandler
     private readonly MainViewModel _vm;
     private readonly TextBox _search;
 
+    // The commands of the current page (its group, on its view model), wherever the focus is: single keys, chords and
+    // the command palette find them.
+    private readonly KeybindingScope _pageScope = new();
+
     public MainView(MainViewModel viewModel) : base("Global")
     {
         _vm = viewModel;
         DataContext = _vm;
         _vm.ShowCommandEditorAction = ShowCommandEditor;
+        _vm.ShowCommandPaletteAction = ShowCommandPalette;
+        AdditionalScopes.Add(_pageScope);
+        UpdatePageScope();
 
         _search = new TextBox()
             .Placeholder("Search pages (Ctrl+F)")
@@ -69,19 +76,35 @@ public class MainView : KeybindingHandler
             _search.Focus();
             e.Handled = true;
         }
-        else if (_vm.CurrentPage != null && KeybindingManager.TryExecuteGesture(Group, e.Key, e.Modifiers, _vm.CurrentPage))
-        {
-            // Global keybindings declared on the current page's view model work wherever the focus is.
-            e.Handled = true;
-        }
-        else if (_vm.CurrentPage is { CommandGroup: { Length: > 0 } pageGroup } page && pageGroup != Group
-            && KeybindingManager.TryExecuteGesture(pageGroup, e.Key, e.Modifiers, page))
-        {
-            // The page runs its own shortcuts while the focus is on it (it is their KeybindingHandler); this makes
-            // single-key shortcuts work with the focus elsewhere too, e.g. in the navigation.
-            e.Handled = true;
-        }
     }
+
+    protected override void OnAttachedToVisualTree()
+    {
+        base.OnAttachedToVisualTree();
+        _vm.PropertyChanged += OnViewModelPropertyChanged;
+        UpdatePageScope();
+    }
+
+    protected override void OnDetachedFromVisualTree()
+    {
+        _vm.PropertyChanged -= OnViewModelPropertyChanged;
+        base.OnDetachedFromVisualTree();
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.CurrentPage)) UpdatePageScope();
+    }
+
+    private void UpdatePageScope()
+    {
+        _pageScope.Group = _vm.CurrentPage?.CommandGroup ?? string.Empty;
+        _pageScope.Target = _vm.CurrentPage;
+    }
+
+    // The command palette, for the commands that work where the focus is (but not the one that opens it).
+    private void ShowCommandPalette() =>
+        CommandPalette.Show(this, c => !(c.Descriptor.Group == "Global" && c.Descriptor.Name == "CommandPalette"));
 
     // The main menu in the title bar. Icons and shortcuts come from the [Command] declarations (Ctrl+T, F1, ...); Alt or F10
     // reach the menu from the keyboard.
@@ -95,15 +118,24 @@ public class MainView : KeybindingHandler
                 new MenuItem().Command(_vm.NewWindowCommand),
                 new Separator(),
                 new MenuItem("E_xit").Icon(MaterialIconKind.Logout).InputGestureText("Alt+F4").OnClick(() => Host?.Close())),
-            new MenuItem("_View").Items(
-                new MenuItem().Command(_vm.ToggleThemeCommand),
-                new MenuItem().Command(_vm.ToggleFpsOverlayCommand),
-                new MenuItem().Command(_vm.CustomizeCommandsCommand),
-                new Separator(),
-                new MenuItem("_Go to page").Icon(MaterialIconKind.Pageview).ItemsSource(_vm.Pages)),
+            new MenuItem("_View").Items(ViewMenuItems()),
             new MenuItem("_Help").Items(
                 new MenuItem().Command(new ShowShortcutsHelpCommand()),
                 new MenuItem("_Search pages").Icon(MaterialIconKind.Search).InputGestureText("Ctrl+F").OnClick(() => _search.Focus())));
+
+    private object[] ViewMenuItems() =>
+    [
+        new MenuItem().Command(_vm.ToggleThemeCommand),
+        new MenuItem().Command(_vm.ToggleFpsOverlayCommand),
+        new MenuItem().Command(_vm.ShowCommandPaletteCommand),
+        new MenuItem().Command(_vm.CustomizeCommandsCommand),
+#if DEBUG
+        // The developer tools' command: its label, icon and F12 come from its registration, like any other command.
+        new MenuItem().Command(Atelier.DevTools.DevToolsManager.ToggleCommand),
+#endif
+        new Separator(),
+        new MenuItem("_Go to page").Icon(MaterialIconKind.Pageview).ItemsSource(_vm.Pages),
+    ];
 
     private TitleBar TitleBar() => new TitleBar()
         .Title("Atelier Gallery")

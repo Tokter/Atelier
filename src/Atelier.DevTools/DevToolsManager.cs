@@ -27,10 +27,12 @@ public interface IDevToolsHost
 /// border, padding, spacing, drawn over the window too) and a pixel zoom.
 /// </summary>
 /// <remarks>
-/// Keys (handled by the window before its content): F12 opens and closes the tools, Ctrl+Shift+C starts picking an
-/// element (opening the tools if needed), Escape stops picking. Closing puts the window's content back as it was.
+/// The tools' commands (see <see cref="RegisterCommands"/>) are ordinary commands of a window group, so their
+/// shortcuts work anywhere in a window: F12 opens and closes the tools, Ctrl+Shift+C starts picking an element (opening
+/// the tools if needed). Users can change those shortcuts like any other. While picking, Escape stops picking (see
+/// <see cref="HandleKey"/>). Closing puts the window's content back as it was.
 /// </remarks>
-public static class DevToolsManager
+public static partial class DevToolsManager
 {
     private static readonly ConditionalWeakTable<IDevToolsHost, DevToolsSession> s_sessions = new();
 
@@ -66,26 +68,17 @@ public static class DevToolsManager
     }
 
     /// <summary>
-    /// Handles the tools' keys for <paramref name="host"/>: F12, Ctrl+Shift+C and (while picking) Escape. Returns
-    /// <c>true</c> if the key was used.
+    /// Handles the keys of the picking mode for <paramref name="host"/>, before its content: Escape stops picking. The
+    /// tools' shortcuts are commands (see <see cref="RegisterCommands"/>). Returns <c>true</c> if the key was used.
     /// </summary>
     public static bool HandleKey(IDevToolsHost host, KeyEventArgs e)
     {
-        bool ctrlShift = (e.Modifiers & (ModifierKeys.Control | ModifierKeys.Shift)) == (ModifierKeys.Control | ModifierKeys.Shift);
-        switch (e.Key)
+        if (e.Key == Key.Escape && GetSession(host) is { IsPicking: true } picking)
         {
-            case Key.F12 when (e.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) == 0:
-                Toggle(host);
-                return true;
-            case Key.C when ctrlShift:
-                if (Open(host) is { } session) session.IsPicking = !session.IsPicking;
-                return true;
-            case Key.Escape when GetSession(host) is { IsPicking: true } picking:
-                picking.IsPicking = false;
-                return true;
-            default:
-                return false;
+            picking.IsPicking = false;
+            return true;
         }
+        return false;
     }
 
     /// <summary>

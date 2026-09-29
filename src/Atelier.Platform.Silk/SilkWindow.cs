@@ -49,6 +49,11 @@ public class SilkWindow : IDisposable, IHostWindow
     static SilkWindow()
     {
         InitializeSingleFileNativeProbing();
+#if DEBUG
+        // The developer tools' commands (F12, Ctrl+Shift+C) act on the active window.
+        Atelier.DevTools.DevToolsManager.ActiveHost = () => SilkApplication.ActiveWindow?.DevToolsHost;
+        Atelier.DevTools.DevToolsManager.RegisterCommands();
+#endif
     }
 
     private static void InitializeSingleFileNativeProbing()
@@ -1495,7 +1500,7 @@ public class SilkWindow : IDisposable, IHostWindow
 
         var keyEventArgs = new KeyEventArgs(atelierKey, keyCode, GetModifiers(keyboard), true);
 #if DEBUG
-        // F12 developer tools (Debug builds only): F12, Ctrl+Shift+C, and Escape while picking an element.
+        // Escape while picking an element with the developer tools (Debug builds only); their shortcuts are commands.
         if (Atelier.DevTools.DevToolsManager.HandleKey(DevToolsHost, keyEventArgs))
         {
             _needsRender = true;
@@ -1509,6 +1514,9 @@ public class SilkWindow : IDisposable, IHostWindow
 
         FocusManager.DispatchKeyDown(keyEventArgs, _rootElement);
         MenuManager.HandleKeyDown(keyEventArgs, _rootElement); // Alt, F10, Alt+letter, the menu key
+
+        // Shortcuts that work anywhere in the window, such as the developer tools' F12 (KeybindingManager.WindowGroups).
+        Atelier.Core.Keybinding.KeybindingManager.TryExecuteWindowKeybinding(keyEventArgs);
 
         // Manual hot reload with F5 or Ctrl+R, unless the app handled the key itself (e.g. its own F5 shortcut).
         if (!keyEventArgs.Handled &&

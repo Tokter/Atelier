@@ -213,6 +213,17 @@ public static class MaterialStyles
                 .Set(Control.ForegroundProperty, colors.OnSecondaryContainer)
                 .Set(Control.MarginProperty, new Thickness(0,0,10,10)),
 
+            // Command palette: a large, raised surface-container-high card; rows like a list, the highlighted one tonal.
+            new Style(CommandPalette.PopupStyleKey, typeof(Popup))
+                .Set(Control.CornerRadiusProperty, new CornerRadius(MaterialShape.Large))
+                .Set(Popup.ElevationProperty, MaterialElevation.Level3)
+                .Set(Control.BackgroundProperty, colors.SurfaceContainerHigh)
+                .Set(Popup.BorderThicknessProperty, Thickness.Zero),
+            new Style(CommandPalette.RowStyleKey, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.OnSurface),
+            new Style(CommandPalette.HighlightedRowStyleKey, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.OnSecondaryContainer),
+
             new Style(PickerStyleKeys.HeaderButton, typeof(Button))
                 .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
             new Style(PickerStyleKeys.DockedPopup, typeof(Popup))

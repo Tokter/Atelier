@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using Atelier.Controls;
 using Atelier.Core.Events;
+using Atelier.Core.Keybinding;
 using Atelier.Core.Primitives;
 using Atelier.Core.Properties;
 using Atelier.Core.Tree;
@@ -66,11 +67,67 @@ public class DevToolsTests
         return new Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
     }
 
+    // The tools' commands, acting on host, for one test; removed again afterwards so other tests don't see them.
+    private sealed class Commands : IDisposable
+    {
+        public Commands(IDevToolsHost host)
+        {
+            DevToolsManager.ActiveHost = () => host;
+            DevToolsManager.RegisterCommands();
+        }
+
+        public void Dispose()
+        {
+            DevToolsManager.ActiveHost = null;
+            KeybindingManager.RemoveWindowGroup(DevToolsManager.CommandGroup);
+            KeybindingManager.UnregisterKeybinding(DevToolsManager.CommandGroup, "Toggle");
+            KeybindingManager.UnregisterKeybinding(DevToolsManager.CommandGroup, "PickElement");
+        }
+    }
+
+    // A key press nothing in the window handled, as the window passes it to the window groups.
+    private static bool Press(Key key, ModifierKeys modifiers = ModifierKeys.None) =>
+        KeybindingManager.TryExecuteWindowKeybinding(new KeyEventArgs(key, 0, modifiers));
+
+    [Fact]
+    public void Commands_AreAWindowGroupWithTheirShortcuts_ThatUsersCanChange()
+    {
+        var (host, _, _, _, _) = Window();
+        using var commands = new Commands(host);
+        Assert.Contains(DevToolsManager.CommandGroup, KeybindingManager.WindowGroups);
+        var toggle = KeybindingManager.FindCommand(DevToolsManager.CommandGroup, "Toggle")!;
+        Assert.Equal("F12", toggle.Keybinding);
+        Assert.Same(DevToolsManager.ToggleCommand, toggle.Command);
+        Assert.Equal("Ctrl+Shift+C", KeybindingManager.FindCommand(DevToolsManager.CommandGroup, "PickElement")!.Keybinding);
+
+        // The command palette lists them wherever the focus is.
+        Assert.Contains(KeybindingHandler.GetActiveCommands(host.Content!), c => c.Descriptor.Command == DevToolsManager.ToggleCommand);
+
+        try
+        {
+            KeybindingManager.SetCustomization(DevToolsManager.CommandGroup, "Toggle", new CommandCustomization(Keybinding: "Ctrl+F12"));
+            Assert.False(Press(Key.F12));
+            Assert.True(Press(Key.F12, ModifierKeys.Control));
+            Assert.True(DevToolsManager.IsOpen(host));
+        }
+        finally
+        {
+            KeybindingManager.ClearCustomizations();
+            DevToolsManager.Close(host);
+        }
+
+        // Without a window to act on, the commands cannot run.
+        DevToolsManager.ActiveHost = () => null;
+        Assert.False(DevToolsManager.ToggleCommand.CanExecute(null));
+        Assert.False(Press(Key.F12));
+    }
+
     [Fact]
     public void F12_WrapsTheContentBesideThePanel_AndClosingRestoresIt()
     {
         var (host, root, _, _, _) = Window();
-        Assert.True(DevToolsManager.HandleKey(host, new KeyEventArgs(Key.F12)));
+        using var commands = new Commands(host);
+        Assert.True(Press(Key.F12));
         var session = DevToolsManager.GetSession(host)!;
         Assert.Same(session.Layout, host.Content);
         Assert.Same(session.Layout, root.Parent);
@@ -79,18 +136,19 @@ public class DevToolsTests
         Assert.Same(root, session.InspectedRoot);
         Assert.Same(root, session.Panel.Roots[0].Element);
 
-        Assert.True(DevToolsManager.HandleKey(host, new KeyEventArgs(Key.F12)));
+        Assert.True(Press(Key.F12));
         Assert.False(DevToolsManager.IsOpen(host));
         Assert.Same(root, host.Content);
         Assert.Null(root.Parent);
-        Assert.False(DevToolsManager.HandleKey(host, new KeyEventArgs(Key.F11)));
+        Assert.False(Press(Key.F11));
     }
 
     [Fact]
     public void Picking_HighlightsTheElementUnderThePointer_AndAClickSelectsIt()
     {
         var (host, _, card, button, _) = Window();
-        Assert.True(DevToolsManager.HandleKey(host, new KeyEventArgs(Key.C, 0, ModifierKeys.Control | ModifierKeys.Shift)));
+        using var commands = new Commands(host);
+        Assert.True(Press(Key.C, ModifierKeys.Control | ModifierKeys.Shift));
         var session = DevToolsManager.GetSession(host)!;
         host.Layout();
         Assert.True(session.IsPicking);

@@ -23,8 +23,13 @@ namespace Atelier.Controls;
 /// originated from, the distinct data contexts of its ancestors up to this handler, then this handler's own data context
 /// (or <c>null</c> when there is none).
 /// </para>
+/// <para>
+/// Besides <see cref="Group"/>, the handler runs the groups of its <see cref="AdditionalScopes"/>, which can have a fixed
+/// target (such as the view model of the page a window shows). <see cref="GetActiveCommands"/> lists the commands the
+/// handlers around an element run.
+/// </para>
 /// </remarks>
-public class KeybindingHandler : ContentControl
+public partial class KeybindingHandler : ContentControl
 {
     /// <summary>Identifies the <see cref="Group"/> bindable property.</summary>
     public static readonly BindableProperty<string> GroupProperty =
@@ -48,6 +53,12 @@ public class KeybindingHandler : ContentControl
         get => GetValue(GroupProperty);
         set => SetValue(GroupProperty, value);
     }
+
+    /// <summary>
+    /// Gets further groups the handler runs after <see cref="Group"/>, each optionally for a fixed target. Their groups
+    /// and targets can change at any time (e.g. when a window shows another page).
+    /// </summary>
+    public IList<KeybindingScope> AdditionalScopes { get; } = new List<KeybindingScope>();
 
     /// <summary>
     /// Gets the strokes of a chord that has been started but not completed (e.g. <c>"Ctrl+K"</c>), or <c>null</c>.
@@ -78,7 +89,9 @@ public class KeybindingHandler : ContentControl
     {
         base.OnKeyDown(e);
 
-        if (e.Handled || string.IsNullOrEmpty(Group) || e.Key == Key.None || IsModifierKey(e.Key))
+        if (e.Handled || e.Key == Key.None || IsModifierKey(e.Key))
+            return;
+        if (string.IsNullOrEmpty(Group) && !HasAdditionalGroups())
             return;
 
         long now = Environment.TickCount64;
@@ -118,7 +131,12 @@ public class KeybindingHandler : ContentControl
             return true;
         }
 
-        if (KeybindingManager.IsKeybindingPrefix(Group, _pendingStrokes))
+        bool isPrefix = false;
+        foreach (var scope in Scopes())
+        {
+            isPrefix |= KeybindingManager.IsKeybindingPrefix(scope.Group, _pendingStrokes);
+        }
+        if (isPrefix)
         {
             _pendingSinceMs = now;
             e.Handled = true;
@@ -128,39 +146,31 @@ public class KeybindingHandler : ContentControl
         return false;
     }
 
+    // Runs the command the strokes complete in the first scope that has one and a target it can run on.
     private bool TryExecute(KeyEventArgs e)
     {
-        // 1. Try DataContext of the initially focused element that originated the key event
-        var initialElement = e.OriginalSource as UIElement;
-        object? initialTarget = initialElement?.DataContext;
-
-        if (initialTarget != null && KeybindingManager.TryExecuteSequence(Group, _pendingStrokes, initialTarget))
+        var origin = e.OriginalSource as UIElement;
+        foreach (var scope in Scopes())
         {
-            return true;
-        }
-
-        // 2. Walk up the visual ancestor chain from initialElement up to this KeybindingHandler,
-        // trying each ancestor's distinct DataContext (e.g. subviews, pages, cards)
-        var current = initialElement?.Parent as UIElement;
-        while (current != null && current != this)
-        {
-            if (current.DataContext != null && !ReferenceEquals(current.DataContext, initialTarget)
-                && KeybindingManager.TryExecuteSequence(Group, _pendingStrokes, current.DataContext))
+            IEnumerable<object?> targets = scope.Target != null ? new[] { scope.Target } : TargetCandidates(origin);
+            foreach (var target in targets)
             {
-                return true;
+                if (KeybindingManager.TryExecuteSequence(scope.Group, _pendingStrokes, target))
+                {
+                    return true;
+                }
             }
-            current = current.Parent as UIElement;
         }
+        return false;
+    }
 
-        // 3. Fall back to this KeybindingHandler's own DataContext
-        if (DataContext != null && !ReferenceEquals(DataContext, initialTarget))
+    private bool HasAdditionalGroups()
+    {
+        foreach (var scope in AdditionalScopes)
         {
-            return KeybindingManager.TryExecuteSequence(Group, _pendingStrokes, DataContext);
+            if (!string.IsNullOrEmpty(scope.Group)) return true;
         }
-
-        // 4. Try null target (for parameterless or class-level [Keybinding] commands)
-        return initialTarget == null && DataContext == null
-            && KeybindingManager.TryExecuteSequence(Group, _pendingStrokes, null);
+        return false;
     }
 
     private static bool IsModifierKey(Key key) => key is

@@ -20,7 +20,8 @@ namespace Atelier.Gallery.Infrastructure;
 /// Enabled with <c>ATELIER_GALLERY_SNAPSHOT=&lt;output directory&gt;</c>. Optional: <c>ATELIER_GALLERY_PAGES</c> (page
 /// indexes, comma-separated; all by default), <c>ATELIER_GALLERY_THEME=dark</c>, and <c>ATELIER_GALLERY_SIZE</c>
 /// (<c>WIDTHxHEIGHT</c>, 1280x860 by default; a taller size shows more of a page), <c>ATELIER_GALLERY_TOOLTIP</c> and
-/// <c>ATELIER_GALLERY_FILE_DIALOG</c> and <c>ATELIER_GALLERY_COMMAND_EDITOR</c> (see below), and <c>ATELIER_GALLERY_SEED</c>
+/// <c>ATELIER_GALLERY_FILE_DIALOG</c>, <c>ATELIER_GALLERY_COMMAND_EDITOR</c> and <c>ATELIER_GALLERY_COMMAND_PALETTE</c> (see
+/// below), and <c>ATELIER_GALLERY_SEED</c>
 /// (<c>#RRGGBB[:Variant]</c>, a generated theme).
 /// </remarks>
 internal static class Snapshot
@@ -103,6 +104,21 @@ internal static class Snapshot
                 {
                     editor.ShowGroup(parts[0]);
                     editor.Select(parts[0], parts[1]);
+                }
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    root.Measure(new Size(width, height));
+                    root.Arrange(new Rect(0, 0, width, height));
+                }
+            }
+
+            // ATELIER_GALLERY_COMMAND_PALETTE=<search> opens the command palette ("*" for an empty search).
+            if (Environment.GetEnvironmentVariable("ATELIER_GALLERY_COMMAND_PALETTE") is { Length: > 0 } paletteSearch)
+            {
+                viewModel.ShowCommandPaletteCommand.Execute(null);
+                if (System.Linq.Enumerable.LastOrDefault(PopupManager.ActivePopups)?.Child is CommandPalette palette && paletteSearch != "*")
+                {
+                    palette.SearchText = paletteSearch;
                 }
                 for (int pass = 0; pass < 2; pass++)
                 {

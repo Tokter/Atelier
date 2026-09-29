@@ -419,6 +419,17 @@ public static class FocusManager
         s_treeOwners.AddOrUpdate(root, new WeakReference<VisualNode>(owner));
     }
 
+    /// <summary>
+    /// Gets the element that owns the separate tree rooted at <paramref name="root"/> (see <see cref="SetTreeOwner"/>),
+    /// such as the placement target of an open popup without a parent; <c>null</c> if the tree isn't owned.
+    /// </summary>
+    /// <remarks>Walking up with <c>node.Parent ?? GetTreeOwner(node)</c> goes from a popup's content to the window's tree.</remarks>
+    public static VisualNode? GetTreeOwner(VisualNode root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        return root.Parent == null && s_treeOwners.TryGetValue(root, out var owner) && owner.TryGetTarget(out var node) ? node : null;
+    }
+
     // The root of the owned tree containing element, or null when it isn't in one.
     private static VisualNode? GetOwnedTreeRoot(VisualNode element)
     {

@@ -36,6 +36,9 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Set by the view: shows the command editor.</summary>
     public Action? ShowCommandEditorAction { get; set; }
 
+    /// <summary>Set by the view: shows the command palette.</summary>
+    public Action? ShowCommandPaletteAction { get; set; }
+
     public MainViewModel()
     {
         _allPages =
@@ -129,6 +132,11 @@ public partial class MainViewModel : ObservableObject
     [property: Command("CustomizeCommands", "Global", Label = "_Customize commands…", Icon = MaterialIcons.Tune,
         Description = "Change the labels, icons and shortcuts of the commands", DefaultKeybinding = "Ctrl+K, Ctrl+S")]
     private void CustomizeCommands() => ShowCommandEditorAction?.Invoke();
+
+    [RelayCommand]
+    [property: Command("CommandPalette", "Global", Label = "Command _palette…", Icon = MaterialIcons.Search,
+        Description = "Search and run the commands that work where the focus is", DefaultKeybinding = "Ctrl+Shift+P")]
+    private void ShowCommandPalette() => ShowCommandPaletteAction?.Invoke();
 
     private void UpdateThemeToggle()
     {
