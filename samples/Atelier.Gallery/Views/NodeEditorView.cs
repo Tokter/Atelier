@@ -31,6 +31,14 @@ public class NodeEditorView : GalleryPage
             .Bind(NodeEditor.AutoInsertProperty, _vm, v => v.AutoInsert);
         UpdateBackground();
 
+        // Save and Open ask for the file with the file dialogs.
+        const string filter = "Node graph (*.json)|*.json|All files (*.*)|*.*";
+        var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        var saveDialog = new SaveFileDialog { Title = "Save the graph", Filter = filter, FileName = "node-graph", DefaultExt = "json", InitialDirectory = documents };
+        var openDialog = new OpenFileDialog { Title = "Open a graph", Filter = filter, InitialDirectory = documents };
+        _vm.ChooseSaveFile = async () => await saveDialog.ShowAsync(this) ? saveDialog.FileName : null;
+        _vm.ChooseOpenFile = async () => await openDialog.ShowAsync(this) ? openDialog.FileName : null;
+
         Settings(
             new Switch("Dot grid").BindIsChecked(_vm, v => v.UseDotGrid, (v, on) => v.UseDotGrid = on),
             new Switch("Snap to grid").BindIsChecked(_vm, v => v.SnapToGrid, (v, on) => v.SnapToGrid = on),
@@ -76,12 +84,15 @@ public class NodeEditorView : GalleryPage
             Tool(NodeEditorCommands.Delete),
             Tool(NodeEditorCommands.ToggleCollapse),
             Tool(NodeEditorCommands.ToggleMute),
+            Tool(NodeEditorCommands.MakeGroup),
+            Tool(NodeEditorCommands.EnterGroup),
             Tool(NodeEditorCommands.FrameAll));
 
         return Ui.Section("Graph",
             "Drag nodes to move them and sockets to connect them; drop a link on empty space to add a node for it. The " +
             "Viewer shows the result, updated as you turn the knobs. Middle-drag pans, the wheel zooms, Ctrl+right drag " +
-            "cuts links and Shift+right drag adds reroute points.",
+            "cuts links and Shift+right drag adds reroute points. The Remap nodes use one group: select one and press Tab " +
+            "to edit it (both change), or select nodes and press Ctrl+G to make a group of your own.",
             toolbar,
             new Border().CornerRadius(12).ClipToBounds().Child(_editor),
             Ui.Readout(_vm, v => v.Status));

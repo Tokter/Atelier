@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using Atelier.Controls;
 using Atelier.Core.Keybinding;
 using Atelier.Core.Primitives;
@@ -18,7 +19,7 @@ public partial class NodeEditorViewModel : PageViewModel
     /// <summary>The keybinding group of this page's commands.</summary>
     public const string Group = "NodeEditorPage";
 
-    /// <summary>Gets the file the graph is saved to: <c>%APPDATA%\Atelier\Gallery\node-graph.json</c> on Windows.</summary>
+    /// <summary>Gets the file the graph is saved to when no dialog asks: <c>%APPDATA%\Atelier\Gallery\node-graph.json</c> on Windows.</summary>
     public static string SavePath { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Atelier", "Gallery", "node-graph.json");
 
@@ -34,14 +35,14 @@ public partial class NodeEditorViewModel : PageViewModel
     private bool _autoInsert = true;
 
     [ObservableProperty]
-    private string _status = "Right-click or press Shift+A to add nodes.";
+    private string _status = "Right-click or press Shift+A to add nodes. Select a Remap node and press Tab to edit its group.";
 
     public NodeEditorViewModel()
     {
         PageIcon = MaterialIconKind.AccountTree;
         PageTitle = "Node Editor";
         CommandGroup = Group;
-        Keywords = "node editor graph blender socket link reroute knob dataflow evaluation";
+        Keywords = "node editor graph blender socket link reroute knob dataflow evaluation group subgraph";
         DemoSockets.RegisterNodes(Graph.Catalog);
         BuildDemo();
         _evaluator = new GraphEvaluator(Graph);
@@ -60,48 +61,92 @@ public partial class NodeEditorViewModel : PageViewModel
         Status = "The demo graph is back.";
     }
 
+    /// <summary>
+    /// Gets or sets how the page asks where to save the graph (the view shows a Save dialog); it returns the chosen path,
+    /// or <c>null</c> when canceled. Without it, the graph is saved to <see cref="SavePath"/>.
+    /// </summary>
+    public Func<Task<string?>>? ChooseSaveFile { get; set; }
+
+    /// <summary>
+    /// Gets or sets how the page asks which graph to open (the view shows an Open dialog); it returns the chosen path, or
+    /// <c>null</c> when canceled. Without it, the graph is loaded from <see cref="SavePath"/>.
+    /// </summary>
+    public Func<Task<string?>>? ChooseOpenFile { get; set; }
+
     [RelayCommand]
-    [property: Command("SaveGraph", Group, Label = "Save", Icon = MaterialIcons.Save, Description = "Save the graph to node-graph.json in the gallery's settings folder")]
-    private void SaveGraph()
+    [property: Command("SaveGraph", Group, Label = "Save…", Icon = MaterialIcons.Save, Description = "Save the graph as a JSON file")]
+    private async Task SaveGraph()
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(SavePath)!);
-        File.WriteAllText(SavePath, NodeGraphSerializer.Save(Graph));
-        Status = $"Saved to {SavePath}";
-        LoadGraphCommand.NotifyCanExecuteChanged();
+        string? path = ChooseSaveFile != null ? await ChooseSaveFile() : SavePath;
+        if (path == null) return;
+        try
+        {
+            if (Path.GetDirectoryName(path) is { Length: > 0 } folder) Directory.CreateDirectory(folder);
+            File.WriteAllText(path, NodeGraphSerializer.Save(Graph, out var problems));
+            Status = problems.Count == 0 ? $"Saved to {path}" : $"Saved to {path}. {string.Join(" ", problems)}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Status = $"Couldn't save: {ex.Message}";
+        }
     }
 
-    [RelayCommand(CanExecute = nameof(CanLoadGraph))]
-    [property: Command("LoadGraph", Group, Label = "Load", Icon = MaterialIcons.FileOpen, Description = "Load the graph saved last")]
-    private void LoadGraph()
+    [RelayCommand]
+    [property: Command("LoadGraph", Group, Label = "Open…", Icon = MaterialIcons.FileOpen, Description = "Open a graph saved as a JSON file")]
+    private async Task LoadGraph()
     {
-        var problems = NodeGraphSerializer.Load(Graph, File.ReadAllText(SavePath));
-        _evaluator.InvalidateAll();
-        Status = problems.Count == 0 ? "Loaded the saved graph." : string.Join(" ", problems);
+        string? path = ChooseOpenFile != null ? await ChooseOpenFile() : SavePath;
+        if (path == null) return;
+        try
+        {
+            var problems = NodeGraphSerializer.Load(Graph, File.ReadAllText(path));
+            _evaluator.InvalidateAll();
+            Status = problems.Count == 0 ? $"Opened {path}" : $"Opened {path}. {string.Join(" ", problems)}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException)
+        {
+            Status = $"Couldn't open {path}: {ex.Message}";
+        }
     }
 
-    private static bool CanLoadGraph() => File.Exists(SavePath);
-
-    // Two values multiplied and clamped, and a color mixed by the result, both shown by a viewer.
+    // A value remapped twice by the same group (Value × Factor, clamped): once for the viewer's number, once to mix a
+    // color, which the viewer shows too.
     private void BuildDemo()
     {
-        var value = (ValueNode)Graph.AddNode("value", new Point(20, 30));
-        var scale = (ValueNode)Graph.AddNode("value", new Point(20, 180));
-        scale.Title = "Scale";
-        scale.Inputs[0].Value = 0.8;
-        var math = (MathNode)Graph.AddNode("math", new Point(190, 50));
-        math.Operation = MathOperation.Multiply;
-        var clamp = Graph.AddNode("clamp", new Point(400, 30));
-        var rgb = Graph.AddNode("rgb", new Point(190, 320));
-        var mix = Graph.AddNode("mix", new Point(590, 290));
-        var viewer = Graph.AddNode("viewer", new Point(820, 140));
+        var remap = BuildRemapGroup();
+        var value = (ValueNode)Graph.AddNode("value", new Point(20, 150));
+        var number = Graph.AddNode(new GroupNodeViewModel(remap) { Position = new Point(210, 20) });
+        var amount = Graph.AddNode(new GroupNodeViewModel(remap) { Position = new Point(210, 200) });
+        amount.Inputs[1].Value = 1.6;
+        var rgb = Graph.AddNode("rgb", new Point(210, 380));
+        var mix = Graph.AddNode("mix", new Point(460, 290));
+        var viewer = Graph.AddNode("viewer", new Point(700, 120));
 
-        Graph.Connect(value.Outputs[0], math.Inputs[0]);
-        Graph.Connect(scale.Outputs[0], math.Inputs[1]);
-        Graph.Connect(math.Outputs[0], clamp.Inputs[0]);
-        Graph.Connect(clamp.Outputs[0], viewer.Inputs[0]);
-        Graph.Connect(clamp.Outputs[0], mix.Inputs[0]);
+        Graph.Connect(value.Outputs[0], number.Inputs[0]);
+        Graph.Connect(value.Outputs[0], amount.Inputs[0]);
+        Graph.Connect(number.Outputs[0], viewer.Inputs[0]);
+        Graph.Connect(amount.Outputs[0], mix.Inputs[0]);
         Graph.Connect(rgb.Outputs[0], mix.Inputs[1]);
         Graph.Connect(mix.Outputs[0], viewer.Inputs[1]);
         Graph.Undo.Clear();
+    }
+
+    // The "Remap" group: Value × Factor, clamped between 0 and 1.
+    private NodeGroupDefinition BuildRemapGroup()
+    {
+        var remap = Graph.Groups.Add("Remap");
+        var value = remap.AddInput("Value", DemoSockets.Float, defaultValue: 0.5);
+        var factor = remap.AddInput("Factor", DemoSockets.Float, defaultValue: 0.8, minimum: 0, maximum: 2);
+        var result = remap.AddOutput("Result", DemoSockets.Float);
+        var math = (MathNode)remap.Graph.AddNode("math", new Point(220, 30));
+        math.Operation = MathOperation.Multiply;
+        var clamp = remap.Graph.AddNode("clamp", new Point(440, 20));
+        remap.InputNode.Position = new Point(20, 60);
+        remap.OutputNode.Position = new Point(650, 60);
+        remap.Graph.Connect(remap.InputNode.OutputFor(value)!, math.Inputs[0]);
+        remap.Graph.Connect(remap.InputNode.OutputFor(factor)!, math.Inputs[1]);
+        remap.Graph.Connect(math.Outputs[0], clamp.Inputs[0]);
+        remap.Graph.Connect(clamp.Outputs[0], remap.OutputNode.InputFor(result)!);
+        return remap;
     }
 }
