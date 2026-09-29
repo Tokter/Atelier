@@ -494,12 +494,13 @@ public class Dialog : Control
 
     /// <summary>
     /// Handles Escape (closes with the cancel button's result when <see cref="CloseOnEscape"/> is set) and Enter
-    /// (closes with the default button's result, if there is a default button).
+    /// (closes with the default button's result, if there is a default button), unless the content already handled the key.
     /// </summary>
     /// <param name="e">The key event; marked handled when the dialog closes.</param>
     public override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+        if (e.Handled) return; // the content used the key (e.g. Escape cancelling a shortcut being recorded)
 
         if (e.Key == Key.Escape && CloseOnEscape)
         {

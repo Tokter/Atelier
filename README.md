@@ -64,6 +64,8 @@ All screenshots show the included [Gallery](samples/Atelier.Gallery) application
 | **Popups & dialogs**: presets, custom content, scoped hosts | **Property grid**: generated metadata, validation, custom editors |
 | ![Tooltips](docs/screenshots/tooltips.png) | ![Theme editor](docs/screenshots/theme-editor.png) |
 | **Tooltips**: plain text, or rich content with clickable actions | **Theme editor**: schemes generated from an accent color, every role tunable in light and dark |
+| ![Keybinding editor](docs/screenshots/keybinding-editor.png) | |
+| **Keybinding editor**: commands by group, with their labels, icons and shortcuts; record new shortcuts, see conflicts | |
 
 ---
 
@@ -158,6 +160,7 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `GridSplitter` | Resizes grid columns or rows by dragging or with the arrow keys; keeps star proportions; min/max limits, snapping, preview mode, Escape to cancel, double-click to restore |
 | `Icon`, `Image`, `TextBlock` | Material Symbols with variable axes, SVG path data or whole SVG documents (`Source`: an icon name or SVG); stretch modes; wrapping, trimming, max lines and line height |
 | `TitleBar`, `Toolbar`, `KeybindingHandler` | Custom window chrome, action bars, scoped keyboard shortcuts with chords; users can change a command's label, icon and shortcut (`KeybindingManager.SetCustomization`, saved and restored as JSON) |
+| `KeybindingEditor`, `ShortcutRecorder`, `ShortcutView` | Lets users change every command's label, icon and shortcut, listed by group (or all, or the changed ones), with search, conflicts and reset; records shortcuts and chords from key presses; shows shortcuts as key caps |
 
 ### Layout
 
@@ -235,6 +238,7 @@ states, with the code that builds it. Useful shortcuts:
 | Ctrl+F | Search the pages |
 | Ctrl+T | Switch between the light and dark theme |
 | Ctrl+Shift+F | Show the frame-rate overlay |
+| Ctrl+K, Ctrl+S | Customize the commands: labels, icons and shortcuts (saved in `%APPDATA%\Atelier\Gallery`) |
 | F5 / Ctrl+R | Rebuild the window content (hot reload; F5 resets the demos on the Keybindings page) |
 | F12 | Open or close the developer tools (Debug builds) |
 | Ctrl+Shift+C | Select an element with the pointer in the developer tools |
@@ -245,7 +249,8 @@ To render pages to PNG files without opening a window, as for the screenshots ab
 generated from that accent color). `ATELIER_GALLERY_TOOLTIP=<n>` opens the page's n-th
 tooltip, and `ATELIER_GALLERY_FILE_DIALOG=open|save|folder` shows a file dialog limited to the repository (run it
 from the repository folder), and in Debug builds `ATELIER_GALLERY_DEVTOOLS=<text>[:tab]` opens the developer tools
-with the first element whose description contains the text selected.
+with the first element whose description contains the text selected. `ATELIER_GALLERY_COMMAND_EDITOR=<Group>/<Name>`
+opens the command editor with that command selected.
 
 ---
 

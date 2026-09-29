@@ -317,6 +317,21 @@ public readonly struct KeybindingGesture : IEquatable<KeybindingGesture>
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Gets the keys of the gesture as they are labeled, modifiers first, e.g. <c>["Ctrl", "Shift", "T"]</c>, for showing
+    /// each key separately (as key caps).
+    /// </summary>
+    public IReadOnlyList<string> GetDisplayParts()
+    {
+        var parts = new List<string>(5);
+        if (Modifiers.HasFlag(ModifierKeys.Control)) parts.Add("Ctrl");
+        if (Modifiers.HasFlag(ModifierKeys.Alt)) parts.Add("Alt");
+        if (Modifiers.HasFlag(ModifierKeys.Shift)) parts.Add("Shift");
+        if (Modifiers.HasFlag(ModifierKeys.Windows)) parts.Add("Win");
+        parts.Add(KeyDisplayName(Key));
+        return parts;
+    }
+
     /// <summary>Formats strokes for display, separated by <c>", "</c> (e.g. <c>"Ctrl+K, Ctrl+C"</c>).</summary>
     public static string FormatSequenceForDisplay(IReadOnlyList<KeybindingGesture> strokes)
     {

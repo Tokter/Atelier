@@ -177,6 +177,42 @@ public static class MaterialStyles
             new Style(typeof(TabItem))
                 .Set(Control.FontSizeProperty, MaterialTypescale.TitleSmall.Size),
 
+            // Shortcuts: key caps on surface-container-highest with an outline-variant edge; the recorder's frame is
+            // outlined, primary and thicker while recording.
+            new Style(ShortcutView.KeyCapStyleKey, typeof(Atelier.Layout.Border))
+                .Set(Atelier.Layout.Border.BackgroundProperty, colors.SurfaceContainerHighest)
+                .Set(Atelier.Layout.Border.BorderBrushProperty, colors.OutlineVariant),
+            new Style(ShortcutView.KeyTextStyleKey, typeof(TextBlock))
+                .Set(TextBlock.ForegroundProperty, colors.OnSurfaceVariant)
+                .Set(TextBlock.FontSizeProperty, MaterialTypescale.LabelMedium.Size)
+                .Set(TextBlock.FontWeightProperty, MaterialTypescale.LabelMedium.Weight),
+            new Style(ShortcutRecorder.FrameStyleKey, typeof(Atelier.Layout.Border))
+                .Set(Atelier.Layout.Border.BorderBrushProperty, colors.Outline)
+                .Set(Atelier.Layout.Border.BorderThicknessProperty, new Thickness(1)),
+            new Style(ShortcutRecorder.RecordingFrameStyleKey, typeof(Atelier.Layout.Border))
+                .Set(Atelier.Layout.Border.BorderBrushProperty, colors.Primary)
+                .Set(Atelier.Layout.Border.BorderThicknessProperty, new Thickness(2)),
+            // Keybinding editor: primary title-small group headers, a title-large command title, error conflicts and a
+            // primary dot on changed commands.
+            new Style(KeybindingEditor.GroupHeaderStyleKey, typeof(TextBlock))
+                .Set(TextBlock.ForegroundProperty, colors.Primary)
+                .Set(TextBlock.FontSizeProperty, MaterialTypescale.TitleSmall.Size)
+                .Set(TextBlock.FontWeightProperty, MaterialTypescale.TitleSmall.Weight),
+            new Style(KeybindingEditor.TitleStyleKey, typeof(TextBlock))
+                .Set(TextBlock.FontSizeProperty, MaterialTypescale.TitleLarge.Size)
+                .Set(TextBlock.FontWeightProperty, MaterialTypescale.TitleLarge.Weight),
+            new Style(KeybindingEditor.ErrorTextStyleKey, typeof(TextBlock))
+                .Set(TextBlock.ForegroundProperty, colors.Error),
+            new Style(KeybindingEditor.ChangedMarkStyleKey, typeof(Atelier.Layout.Border))
+                .Set(Atelier.Layout.Border.BackgroundProperty, colors.Primary),
+            // Command rows read as a list: on-surface text, on-secondary-container on the selected (tonal) row.
+            new Style(KeybindingEditor.RowStyleKey, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.OnSurface)
+                .Set(Control.MarginProperty, new Thickness(0,0,10,10)),
+            new Style(KeybindingEditor.SelectedRowStyleKey, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.OnSecondaryContainer)
+                .Set(Control.MarginProperty, new Thickness(0,0,10,10)),
+
             new Style(PickerStyleKeys.HeaderButton, typeof(Button))
                 .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
             new Style(PickerStyleKeys.DockedPopup, typeof(Popup))
