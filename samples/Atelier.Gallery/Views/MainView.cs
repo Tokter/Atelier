@@ -141,7 +141,8 @@ public class MainView : KeybindingHandler
         .Title("Atelier Gallery")
         .Icon(new Image("Assets/Icons/Atelier.png").Size(22, 22))
         .Menu(MainMenu())
-        // The search box takes the space the buttons leave (up to 320 px), so the title bar fits narrow windows too.
+        // The search box takes the space the buttons leave. In a narrow window it shrinks to its 140 px minimum, and then
+        // the title bar hides the whole content rather than let it overlap.
         .Content(new Grid()
             .Columns(GridLength.Star, GridLength.Auto, GridLength.Auto)
             .ColumnSpacing(8)

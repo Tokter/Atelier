@@ -64,6 +64,12 @@ public class TitleBarButton : Button
 /// <see cref="IHostWindow.WindowStateChanged"/>. The title is drawn bold with the inherited <see cref="Control.FontSize"/>
 /// and <see cref="Control.FontFamily"/>. The default height is 44.
 /// </para>
+/// <para>
+/// When the window gets narrow, the parts give way in order: the title shortens (with an ellipsis) and then
+/// disappears, the <see cref="Content"/> shrinks as far as its own layout allows (the narrowest width it doesn't ask
+/// more than) and is then hidden, and last the icon and menu are cut off. The minimize, maximize and close buttons
+/// always keep their place.
+/// </para>
 /// </remarks>
 public class TitleBar : Control
 {
@@ -140,7 +146,11 @@ public class TitleBar : Control
         set => SetValue(IconProperty, value);
     }
 
-    /// <summary>Gets or sets the content filling the space between the title and the caption buttons.</summary>
+    /// <summary>
+    /// Gets or sets the content filling the space between the title and the caption buttons. When the window gets
+    /// narrow it shrinks as far as its own layout allows (e.g. a search box in a star column down to its minimum width)
+    /// and is then hidden as a whole.
+    /// </summary>
     public object? Content
     {
         get => GetValue(ContentProperty);
@@ -214,14 +224,33 @@ public class TitleBar : Control
     /// <summary>Gets or sets an action that replaces moving the host window with the pointer.</summary>
     public Action? OnDragMove { get; set; }
 
-    private readonly DockPanel _layout = new() { LastChildFill = true };
-    private readonly StackPanel _leftStack = new() { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0) };
+    // The parts, left to right: icon and menu, title, content, and the caption buttons (see ArrangeOverride).
+    private readonly StackPanel _leftStack = new() { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0), ClipToBounds = true };
     private readonly StackPanel _rightStack = new() { Orientation = Orientation.Horizontal, Spacing = 0, VerticalAlignment = VerticalAlignment.Center };
-    private readonly ContentControl _contentPresenter = new() { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly ContentControl _contentPresenter = new() { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Stretch, ClipToBounds = true };
 
     // Collapsed until an icon or title is set, so they don't take up spacing.
     private readonly ContentControl _iconContainer = new() { VerticalAlignment = VerticalAlignment.Center, Visibility = Visibility.Collapsed };
-    private readonly TextBlock _titleTextBlock = new() { Bold = true, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), Visibility = Visibility.Collapsed };
+    private readonly TextBlock _titleTextBlock = new() { Bold = true, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Visibility = Visibility.Collapsed };
+
+    // Clips the title to the width the layout gives it (a text block draws its own text unclipped).
+    private readonly ContentControl _titleHost = new() { VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
+
+    // Gaps between the parts, and the narrowest title worth showing (shorter, it disappears instead).
+    private const float TitleGap = 8f;
+    private const float ContentGap = 8f;
+    private const float MinTitleWidth = 40f;
+
+    // The widths the last measure gave the parts; 0 hides a part.
+    private float _leftWidth, _titleWidth, _contentWidth, _rightWidth, _distributedWidth = -1;
+
+    // The natural widths of the title and content (measured without a width limit), from the last measure.
+    private float _titleNatural, _contentNatural, _contentMin;
+    private bool _hasTitle, _hasContent;
+
+    // What _contentMin was found for: the content and its natural width (a change of either searches again).
+    private object? _contentMinFor;
+    private float _contentMinNatural = -1;
 
     private readonly Icon _minIcon = new(MaterialIconKind.Minimize, 18f)
     {
@@ -281,7 +310,6 @@ public class TitleBar : Control
         _closeBtn = new TitleBarButton { IsCloseButton = true, Content = _closeIcon };
 
         _leftStack.Add(_iconContainer);
-        _leftStack.Add(_titleTextBlock);
 
         _minBtn.Click += OnMinimizeButtonClick;
         _maxBtn.Click += OnMaximizeButtonClick;
@@ -291,14 +319,11 @@ public class TitleBar : Control
         _rightStack.Add(_maxBtn);
         _rightStack.Add(_closeBtn);
 
-        DockPanel.SetDock(_leftStack, Dock.Left);
-        DockPanel.SetDock(_rightStack, Dock.Right);
-
-        _layout.Add(_leftStack);
-        _layout.Add(_rightStack);
-        _layout.Add(_contentPresenter);
-
-        AddChild(_layout);
+        AddChild(_leftStack);
+        _titleHost.Content = _titleTextBlock;
+        AddChild(_titleHost);
+        AddChild(_contentPresenter);
+        AddChild(_rightStack); // last, so the caption buttons are drawn and hit-tested on top
     }
 
     private void OnMinimizeButtonClick(object? sender, EventArgs e)
@@ -450,16 +475,111 @@ public class TitleBar : Control
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Shares the width by priority: the caption buttons get theirs, then the icon and menu, then the content and the
+    /// title get the rest; the title shortens first, the content is hidden once it can't shrink any further.
+    /// </remarks>
     protected override Size MeasureOverride(Size availableSize)
     {
-        _layout.Measure(availableSize);
-        return _layout.DesiredSize;
+        var unbounded = new Size(float.PositiveInfinity, availableSize.Height);
+        _rightStack.Measure(unbounded);
+        _leftStack.Measure(unbounded);
+        _titleHost.Measure(unbounded);
+        _contentPresenter.Measure(unbounded);
+
+        _hasTitle = _titleTextBlock.Visibility == Visibility.Visible;
+        _hasContent = _contentPresenter.Content != null;
+        _titleNatural = _hasTitle ? _titleHost.DesiredSize.Width : 0;
+        _contentNatural = _hasContent ? _contentPresenter.DesiredSize.Width : 0;
+        _contentMin = _hasContent ? ContentMinWidth(availableSize.Height) : 0;
+        float height = Math.Max(Math.Max(_rightStack.DesiredSize.Height, _leftStack.DesiredSize.Height),
+            Math.Max(_titleHost.DesiredSize.Height, _contentPresenter.DesiredSize.Height));
+
+        float naturalWidth = _leftStack.DesiredSize.Width + (_hasTitle ? TitleGap + _titleNatural : 0)
+            + (_hasContent ? ContentGap + _contentNatural : 0) + _rightStack.DesiredSize.Width;
+        float width = float.IsFinite(availableSize.Width) ? availableSize.Width : naturalWidth;
+        Distribute(width, availableSize.Height);
+
+        return new Size(width, float.IsFinite(availableSize.Height) ? Math.Min(height, availableSize.Height) : height);
+    }
+
+    // The narrowest width the content fits in (it doesn't ask for more than it gets), found by halving the range between
+    // nothing and its natural width. Searched again only when the content or its natural width changes.
+    private float ContentMinWidth(float height)
+    {
+        if (ReferenceEquals(_contentMinFor, _contentPresenter.Content) && Math.Abs(_contentMinNatural - _contentNatural) < 0.5f)
+        {
+            return _contentMin;
+        }
+
+        float fits = _contentNatural, tooNarrow = 0;
+        for (int i = 0; i < 16 && fits - tooNarrow > 1; i++)
+        {
+            float width = (fits + tooNarrow) / 2;
+            _contentPresenter.Measure(new Size(width, height));
+            if (_contentPresenter.DesiredSize.Width <= width + 0.5f) fits = width;
+            else tooNarrow = width;
+        }
+
+        _contentMinFor = _contentPresenter.Content;
+        _contentMinNatural = _contentNatural;
+        return MathF.Ceiling(fits);
+    }
+
+    // Shares width among the parts (see MeasureOverride) and measures the title and content at the widths they get.
+    private void Distribute(float width, float height)
+    {
+        _distributedWidth = width;
+
+        // 1. The caption buttons, always in full.
+        _rightWidth = Math.Min(_rightStack.DesiredSize.Width, width);
+        float rest = width - _rightWidth;
+
+        // 2. The icon and menu (cut off only when even they don't fit).
+        _leftWidth = Math.Min(_leftStack.DesiredSize.Width, rest);
+        rest -= _leftWidth;
+
+        // 3. The content if it fits at its minimum width; the title then gets what the content can spare, the content the
+        //    rest. Else the content is hidden and the title gets it all.
+        float contentSpace = _hasContent ? rest - ContentGap : 0;
+        if (_hasContent && _contentMin <= contentSpace)
+        {
+            _titleWidth = TitleWidth(contentSpace - _contentMin - TitleGap);
+            _contentWidth = contentSpace - (_titleWidth > 0 ? _titleWidth + TitleGap : 0);
+        }
+        else
+        {
+            _contentWidth = 0;
+            _titleWidth = TitleWidth(rest - TitleGap);
+        }
+
+        // The title at the width it gets (it trims); the content filling its slot.
+        if (_titleWidth > 0) _titleHost.Measure(new Size(_titleWidth, height));
+        if (_contentWidth > 0) _contentPresenter.Measure(new Size(_contentWidth, height));
+
+        float TitleWidth(float space) =>
+            _hasTitle && space >= Math.Min(MinTitleWidth, _titleNatural) ? Math.Min(_titleNatural, space) : 0;
     }
 
     /// <inheritdoc/>
     protected override Size ArrangeOverride(Size finalSize)
     {
-        _layout.Arrange(new Rect(Point.Zero, finalSize));
+        // Parents may arrange at another width than they measured with: share the width actually given.
+        if (Math.Abs(finalSize.Width - _distributedWidth) > 0.5f) Distribute(finalSize.Width, finalSize.Height);
+
+        float h = finalSize.Height;
+        float x = 0;
+        _leftStack.Arrange(new Rect(x, 0, _leftWidth, h));
+        x += _leftWidth;
+
+        if (_titleWidth > 0) x += TitleGap;
+        _titleHost.Arrange(new Rect(x, 0, _titleWidth, h));
+        x += _titleWidth;
+
+        if (_contentWidth > 0) x += ContentGap;
+        _contentPresenter.Arrange(new Rect(x, 0, _contentWidth, h));
+
+        _rightStack.Arrange(new Rect(finalSize.Width - _rightWidth, 0, _rightWidth, h));
         return finalSize;
     }
 }

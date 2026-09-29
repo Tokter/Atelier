@@ -418,7 +418,9 @@ public sealed class MenuTests : IDisposable
     {
         var menu = new Menu().Items(new MenuItem("_File"));
         var titleBar = new TitleBar { Title = "App" }.Menu(menu);
-        Assert.Same(titleBar, menu.Parent!.Parent!.Parent);
+        var left = (StackPanel)menu.Parent!;
+        Assert.Same(titleBar, left.Parent);
+        Assert.Same(menu, left.Children[1]); // after the icon
         titleBar.Menu = null;
         Assert.Null(menu.Parent);
     }

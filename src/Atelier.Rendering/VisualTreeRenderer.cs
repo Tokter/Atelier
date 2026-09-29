@@ -50,7 +50,13 @@ public static class VisualTreeRenderer
         presenter?.Render(element, ref context);
 
         int clipSave = -1;
-        if (element.ClipToBounds && element.Bounds.Width > 0 && element.Bounds.Height > 0)
+        if (element.ClipToBounds && (element.Bounds.Width <= 0 || element.Bounds.Height <= 0))
+        {
+            // Clipped to an empty area (e.g. a part a layout left no room for): none of the children can show.
+            if (opacitySave >= 0) context.Canvas.RestoreToCount(opacitySave);
+            return;
+        }
+        if (element.ClipToBounds)
         {
             clipSave = context.Canvas.Save();
 

@@ -1608,8 +1608,11 @@ public class TextBox : Control
         float containerH = Math.Max(fieldHeight, textSize.Height + padding.Vertical);
         float totalH = containerH + (hasSupportingText ? 20f : 0f);
 
+        // The text's width is what the field would like; it can get narrower (down to 140) when there is less room, so
+        // layouts such as a star grid column can tell what it needs.
+        float width = float.IsFinite(availableSize.Width) ? Math.Min(contentW, availableSize.Width) : contentW;
         return new Size(
-            Math.Max(140f, contentW),
+            Math.Max(140f, width),
             totalH
         );
     }

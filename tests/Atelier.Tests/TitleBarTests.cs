@@ -45,9 +45,8 @@ public class TitleBarTests
 
     private static (StackPanel Left, TextBlock Title, ContentControl IconContainer) GetLeftParts(TitleBar titleBar)
     {
-        var dock = (DockPanel)titleBar.Children[0];
-        var left = (StackPanel)dock.Children[0];
-        return (left, (TextBlock)left.Children[1], (ContentControl)left.Children[0]);
+        var left = (StackPanel)titleBar.Children[0];
+        return (left, (TextBlock)((ContentControl)titleBar.Children[1]).Content!, (ContentControl)left.Children[0]);
     }
 
     [Fact]
@@ -119,6 +118,110 @@ public class TitleBarTests
         Assert.Equal(1, host.ToggleCount);
         Assert.True(titleBar.IsMaximized);
         root.DetachFromHost();
+    }
+
+    // A title bar with a title and 300 px of content, laid out at width.
+    private static (TitleBar Bar, ContentControl Title, ContentControl Content, StackPanel Buttons) NarrowBar(float width)
+    {
+        var titleBar = new TitleBar { Title = "Atelier Gallery", Content = new Border { Width = 300, Height = 30 } };
+        titleBar.Measure(new Size(width, 44));
+        titleBar.Arrange(new Rect(0, 0, width, 44));
+        return (titleBar, (ContentControl)titleBar.Children[1], (ContentControl)titleBar.Children[2], (StackPanel)titleBar.Children[3]);
+    }
+
+    [Fact]
+    public void CaptionButtons_AlwaysKeepTheirPlaceAtTheRight()
+    {
+        foreach (float width in new[] { 1000f, 500f, 300f, 200f })
+        {
+            var (_, _, content, buttons) = NarrowBar(width);
+            Assert.Equal(width, buttons.Bounds.Right, 0.5);
+            Assert.Equal(3 * 46, buttons.Bounds.Width, 0.5);
+            Assert.True(content.Bounds.Right <= buttons.Bounds.Left + 0.5, $"content overlaps the buttons at {width}");
+        }
+    }
+
+    [Fact]
+    public void WhenNarrow_TheTitleGivesWayFirst_ThenTheContent()
+    {
+        var (_, title, content, _) = NarrowBar(1000);
+        Assert.True(title.Bounds.Width > 40);
+        Assert.True(content.Bounds.Width >= 300);
+        Assert.False(((TextBlock)title.Content!).IsTextTrimmed);
+        Assert.True(title.ClipToBounds);
+
+        // Room for the content but hardly for the title: the title disappears.
+        (_, title, content, _) = NarrowBar(500);
+        Assert.Equal(0, title.Bounds.Width);
+        Assert.True(content.Bounds.Width >= 300);
+
+        // No room for the content: it's hidden, and the title gets the space (shortened if needed).
+        (_, title, content, _) = NarrowBar(260);
+        Assert.Equal(0, content.Bounds.Width);
+        Assert.True(title.Bounds.Width > 0);
+        Assert.True(content.ClipToBounds);
+    }
+
+    [Fact]
+    public void ShrinkingContent_NeverOverlapsItself_AtAnyWidth()
+    {
+        using var theme = ActiveTheme.Use(Atelier.Theming.Material.MaterialTheme.CreateLight());
+        // Like the gallery's: a search box in a star column (it shrinks to 140), then two buttons.
+        var search = new TextBox { Placeholder = "Search pages (Ctrl+F)" };
+        var first = new Button("New window");
+        var second = new Button("Light theme");
+        var grid = new Grid { ColumnSpacing = 8, Margin = new Thickness(16, 0) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+        grid.Add(search);
+        Grid.SetColumn(first, 1);
+        grid.Add(first);
+        Grid.SetColumn(second, 2);
+        grid.Add(second);
+        var titleBar = new TitleBar { Title = "Atelier Gallery", Content = grid };
+        var root = new StackPanel();
+        root.Add(titleBar);
+        root.AttachToHost();
+        root.ApplyStylesToTree();
+        try
+        {
+            bool shownShrunk = false, hidden = false;
+            for (float width = 1000; width >= 200; width -= 5)
+            {
+                root.Measure(new Size(width, 44));
+                root.Arrange(new Rect(0, 0, width, 44));
+                var content = (ContentControl)titleBar.Children[2];
+                if (content.Bounds.Width == 0)
+                {
+                    hidden = true;
+                    continue;
+                }
+                Assert.True(search.Bounds.Right <= first.Bounds.Left - 7.5f, $"at {width}: search ends at {search.Bounds.Right}, the button starts at {first.Bounds.Left}");
+                Assert.True(second.Bounds.Right <= grid.Bounds.Width + 0.5f, $"at {width}: the last button overflows");
+                shownShrunk |= search.Bounds.Width < search.DesiredSize.Width + 1 && search.Bounds.Width < 200;
+            }
+            Assert.True(shownShrunk, "the search box never shrank before the content was hidden");
+            Assert.True(hidden);
+        }
+        finally
+        {
+            root.DetachFromHost();
+        }
+    }
+
+    [Fact]
+    public void AnElementClippedToNoWidth_DrawsNoneOfItsChildren()
+    {
+        using var theme = ActiveTheme.Use(Atelier.Theming.Material.MaterialTheme.CreateLight());
+        // A canvas lays its children out at their own size, so they overflow the element that clips to no width.
+        var overflowing = new Canvas();
+        overflowing.Add(new Border { Width = 40, Height = 40, Background = Color.Black });
+        var hidden = new Border { ClipToBounds = true, Width = 0, Height = 40, Child = overflowing };
+        var root = new Canvas { Width = 60, Height = 60 };
+        root.Add(hidden);
+        using var bitmap = ThemeRendering.Render(root, 60, 60);
+        Assert.True(ThemeRendering.IsClose(bitmap.GetPixel(20, 20), Color.White), $"{bitmap.GetPixel(20, 20)}");
     }
 
     [Fact]
