@@ -141,7 +141,7 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `CheckBox`, `RadioButton`, `Switch` | Three states, rich content, named and unnamed radio groups, thumb icons, value-matching radio binding |
 | `TextBox` | Outlined and filled variants, floating label, placeholder, leading icon, supporting text, `INotifyDataErrorInfo` validation, max length, password mode, undo/redo, clipboard and word navigation |
 | `ComboBox` | Items or bound collections, typed item templates, text search, keyboard navigation, max drop-down height, compact mode |
-| `Slider`, `ProgressBar` | Ranges, small and large steps, tick snapping, formatted value bubble; determinate and indeterminate progress |
+| `Slider`, `Knob`, `ProgressBar` | Ranges, small and large steps, tick snapping, formatted value bubble; a rotary knob turned by dragging (Shift for fine steps), the wheel or the keys, reset by double-clicking; determinate and indeterminate progress |
 | `ListBox`, `ItemsControl` | UI virtualization (only the items in view get containers), incremental updates from observable collections, typed templates, type-to-search, keyboard navigation |
 | `TreeView` | Data-bound or item-built trees, children selector, typed templates, configurable expander icons; the shown nodes form one virtualized list |
 | `DataGrid` | Virtualized rows; text, template and check box columns; multi-column sorting; Pixel, Auto and Star widths; resizing, reordering and a column chooser with saved layouts; a filter row and spreadsheet-style filter menus; single, check box and extended selection of rows or cells; F2 editing with custom editors and validation; Ctrl+C as tab-separated text; row context menus and empty placeholders |
@@ -159,9 +159,10 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `PropertyGrid` | Categories, sorting, filtering, validation, custom editors per type or predicate, a resizable label column; metadata generated at compile time |
 | `GridSplitter` | Resizes grid columns or rows by dragging or with the arrow keys; keeps star proportions; min/max limits, snapping, preview mode, Escape to cancel, double-click to restore |
 | `Icon`, `Image`, `TextBlock` | Material Symbols with variable axes, SVG path data or whole SVG documents (`Source`: an icon name or SVG); stretch modes; wrapping, trimming, max lines and line height |
-| `TitleBar`, `Toolbar`, `KeybindingHandler` | Custom window chrome, action bars, scoped keyboard shortcuts with chords (a handler can run further groups for a fixed target); users can change a command's label, icon and shortcut (`KeybindingManager.SetCustomization`, saved and restored as JSON) |
-| `KeybindingEditor`, `ShortcutRecorder`, `ShortcutView` | Lets users change every command's label, icon and shortcut, listed by group (or all, or the changed ones), with search, conflicts and reset; records shortcuts and chords from key presses; shows shortcuts as key caps |
+| `TitleBar`, `Toolbar`, `KeybindingHandler` | Custom window chrome, action bars, scoped shortcuts with chords, and pointer gestures bound like keys (`"RightClick"`, `"Ctrl+WheelUp"`, `"MiddleDrag"` running an `IDragCommand`); a handler can run further groups for a fixed target; users can change a command's label, icon and shortcut (`KeybindingManager.SetCustomization`, saved and restored as JSON) |
+| `KeybindingEditor`, `ShortcutRecorder`, `ShortcutView` | Lets users change every command's label, icon and shortcut, listed by group (or all, or the changed ones), with search, conflicts and reset; records shortcuts and chords from key presses, and clicks, drags and wheel turns; shows shortcuts as key caps |
 | `CommandPalette` | Searches the commands whose shortcuts work where the focus is (`KeybindingHandler.GetActiveCommands`: the handlers from the focus up to the window), ranks label prefixes, word starts and initials first, and runs the chosen one on its target |
+| `NodeEditor` | Blender-style node graphs ([`Atelier.NodeEditor`](src/Atelier.NodeEditor)): typed sockets with opt-in conversions, links as curves, value controls beside unconnected inputs, pan and zoom as rebindable commands, grid and dot backgrounds, undo, and optional dataflow evaluation |
 
 ### Layout
 
@@ -216,14 +217,15 @@ anywhere in a window), so they appear in menus, the command palette and the keyb
 | [`Atelier.Rendering`](src/Atelier.Rendering) | SkiaSharp drawing context, paint, font and text caches, text measurement |
 | [`Atelier.Layout`](src/Atelier.Layout) | Layout panels and `Border` |
 | [`Atelier.Controls`](src/Atelier.Controls) | The control library |
-| [`Atelier.Theming`](src/Atelier.Theming) | Theme infrastructure and renderer registry |
+| [`Atelier.Theming`](src/Atelier.Theming) | Theme infrastructure and renderer registry, theme extensions for other libraries' controls |
 | [`Atelier.Theming.Material`](src/Atelier.Theming.Material) | Material Design 3 renderers, color schemes, typography, sizing and default styles |
 | [`Atelier.Markup`](src/Atelier.Markup) | The fluent markup API |
 | [`Atelier.Generators`](src/Atelier.Generators) | Source generators for commands, keybindings and property-grid metadata |
+| [`Atelier.NodeEditor`](src/Atelier.NodeEditor) | Node graph view models, undo, dataflow evaluation and the `NodeEditor` control (namespace `Atelier.Nodes`) |
 | [`Atelier.Platform.Silk`](src/Atelier.Platform.Silk) | Windows, OpenGL context, input and clipboard via Silk.NET |
 | [`Atelier.DevTools`](src/Atelier.DevTools) | The F12 developer tools (Debug builds only) |
 | [`Atelier.Gallery`](samples/Atelier.Gallery) | Showcase application for every control |
-| [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (1,100+) |
+| [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (1,250+) |
 
 ---
 

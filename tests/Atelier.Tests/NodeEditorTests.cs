@@ -1,5 +1,6 @@
 using Atelier.Controls;
 using Atelier.Core.Events;
+using Atelier.Core.Keybinding;
 using Atelier.Core.Primitives;
 using Atelier.Core.Tree;
 using Atelier.Nodes;
@@ -147,39 +148,138 @@ public class NodeEditorTests
         editor.DetachFromHost();
     }
 
+    // Pointer events as a window dispatches them: preview from the root down, then bubbling up from the element hit.
+    internal static void Press(UIElement root, Point at, PointerButtons button, ModifierKeys modifiers = ModifierKeys.None, int clicks = 1)
+    {
+        var target = root.HitTest(at) ?? root;
+        target.DispatchPointerEvent(new PointerEventArgs(at, at, button, modifiers: modifiers, clickCount: clicks),
+            (e, a) => e.OnPreviewPointerPressed(a), (e, a) => e.OnPointerPressed(a));
+    }
+
+    internal static void Move(UIElement root, Point to, ModifierKeys modifiers = ModifierKeys.None)
+    {
+        var target = UIElement.CapturedElement ?? root.HitTest(to) ?? root;
+        target.DispatchPointerEvent(new PointerEventArgs(to, to, modifiers: modifiers),
+            (e, a) => e.OnPreviewPointerMoved(a), (e, a) => e.OnPointerMoved(a));
+    }
+
+    internal static void Release(UIElement root, Point at, PointerButtons button)
+    {
+        var target = UIElement.CapturedElement ?? root.HitTest(at) ?? root;
+        target.DispatchPointerEvent(new PointerEventArgs(at, at, button),
+            (e, a) => e.OnPreviewPointerReleased(a), (e, a) => e.OnPointerReleased(a));
+    }
+
+    internal static void Wheel(UIElement root, Point at, float delta, ModifierKeys modifiers = ModifierKeys.None)
+    {
+        var target = root.HitTest(at) ?? root;
+        target.DispatchPointerEvent(new PointerWheelEventArgs(at, at, 0, delta, modifiers: modifiers),
+            (e, a) => e.OnPreviewPointerWheel(a), (e, a) => e.OnPointerWheel(a));
+    }
+
     [Fact]
     public void MiddleDragPans_AndTheWheelZoomsAroundThePointer()
     {
         var editor = Show(new NodeGraphViewModel());
-        editor.OnPointerPressed(new PointerEventArgs(new Point(100, 100), new Point(100, 100), PointerButtons.Middle));
-        editor.OnPointerMoved(new PointerEventArgs(new Point(130, 90), new Point(130, 90), PointerButtons.Middle));
-        editor.OnPointerReleased(new PointerEventArgs(new Point(130, 90), new Point(130, 90), PointerButtons.Middle));
+        Press(editor, new Point(100, 100), PointerButtons.Middle);
+        Move(editor, new Point(101, 101)); // not a drag yet
+        Assert.Equal(Point.Zero, editor.Offset);
+        Move(editor, new Point(130, 90));
+        Assert.True(editor.IsDragging);
+        Release(editor, new Point(130, 90), PointerButtons.Middle);
         Assert.Equal(new Point(30, -10), editor.Offset);
         Assert.False(editor.IsPointerCaptured);
 
         var pointer = new Point(200, 150);
         var under = editor.ViewToGraph(pointer);
-        editor.OnPointerWheel(new PointerWheelEventArgs(pointer, 0, 1));
+        Wheel(editor, pointer, 1);
         Assert.Equal(1.1f, editor.Zoom, 3);
         AssertClose(pointer, editor.GraphToView(under), 0.01f);
+        Wheel(editor, pointer, -1);
+        Assert.Equal(1f, editor.Zoom, 3);
         editor.DetachFromHost();
     }
+
+    [Fact]
+    public void EscapeCancelsAPan()
+    {
+        var editor = Show(new NodeGraphViewModel());
+        FocusManager.SetFocus(editor);
+        Press(editor, new Point(100, 100), PointerButtons.Middle);
+        Move(editor, new Point(160, 100));
+        Assert.Equal(new Point(60, 0), editor.Offset);
+
+        FocusManager.DispatchKeyDown(new KeyEventArgs(Key.Escape), editor);
+        Assert.Equal(Point.Zero, editor.Offset);
+        Assert.False(editor.IsDragging);
+        Assert.False(editor.IsPointerCaptured);
+        editor.DetachFromHost();
+    }
+
+    [Fact]
+    public void TheEditorsGestures_CanBeRebound()
+    {
+        var editor = Show(new NodeGraphViewModel());
+        try
+        {
+            KeybindingManager.SetCustomization(NodeEditor.CommandGroup, "Pan", new CommandCustomization(Keybinding: "Shift+RightDrag"));
+            KeybindingManager.SetCustomization(NodeEditor.CommandGroup, "ZoomIn", new CommandCustomization(Keybinding: "Ctrl+WheelUp"));
+
+            Press(editor, new Point(100, 100), PointerButtons.Middle);
+            Move(editor, new Point(150, 100));
+            Release(editor, new Point(150, 100), PointerButtons.Middle);
+            Assert.Equal(Point.Zero, editor.Offset); // no longer bound
+
+            Press(editor, new Point(100, 100), PointerButtons.Right, ModifierKeys.Shift);
+            Move(editor, new Point(150, 100), ModifierKeys.Shift);
+            Release(editor, new Point(150, 100), PointerButtons.Right);
+            Assert.Equal(new Point(50, 0), editor.Offset);
+
+            Wheel(editor, new Point(10, 10), 1);
+            Assert.Equal(1f, editor.Zoom);
+            Wheel(editor, new Point(10, 10), 1, ModifierKeys.Control);
+            Assert.Equal(1.1f, editor.Zoom, 3);
+        }
+        finally
+        {
+            KeybindingManager.ClearCustomizations();
+            editor.DetachFromHost();
+        }
+    }
+
+    [Fact]
+    public void TheEditorsCommands_AreListedWhereTheFocusIs_ExceptDrags()
+    {
+        var graph = new NodeGraphViewModel();
+        var node = graph.AddNode(TestSockets.Math());
+        var editor = Show(graph);
+        var inNode = editor.GetNodeView(node)!.GetInputEditor(node.Inputs[0])!;
+
+        var commands = KeybindingHandler.GetActiveCommands(inNode);
+        var frame = Assert.Single(commands, c => c.Descriptor.Name == "FrameAll");
+        Assert.Same(editor, frame.Target);
+        Assert.True(frame.CanExecute);
+        Assert.Contains(commands, c => c.Descriptor.Command is IDragCommand);
+        editor.DetachFromHost();
+    }
+
+    private static UIElement Surface(NodeEditor editor) => (UIElement)editor.Content!;
 
     [Fact]
     public void BackgroundLayers_AreDrawnBehindEverything_AndCanBeReplaced()
     {
         var editor = new NodeEditor();
         var grid = Assert.IsType<GridLayer>(Assert.Single(editor.BackgroundLayers));
-        Assert.Same(grid, editor.Children[0]);
+        Assert.Same(grid, Surface(editor).Children[0]);
         Assert.Same(editor, grid.Editor);
 
         var dots = new DotGridLayer();
         editor.BackgroundLayers[0] = dots;
         editor.BackgroundLayers.Add(new GridLayer { Spacing = 100 });
-        Assert.Same(dots, editor.Children[0]);
-        Assert.IsType<GridLayer>(editor.Children[1]);
+        Assert.Same(dots, Surface(editor).Children[0]);
+        Assert.IsType<GridLayer>(Surface(editor).Children[1]);
         Assert.Null(grid.Editor);
-        Assert.DoesNotContain(grid, editor.Children);
+        Assert.DoesNotContain(grid, Surface(editor).Children);
         Assert.False(dots.IsHitTestVisible);
     }
 

@@ -20,11 +20,18 @@ namespace Atelier.Nodes;
 /// scales the node views without laying them out again.
 /// </para>
 /// <para>
-/// Dragging with the middle pointer button pans the view, and the wheel zooms around the pointer.
+/// The editor is a <see cref="KeybindingHandler"/> that runs the <see cref="CommandGroup"/> commands (see
+/// <see cref="NodeEditorCommands"/>) on itself: by default dragging with the middle button pans, the wheel zooms around
+/// the pointer and Home frames all nodes. Users can rebind them like any shortcut, to keys or pointer gestures. Its
+/// <see cref="ContentControl.Content"/> is its drawing surface; don't replace it. <see cref="KeybindingHandler.Group"/>
+/// can name a further group whose commands run on the view models, as for any keybinding handler.
 /// </para>
 /// </remarks>
-public class NodeEditor : Control
+public class NodeEditor : KeybindingHandler
 {
+    /// <summary>The keybinding group of the editor's own commands.</summary>
+    public const string CommandGroup = "NodeEditor";
+
     /// <summary>Identifies the <see cref="Graph"/> property.</summary>
     public static readonly BindableProperty<NodeGraphViewModel?> GraphProperty =
         BindableProperty.Register<NodeEditor, NodeGraphViewModel?>(nameof(Graph), null, (s, o, n) => ((NodeEditor)s).OnGraphChanged(o, n));
@@ -68,14 +75,12 @@ public class NodeEditor : Control
         BindableProperty.Register<NodeEditor, Func<InputSocketViewModel, UIElement?>?>(nameof(InputEditorFactory), null,
             (s, o, n) => ((NodeEditor)s).RecreateNodeViews());
 
-    private const float WheelZoomStep = 1.1f;
     private static readonly Size DefaultSize = new(400, 300);
 
+    private readonly Surface _surface = new();
     private readonly LinkLayer _links;
     private readonly NodeLayer _nodes;
     private readonly Dictionary<NodeViewModel, NodeView> _views = [];
-    private bool _isPanning;
-    private Point _lastPanPosition;
 
     static NodeEditor()
     {
@@ -87,10 +92,13 @@ public class NodeEditor : Control
     /// <summary>Initializes an editor with a <see cref="GridLayer"/> background.</summary>
     public NodeEditor()
     {
+        NodeEditorCommands.Register();
+        AdditionalScopes.Add(new KeybindingScope(CommandGroup, this));
         _links = new LinkLayer(this);
         _nodes = new NodeLayer(this);
-        AddChild(_links);
-        AddChild(_nodes);
+        _surface.AddChild(_links);
+        _surface.AddChild(_nodes);
+        Content = _surface;
         BackgroundLayers = [new GridLayer()];
         BackgroundLayers.CollectionChanged += (_, _) => SyncLayers();
         SyncLayers();
@@ -201,85 +209,49 @@ public class NodeEditor : Control
         return new Rect(node.Position.X, node.Position.Y, node.Width, height);
     }
 
-    /// <inheritdoc/>
-    /// <remarks>Dragging with the middle button pans the view.</remarks>
-    public override void OnPointerPressed(PointerEventArgs e)
-    {
-        base.OnPointerPressed(e);
-        if (e.Handled) return;
+    /// <summary>
+    /// Gets where the pointer is over the editor, in its coordinates, or <c>null</c> when it isn't over it. Commands such
+    /// as zooming use it.
+    /// </summary>
+    public Point? PointerPosition { get; private set; }
 
-        if (e.Button == PointerButtons.Middle)
-        {
-            CapturePointer();
-            _isPanning = true;
-            _lastPanPosition = e.ScreenPosition;
-            e.Handled = true;
-        }
-        Focus();
+    /// <inheritdoc/>
+    /// <remarks>Takes the focus (for the editor's shortcuts) unless an element inside takes it.</remarks>
+    public override void OnPreviewPointerPressed(PointerEventArgs e)
+    {
+        PointerPosition = e.Position;
+        base.OnPreviewPointerPressed(e);
+        if (!IsFocused) Focus();
     }
 
     /// <inheritdoc/>
-    public override void OnPointerMoved(PointerEventArgs e)
+    public override void OnPreviewPointerMoved(PointerEventArgs e)
     {
-        base.OnPointerMoved(e);
-        if (!_isPanning) return;
-
-        // Screen pixels are view pixels as long as the editor itself isn't scaled.
-        var delta = e.ScreenPosition - _lastPanPosition;
-        _lastPanPosition = e.ScreenPosition;
-        PanBy(delta.X, delta.Y);
-        e.Handled = true;
+        PointerPosition = e.Position;
+        base.OnPreviewPointerMoved(e);
     }
 
     /// <inheritdoc/>
-    public override void OnPointerReleased(PointerEventArgs e)
+    public override void OnPreviewPointerWheel(PointerWheelEventArgs e)
     {
-        base.OnPointerReleased(e);
-        if (!_isPanning || e.Button != PointerButtons.Middle) return;
-
-        e.Handled = true;
-        if (IsPointerCaptured) ReleasePointerCapture();
-        _isPanning = false;
+        PointerPosition = e.Position;
+        base.OnPreviewPointerWheel(e);
     }
 
     /// <inheritdoc/>
-    protected override void OnLostPointerCapture()
+    public override void OnPointerExited(PointerEventArgs e)
     {
-        base.OnLostPointerCapture();
-        _isPanning = false;
-    }
-
-    /// <inheritdoc/>
-    /// <remarks>Zooms around the pointer, by 10% per wheel notch.</remarks>
-    public override void OnPointerWheel(PointerWheelEventArgs e)
-    {
-        base.OnPointerWheel(e);
-        if (e.Handled || e.DeltaY == 0) return;
-
-        ZoomAt(e.Position, Zoom * MathF.Pow(WheelZoomStep, e.DeltaY));
-        e.Handled = true;
+        base.OnPointerExited(e);
+        if (!IsPointerCaptured) PointerPosition = null;
     }
 
     /// <inheritdoc/>
     protected override Size MeasureOverride(Size availableSize)
     {
-        foreach (var child in Children)
-        {
-            if (child is UIElement element) element.Measure(availableSize);
-        }
+        base.MeasureOverride(availableSize);
         return new Size(
             float.IsInfinity(availableSize.Width) ? DefaultSize.Width : availableSize.Width,
             float.IsInfinity(availableSize.Height) ? DefaultSize.Height : availableSize.Height);
-    }
-
-    /// <inheritdoc/>
-    protected override Size ArrangeOverride(Size finalSize)
-    {
-        foreach (var child in Children)
-        {
-            if (child is UIElement element) element.Arrange(new Rect(Point.Zero, finalSize));
-        }
-        return finalSize;
     }
 
     // Called by node views when their sockets' anchors moved.
@@ -302,22 +274,22 @@ public class NodeEditor : Control
 
     private void SyncLayers()
     {
-        foreach (var old in Children.OfType<NodeEditorLayer>().ToList())
+        foreach (var old in _surface.Children.OfType<NodeEditorLayer>().ToList())
         {
             if (!BackgroundLayers.Contains(old))
             {
                 old.Editor = null;
-                RemoveChild(old);
+                _surface.RemoveChild(old);
             }
         }
         for (int i = 0; i < BackgroundLayers.Count; i++)
         {
             var layer = BackgroundLayers[i];
-            if (Children.Count > i && Children[i] == layer) continue;
-            if (layer.Parent == this) RemoveChild(layer);
+            if (_surface.Children.Count > i && _surface.Children[i] == layer) continue;
+            if (layer.Parent == _surface) _surface.RemoveChild(layer);
             else if (layer.Editor != null) throw new InvalidOperationException("A layer can only be in one node editor.");
             layer.Editor = this;
-            InsertChild(i, layer);
+            _surface.InsertChild(i, layer);
         }
     }
 
@@ -372,6 +344,16 @@ public class NodeEditor : Control
             _nodes.InsertChild(i, view);
         }
         _links.InvalidateVisual();
+    }
+
+    // Holds the layers, the links and the nodes, back to front, all filling the editor.
+    private sealed class Surface : UIElement
+    {
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            base.MeasureOverride(availableSize);
+            return Size.Zero;
+        }
     }
 
     // Places the node views at their positions, scaled by the zoom.
