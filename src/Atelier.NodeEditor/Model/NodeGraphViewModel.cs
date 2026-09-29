@@ -1,7 +1,7 @@
 using System.Collections.ObjectModel;
 using Atelier.Core.Primitives;
 
-namespace Atelier.NodeEditor;
+namespace Atelier.Nodes;
 
 /// <summary>Whether an output can be linked to an input, or why not.</summary>
 public enum ConnectResult

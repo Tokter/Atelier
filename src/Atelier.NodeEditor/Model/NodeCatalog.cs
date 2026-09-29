@@ -1,6 +1,6 @@
 using Atelier.Core.Primitives;
 
-namespace Atelier.NodeEditor;
+namespace Atelier.Nodes;
 
 /// <summary>A kind of node users can add: its name, where it's listed, and how to create it.</summary>
 public sealed class NodeType

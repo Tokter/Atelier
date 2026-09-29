@@ -2,7 +2,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using Atelier.Core.Threading;
 
-namespace Atelier.NodeEditor;
+namespace Atelier.Nodes;
 
 /// <summary>Provides data for <see cref="GraphEvaluator.Evaluated"/>.</summary>
 public sealed class GraphEvaluatedEventArgs(IReadOnlyList<NodeViewModel> computedNodes) : EventArgs

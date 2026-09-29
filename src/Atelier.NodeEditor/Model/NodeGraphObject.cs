@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace Atelier.NodeEditor;
+namespace Atelier.Nodes;
 
 /// <summary>The base of the node graph's view models: property change notification.</summary>
 public abstract class NodeGraphObject : INotifyPropertyChanged

@@ -1,5 +1,5 @@
 using Atelier.Core.Threading;
-using Atelier.NodeEditor;
+using Atelier.Nodes;
 
 namespace Atelier.Tests;
 

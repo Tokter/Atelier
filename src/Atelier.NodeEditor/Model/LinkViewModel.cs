@@ -1,6 +1,6 @@
 using Atelier.Core.Primitives;
 
-namespace Atelier.NodeEditor;
+namespace Atelier.Nodes;
 
 /// <summary>A connection from an output to an input. Create links with <see cref="NodeGraphViewModel.Connect"/>.</summary>
 public sealed class LinkViewModel : NodeGraphObject

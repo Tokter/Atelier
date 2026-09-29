@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Atelier.NodeEditor;
+namespace Atelier.Nodes;
 
 /// <summary>
 /// A node that computes its outputs from its inputs. A <see cref="GraphEvaluator"/> calls <see cref="Compute"/>

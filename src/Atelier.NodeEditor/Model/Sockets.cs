@@ -1,6 +1,6 @@
 using Atelier.Core.Primitives;
 
-namespace Atelier.NodeEditor;
+namespace Atelier.Nodes;
 
 /// <summary>Which control edits the value of an unconnected input, next to its socket.</summary>
 public enum InputEditor

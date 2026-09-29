@@ -1,6 +1,6 @@
 using Atelier.Core.Primitives;
 
-namespace Atelier.NodeEditor;
+namespace Atelier.Nodes;
 
 /// <summary>How a socket is drawn; Blender uses circles for single values and diamonds for per-element fields.</summary>
 public enum SocketShape

@@ -2,17 +2,21 @@
 
   <!--
     A Blender-style node editor: node graphs as view models (nodes with typed input and output sockets, links, undo,
-    optional dataflow evaluation) and, later, the NodeEditor control that shows and edits them.
+    optional dataflow evaluation) and the NodeEditor control that shows and edits them. It brings its own renderers and
+    adds them to every theme (with Material colors for Material themes).
   -->
 
   <ItemGroup>
     <ProjectReference Include="..\Atelier.Core\Atelier.Core.csproj" />
+    <ProjectReference Include="..\Atelier.Controls\Atelier.Controls.csproj" />
+    <ProjectReference Include="..\Atelier.Theming.Material\Atelier.Theming.Material.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RootNamespace>Atelier.Nodes</RootNamespace>
   </PropertyGroup>
 
 </Project>

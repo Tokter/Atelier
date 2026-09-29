@@ -1,4 +1,4 @@
-namespace Atelier.NodeEditor;
+namespace Atelier.Nodes;
 
 /// <summary>A change that can be undone and redone.</summary>
 public interface IUndoAction
