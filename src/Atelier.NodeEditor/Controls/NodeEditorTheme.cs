@@ -57,6 +57,13 @@ public static class NodeEditorTheme
             new Style(typeof(SocketView))
                 .Set(SocketView.OutlineColorProperty, Color.Black.WithAlpha(isDark ? 0.6f : 0.45f)),
             // The add-node menu: a surface-container menu at elevation level 2, primary label-medium category headers.
+            // Panels over the graph (the group path and interface): surface-container-high with an outline-variant edge.
+            new Style(NodeEditor.PanelStyleKey, typeof(Atelier.Layout.Border))
+                .Set(Atelier.Layout.Border.BackgroundProperty, colors.SurfaceContainerHigh.WithAlpha(0.96f))
+                .Set(Atelier.Layout.Border.BorderBrushProperty, colors.OutlineVariant)
+                .Set(Atelier.Layout.Border.BorderThicknessProperty, new Thickness(1))
+                .Set(Atelier.Layout.Border.CornerRadiusProperty, new CornerRadius(MaterialShape.Medium))
+                .Set(Atelier.Layout.Border.PaddingProperty, new Thickness(6)),
             new Style(AddNodeMenu.PopupStyleKey, typeof(Atelier.Controls.Popup))
                 .Set(Atelier.Controls.Control.CornerRadiusProperty, new CornerRadius(MaterialShape.Medium))
                 .Set(Atelier.Controls.Popup.ElevationProperty, MaterialElevation.Level2)
@@ -83,6 +90,12 @@ public static class NodeEditorTheme
                 .Set(GridLayer.LineColorProperty, line.WithAlpha(0.05f))
                 .Set(GridLayer.MajorLineColorProperty, line.WithAlpha(0.12f)),
             new Style(typeof(DotGridLayer)).Set(DotGridLayer.DotColorProperty, line.WithAlpha(0.25f)),
+            new Style(NodeEditor.PanelStyleKey, typeof(Atelier.Layout.Border))
+                .Set(Atelier.Layout.Border.BackgroundProperty, node)
+                .Set(Atelier.Layout.Border.BorderBrushProperty, line.WithAlpha(0.2f))
+                .Set(Atelier.Layout.Border.BorderThicknessProperty, new Thickness(1))
+                .Set(Atelier.Layout.Border.CornerRadiusProperty, new CornerRadius(8))
+                .Set(Atelier.Layout.Border.PaddingProperty, new Thickness(6)),
             new Style(typeof(NodeView))
                 .Set(Atelier.Controls.Control.BackgroundProperty, node)
                 .Set(Atelier.Controls.Control.ForegroundProperty, text)
@@ -117,7 +130,7 @@ internal sealed class LinkLayerRenderer : ControlRenderer<LinkLayer>
     public override void Render(LinkLayer layer, ref DrawingContext context)
     {
         var editor = layer.Editor;
-        if (editor.Graph is not { } graph || graph.Links.Count == 0) return;
+        if (editor.CurrentGraph is not { } graph || graph.Links.Count == 0) return;
 
         float zoom = editor.Zoom;
         float width = Math.Max(1f, editor.LinkThickness * Math.Min(1f, zoom));
@@ -300,6 +313,12 @@ internal sealed class SocketViewRenderer : ControlRenderer<SocketView>
         var center = new Point(view.Bounds.Width * 0.5f, view.Bounds.Height * 0.5f);
         float radius = view.IsHovered ? SocketView.HoverRadius : SocketView.Radius;
         var type = view.Socket.Type;
+        if (GroupSockets.IsNewSocket(view.Socket))
+        {
+            // The empty socket of a group's own input or output node: a hollow circle.
+            context.DrawCircleOutline(center, radius + 0.5f, type.Color, 1.5f);
+            return;
+        }
         switch (type.Shape)
         {
             case SocketShape.Diamond:

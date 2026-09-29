@@ -20,12 +20,12 @@ public sealed class ConnectCommand : DragCommand
     public override bool IsContextual => true;
 
     /// <inheritdoc/>
-    public override bool CanExecute(object? parameter) => parameter is NodeEditor { Graph: not null };
+    public override bool CanExecute(object? parameter) => parameter is NodeEditor { CurrentGraph: not null };
 
     /// <inheritdoc/>
     public override IDragOperation? BeginDrag(DragStart start)
     {
-        if (start.Target is not NodeEditor { Graph: { } graph } editor) return null;
+        if (start.Target is not NodeEditor { CurrentGraph: { } graph } editor) return null;
         var position = editor.PointToClient(start.ScreenPosition);
         // Reroute points are moved by dragging them; links go into them from other sockets.
         if (editor.SocketAt(position, SocketRadius, s => s.Node is not RerouteNodeViewModel) is not { } socket) return null;
@@ -57,22 +57,33 @@ public sealed class ConnectCommand : DragCommand
             if (pickedUp == null && _target == null)
             {
                 // A new link dropped on empty space: offer the nodes it can connect to.
-                if (editor.SearchOnLinkDrop) editor.ShowAddNodeMenu(editor.PointToClient(screenPosition), from);
+                if (editor.SearchOnLinkDrop && !GroupSockets.IsNewSocket(from)) editor.ShowAddNodeMenu(editor.PointToClient(screenPosition), from);
                 return;
             }
 
-            using (graph.Undo.Group(pickedUp != null ? "Reconnect" : "Connect"))
+            var (output, input) = (from, _target) switch
+            {
+                (OutputSocketViewModel o, InputSocketViewModel i) => (o, i),
+                (InputSocketViewModel i, OutputSocketViewModel o) => (o, i),
+                _ => ((OutputSocketViewModel?)null, (InputSocketViewModel?)null),
+            };
+            string name = GroupSockets.IsNewSocket(output) ? "Add group input" : GroupSockets.IsNewSocket(input) ? "Add group output" : pickedUp != null ? "Reconnect" : "Connect";
+            using (graph.Undo.Group(name))
             {
                 if (pickedUp != null) graph.Disconnect(pickedUp);
-                switch (_target)
+                if (output == null || input == null) return;
+
+                // The empty socket of a group's own input or output node: add the socket to the group first.
+                if (GroupSockets.IsNewSocket(output) && graph.Owner is { } inputsOf)
                 {
-                    case InputSocketViewModel input when from is OutputSocketViewModel output:
-                        graph.Connect(output, input);
-                        break;
-                    case OutputSocketViewModel output when from is InputSocketViewModel input:
-                        graph.Connect(output, input);
-                        break;
+                    var socket = inputsOf.AddInput(input.Name, input.Type, defaultValue: input.Value, minimum: input.Minimum, maximum: input.Maximum, editor: input.Editor);
+                    output = inputsOf.InputNode.OutputFor(socket)!;
                 }
+                else if (GroupSockets.IsNewSocket(input) && graph.Owner is { } outputsOf)
+                {
+                    input = outputsOf.OutputNode.InputFor(outputsOf.AddOutput(output.Name, output.Type))!;
+                }
+                graph.Connect(output, input);
             }
         }
 
@@ -87,6 +98,11 @@ public sealed class ConnectCommand : DragCommand
         // Sockets the dragged end can connect to (and the input a picked-up link came from).
         private bool Accepts(SocketViewModel socket) => (from, socket) switch
         {
+            // The empty socket of a group's own input or output node takes a link from any other socket.
+            (OutputSocketViewModel output, InputSocketViewModel input) when GroupSockets.IsNewSocket(output) || GroupSockets.IsNewSocket(input) =>
+                !(GroupSockets.IsNewSocket(output) && GroupSockets.IsNewSocket(input)) && output.Node != input.Node,
+            (InputSocketViewModel input, OutputSocketViewModel output) when GroupSockets.IsNewSocket(output) || GroupSockets.IsNewSocket(input) =>
+                !(GroupSockets.IsNewSocket(output) && GroupSockets.IsNewSocket(input)) && output.Node != input.Node,
             (OutputSocketViewModel output, InputSocketViewModel input) =>
                 input == pickedUp?.To || graph.CanConnect(output, input) is ConnectResult.Ok or ConnectResult.AlreadyConnected,
             (InputSocketViewModel input, OutputSocketViewModel output) => graph.CanConnect(output, input) == ConnectResult.Ok,
@@ -122,12 +138,12 @@ public sealed class MoveNodesCommand(bool detach = false) : DragCommand
     public bool Detach { get; } = detach;
 
     /// <inheritdoc/>
-    public override bool CanExecute(object? parameter) => parameter is NodeEditor { Graph: not null };
+    public override bool CanExecute(object? parameter) => parameter is NodeEditor { CurrentGraph: not null };
 
     /// <inheritdoc/>
     public override IDragOperation? BeginDrag(DragStart start)
     {
-        if (start.Target is not NodeEditor { Graph: { } graph } editor) return null;
+        if (start.Target is not NodeEditor { CurrentGraph: { } graph } editor) return null;
         if (editor.NodeAt(editor.PointToClient(start.ScreenPosition)) is not { } node) return null;
 
         if (!node.IsSelected) editor.SelectOnly(node);
@@ -243,12 +259,12 @@ public sealed class BoxSelectCommand(BoxSelectMode mode) : DragCommand
     public BoxSelectMode Mode { get; } = mode;
 
     /// <inheritdoc/>
-    public override bool CanExecute(object? parameter) => parameter is NodeEditor { Graph: not null };
+    public override bool CanExecute(object? parameter) => parameter is NodeEditor { CurrentGraph: not null };
 
     /// <inheritdoc/>
     public override IDragOperation? BeginDrag(DragStart start)
     {
-        if (start.Target is not NodeEditor { Graph: { } graph } editor) return null;
+        if (start.Target is not NodeEditor { CurrentGraph: { } graph } editor) return null;
         var position = editor.PointToClient(start.ScreenPosition);
         if (editor.NodeAt(position) != null) return null;
         return new Operation(editor, graph, Mode, position);
@@ -304,11 +320,11 @@ public abstract class LinkStrokeCommand : DragCommand
     private const float MinimumStep = 3f;
 
     /// <inheritdoc/>
-    public override bool CanExecute(object? parameter) => parameter is NodeEditor { Graph: not null };
+    public override bool CanExecute(object? parameter) => parameter is NodeEditor { CurrentGraph: not null };
 
     /// <inheritdoc/>
     public override IDragOperation? BeginDrag(DragStart start) =>
-        start.Target is NodeEditor { Graph: { } graph } editor ? new Operation(this, editor, graph, editor.PointToClient(start.ScreenPosition)) : null;
+        start.Target is NodeEditor { CurrentGraph: { } graph } editor ? new Operation(this, editor, graph, editor.PointToClient(start.ScreenPosition)) : null;
 
     /// <summary>Whether the stroke cuts links (drawn in the error color) rather than adding to them.</summary>
     private protected abstract bool Cuts { get; }

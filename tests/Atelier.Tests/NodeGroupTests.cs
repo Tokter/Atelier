@@ -104,7 +104,8 @@ public class NodeGroupTests
         var extra = definition.AddInput("Offset", TestSockets.Float, defaultValue: 3.0);
         Assert.Equal(["A", "Offset"], group.Inputs.Select(i => i.Name));
         Assert.Equal(3.0, copy.Inputs[1].Value);
-        Assert.Equal(2, definition.InputNode.Outputs.Count);
+        Assert.Equal(3, definition.InputNode.Outputs.Count); // with the empty socket at the end
+        Assert.True(GroupSockets.IsNewSocket(definition.InputNode.Outputs[^1]));
 
         definition.Inputs[0].Name = "Value";
         Assert.Equal("Value", group.Inputs[0].Name);

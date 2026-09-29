@@ -27,7 +27,7 @@ namespace Atelier.Nodes;
 /// can name a further group whose commands run on the view models, as for any keybinding handler.
 /// </para>
 /// </remarks>
-public class NodeEditor : KeybindingHandler
+public partial class NodeEditor : KeybindingHandler
 {
     /// <summary>The keybinding group of the editor's own commands.</summary>
     public const string CommandGroup = "NodeEditor";
@@ -101,6 +101,8 @@ public class NodeEditor : KeybindingHandler
     private LinkViewModel? _hiddenLink;
     private LinkViewModel? _insertTarget;
     private IReadOnlyList<Point>? _stroke;
+    private readonly List<GroupLevel> _path = [];
+    private NodeGraphViewModel? _current;
     private readonly Dictionary<NodeViewModel, NodeView> _views = [];
 
     static NodeEditor()
@@ -204,7 +206,7 @@ public class NodeEditor : KeybindingHandler
     {
         SocketViewModel? best = null;
         float bestDistance = radius * radius;
-        foreach (var node in Graph?.Nodes ?? (IReadOnlyList<NodeViewModel>)[])
+        foreach (var node in CurrentGraph?.Nodes ?? (IReadOnlyList<NodeViewModel>)[])
         {
             foreach (var socket in node.Inputs.Cast<SocketViewModel>().Concat(node.Outputs))
             {
@@ -227,7 +229,7 @@ public class NodeEditor : KeybindingHandler
     {
         LinkViewModel? best = null;
         float bestDistance = tolerance;
-        foreach (var link in Graph?.Links ?? (IReadOnlyList<LinkViewModel>)[])
+        foreach (var link in CurrentGraph?.Links ?? (IReadOnlyList<LinkViewModel>)[])
         {
             float distance = LinkGeometry.DistanceTo(viewPoint, GraphToView(link.From.Anchor), GraphToView(link.To.Anchor), Zoom);
             if (distance <= bestDistance)
@@ -243,16 +245,16 @@ public class NodeEditor : KeybindingHandler
     public IReadOnlyList<NodeViewModel> NodesIn(Rect viewRect)
     {
         var graphRect = new Rect(ViewToGraph(viewRect.Location), new Size(viewRect.Width / Zoom, viewRect.Height / Zoom));
-        return (Graph?.Nodes ?? (IReadOnlyList<NodeViewModel>)[]).Where(n => GetNodeArea(n).IntersectsWith(graphRect)).ToList();
+        return (CurrentGraph?.Nodes ?? (IReadOnlyList<NodeViewModel>)[]).Where(n => GetNodeArea(n).IntersectsWith(graphRect)).ToList();
     }
 
     /// <summary>Selects only <paramref name="node"/> (none when <c>null</c>) and brings it to the front.</summary>
     public void SelectOnly(NodeViewModel? node)
     {
-        Graph?.ClearSelection();
+        CurrentGraph?.ClearSelection();
         if (node == null) return;
         node.IsSelected = true;
-        Graph?.BringToFront(node);
+        CurrentGraph?.BringToFront(node);
     }
 
     /// <summary>
@@ -263,7 +265,7 @@ public class NodeEditor : KeybindingHandler
     public NodeViewModel? AddNode(NodeType type, Point? viewPoint = null)
     {
         ArgumentNullException.ThrowIfNull(type);
-        if (Graph is not { } graph) return null;
+        if (CurrentGraph is not { } graph) return null;
         var node = type.CreateNode();
         node.Position = Snap(ViewToGraph(viewPoint ?? new Point(Bounds.Width / 2, Bounds.Height / 2)), SnapToGrid);
         graph.AddNode(node);
@@ -286,9 +288,9 @@ public class NodeEditor : KeybindingHandler
     /// <returns>The menu, or <c>null</c> without a graph.</returns>
     public AddNodeMenu? ShowAddNodeMenu(Point? viewPoint, SocketViewModel? connectTo)
     {
-        if (Graph is not { } graph) return null;
+        if (CurrentGraph is not { } graph) return null;
         var at = viewPoint ?? new Point(Bounds.Width / 2, Bounds.Height / 2);
-        var menu = new AddNodeMenu(graph.Catalog, (connectTo as OutputSocketViewModel)?.Type, (connectTo as InputSocketViewModel)?.Type);
+        var menu = new AddNodeMenu(CreateMenuCatalog(), (connectTo as OutputSocketViewModel)?.Type, (connectTo as InputSocketViewModel)?.Type);
         menu.TypePicked += (_, type) =>
         {
             if (connectTo != null) AddConnectedNode(type, at, connectTo);
@@ -308,7 +310,7 @@ public class NodeEditor : KeybindingHandler
     {
         ArgumentNullException.ThrowIfNull(type);
         ArgumentNullException.ThrowIfNull(socket);
-        if (Graph is not { } graph) return null;
+        if (CurrentGraph is not { } graph) return null;
         using (graph.Undo.Group($"Add {type.Title}"))
         {
             if (AddNode(type, viewPoint) is not { } node) return null;
@@ -331,22 +333,22 @@ public class NodeEditor : KeybindingHandler
     /// <returns>The menu, or <c>null</c> if it didn't open.</returns>
     public ContextMenu? ShowContextMenu(Point? viewPoint = null)
     {
-        if (Graph == null) return null;
+        if (CurrentGraph == null) return null;
         var menu = CreateContextMenu(viewPoint ?? new Point(Bounds.Width / 2, Bounds.Height / 2));
         return menu.Open(this) ? menu : null;
     }
 
     /// <summary>
-    /// Creates the context menu for <paramref name="viewPoint"/>: an "Add" submenu of the catalog's types by category
-    /// (added there), then the commands for the selection, the view and undo. Override it to change the menu.
+    /// Creates the context menu for <paramref name="viewPoint"/>: an "Add" submenu of the node types and groups by category
+    /// (added there; see <see cref="CreateMenuCatalog"/>), then the commands for the selection, groups, the view and undo. Override it to change the menu.
     /// </summary>
     public virtual ContextMenu CreateContextMenu(Point viewPoint)
     {
         var menu = new ContextMenu();
-        if (Graph is { Catalog.Types.Count: > 0 } graph)
+        if (CreateMenuCatalog() is { Types.Count: > 0 } catalog)
         {
             var add = new MenuItem("_Add") { Icon = new Icon(MaterialIconKind.AddCircle, 18) };
-            foreach (var category in graph.Catalog.Categories)
+            foreach (var category in catalog.Categories)
             {
                 var parent = add;
                 if (category.Length > 0)
@@ -354,7 +356,7 @@ public class NodeEditor : KeybindingHandler
                     parent = new MenuItem(category);
                     add.Items.Add(parent);
                 }
-                foreach (var type in graph.Catalog.Types.Where(t => t.Category == category))
+                foreach (var type in catalog.Types.Where(t => t.Category == category))
                 {
                     var item = new MenuItem(type.Title);
                     item.Click += (_, _) => AddNode(type, viewPoint);
@@ -367,6 +369,8 @@ public class NodeEditor : KeybindingHandler
         AddCommands(NodeEditorCommands.Copy, NodeEditorCommands.Paste);
         menu.Items.Add(new Separator());
         AddCommands(NodeEditorCommands.Delete, NodeEditorCommands.DeleteReconnect, NodeEditorCommands.Duplicate, NodeEditorCommands.ToggleCollapse, NodeEditorCommands.ToggleMute);
+        menu.Items.Add(new Separator());
+        AddCommands(NodeEditorCommands.MakeGroup, NodeEditorCommands.Ungroup, NodeEditorCommands.EnterGroup, NodeEditorCommands.ExitGroup);
         menu.Items.Add(new Separator());
         AddCommands(NodeEditorCommands.SelectAll, NodeEditorCommands.FrameAll, NodeEditorCommands.FrameSelected);
         menu.Items.Add(new Separator());
@@ -462,7 +466,7 @@ public class NodeEditor : KeybindingHandler
     /// Zooms and pans so that all nodes are visible with <paramref name="padding"/> pixels around them, zooming in no
     /// further than 1. Does nothing without nodes or before the editor has a size.
     /// </summary>
-    public void FrameAll(float padding = 40) => FrameNodes(Graph?.Nodes ?? Enumerable.Empty<NodeViewModel>(), padding);
+    public void FrameAll(float padding = 40) => FrameNodes(CurrentGraph?.Nodes ?? Enumerable.Empty<NodeViewModel>(), padding);
 
     /// <summary>Zooms and pans so that <paramref name="nodes"/> are visible; see <see cref="FrameAll"/>.</summary>
     public void FrameNodes(IEnumerable<NodeViewModel> nodes, float padding = 40)
@@ -479,11 +483,15 @@ public class NodeEditor : KeybindingHandler
         }
         if (left > right || Bounds.Width <= 0 || Bounds.Height <= 0) return;
 
+        // Inside a group, the group path and the interface panel cover the top and the right.
+        var covered = _path.Count == 0 ? Thickness.Zero
+            : new Thickness(0, GroupBarHeight, ShowGroupInterface && _interfacePanel is { } panel ? Math.Max(panel.DesiredSize.Width, InterfacePanelWidth) : 0, 0);
+        var free = new Rect(covered.Left, covered.Top, Math.Max(1, Bounds.Width - covered.Horizontal), Math.Max(1, Bounds.Height - covered.Vertical));
         float width = Math.Max(1, right - left), height = Math.Max(1, bottom - top);
-        float zoom = Math.Min((Bounds.Width - 2 * padding) / width, (Bounds.Height - 2 * padding) / height);
+        float zoom = Math.Min((free.Width - 2 * padding) / width, (free.Height - 2 * padding) / height);
         Zoom = Math.Min(1f, zoom);
         var center = new Point((left + right) * 0.5f, (top + bottom) * 0.5f);
-        Offset = new Point(Bounds.Width * 0.5f - center.X * Zoom, Bounds.Height * 0.5f - center.Y * Zoom);
+        Offset = new Point(free.Center.X - center.X * Zoom, free.Center.Y - center.Y * Zoom);
     }
 
     /// <summary>Gets the area <paramref name="node"/> covers in graph coordinates (its body, once its view was measured).</summary>
@@ -580,19 +588,94 @@ public class NodeEditor : KeybindingHandler
 
     private void OnGraphChanged(NodeGraphViewModel? oldGraph, NodeGraphViewModel? newGraph)
     {
-        if (oldGraph != null)
+        if (oldGraph != null) ((INotifyCollectionChanged)oldGraph.Groups.Definitions).CollectionChanged -= OnGroupsChanged;
+        if (newGraph != null) ((INotifyCollectionChanged)newGraph.Groups.Definitions).CollectionChanged += OnGroupsChanged;
+        foreach (var level in _path) level.Node.Definition.InspectedInstance = null;
+        _path.Clear();
+        ShowGraph(newGraph);
+    }
+
+    /// <summary>
+    /// Gets the graph the editor shows and edits: <see cref="Graph"/>, or the graph inside the group it entered (see
+    /// <see cref="EnterGroup"/>).
+    /// </summary>
+    public NodeGraphViewModel? CurrentGraph => _current;
+
+    /// <summary>Gets the group nodes the editor entered, outermost first; empty while it shows <see cref="Graph"/>.</summary>
+    public IReadOnlyList<GroupNodeViewModel> GroupPath => _path.Select(l => l.Node).ToList();
+
+    /// <summary>Occurs when <see cref="CurrentGraph"/> changed: the editor entered or left a group, or got another graph.</summary>
+    public event EventHandler? CurrentGraphChanged;
+
+    /// <summary>
+    /// Shows the graph inside <paramref name="node"/>'s group (a node of <see cref="CurrentGraph"/>), with the values that
+    /// node computes, framed; <see cref="ExitGroup"/> comes back to where the editor was.
+    /// </summary>
+    /// <returns><c>false</c> if the node isn't in the current graph.</returns>
+    public bool EnterGroup(GroupNodeViewModel node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (_current == null || node.Graph != _current) return false;
+        _path.Add(new GroupLevel(node, _current, Zoom, Offset));
+        node.Definition.InspectedInstance = node;
+        node.ShowValuesInside();
+        ShowGraph(node.Definition.Graph);
+        _current!.ClearSelection();
+        FrameAll();
+        return true;
+    }
+
+    /// <summary>Leaves the group the editor entered last, back to the graph and view it was in, with the group node selected.</summary>
+    /// <returns><c>false</c> if the editor shows <see cref="Graph"/>.</returns>
+    public bool ExitGroup()
+    {
+        if (_path.Count == 0) return false;
+        var level = _path[^1];
+        _path.RemoveAt(_path.Count - 1);
+        level.Node.Definition.InspectedInstance = null;
+        ShowGraph(level.Graph);
+        Zoom = level.Zoom;
+        Offset = level.Offset;
+        if (level.Node.Graph == level.Graph) SelectOnly(level.Node);
+        return true;
+    }
+
+    /// <summary>Leaves groups until <paramref name="depth"/> are entered (0 shows <see cref="Graph"/> again).</summary>
+    public void ExitGroups(int depth = 0)
+    {
+        while (_path.Count > Math.Max(0, depth) && ExitGroup())
         {
-            ((INotifyCollectionChanged)oldGraph.Nodes).CollectionChanged -= OnNodesChanged;
-            ((INotifyCollectionChanged)oldGraph.Links).CollectionChanged -= OnLinksChanged;
         }
-        if (newGraph != null)
+    }
+
+    // Leaves the groups that were deleted (e.g. by undoing the command that made them).
+    private void OnGroupsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        var library = Graph?.Groups;
+        int valid = _path.FindIndex(l => library == null || !library.Definitions.Contains(l.Node.Definition));
+        if (valid >= 0) ExitGroups(valid);
+    }
+
+    private void ShowGraph(NodeGraphViewModel? graph)
+    {
+        if (_current != null)
         {
-            ((INotifyCollectionChanged)newGraph.Nodes).CollectionChanged += OnNodesChanged;
-            ((INotifyCollectionChanged)newGraph.Links).CollectionChanged += OnLinksChanged;
+            ((INotifyCollectionChanged)_current.Nodes).CollectionChanged -= OnNodesChanged;
+            ((INotifyCollectionChanged)_current.Links).CollectionChanged -= OnLinksChanged;
+        }
+        _current = graph;
+        if (graph != null)
+        {
+            ((INotifyCollectionChanged)graph.Nodes).CollectionChanged += OnNodesChanged;
+            ((INotifyCollectionChanged)graph.Links).CollectionChanged += OnLinksChanged;
         }
         SyncNodes();
         _links.InvalidateVisual();
+        UpdateGroupBar();
+        CurrentGraphChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    private sealed record GroupLevel(GroupNodeViewModel Node, NodeGraphViewModel Graph, float Zoom, Point Offset);
 
     private void OnNodesChanged(object? sender, NotifyCollectionChangedEventArgs e) => SyncNodes();
 
@@ -608,7 +691,7 @@ public class NodeEditor : KeybindingHandler
     // Keeps one view per node, in the graph's order.
     private void SyncNodes()
     {
-        var nodes = Graph?.Nodes ?? (IReadOnlyList<NodeViewModel>)[];
+        var nodes = CurrentGraph?.Nodes ?? (IReadOnlyList<NodeViewModel>)[];
         var wanted = nodes.ToHashSet();
         foreach (var (node, view) in _views.ToList())
         {

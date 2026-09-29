@@ -29,10 +29,10 @@ public static class NodeEditorCommands
     public static ZoomCommand ZoomOut { get; } = new(1 / ZoomStep);
 
     /// <summary>Gets the command that zooms and pans to show all nodes (Home).</summary>
-    public static NodeEditorCommand FrameAll { get; } = new(e => e.Graph?.Nodes.Count > 0, e => e.FrameAll());
+    public static NodeEditorCommand FrameAll { get; } = new(e => e.CurrentGraph?.Nodes.Count > 0, e => e.FrameAll());
 
     /// <summary>Gets the command that zooms and pans to show the selected nodes (Num .).</summary>
-    public static NodeEditorCommand FrameSelected { get; } = new(e => e.Graph?.SelectedNodes.Any() == true, e => e.FrameNodes(e.Graph!.SelectedNodes));
+    public static NodeEditorCommand FrameSelected { get; } = new(e => e.CurrentGraph?.SelectedNodes.Any() == true, e => e.FrameNodes(e.CurrentGraph!.SelectedNodes));
 
     /// <summary>Gets the command that connects sockets by dragging, or moves a link picked up from an input (drag from a socket).</summary>
     public static ConnectCommand Connect { get; } = new();
@@ -59,53 +59,73 @@ public static class NodeEditorCommands
     public static BoxSelectCommand BoxSelectSubtract { get; } = new(BoxSelectMode.Subtract);
 
     /// <summary>Gets the command that selects the node or link under the pointer, or clears the selection over the background (click).</summary>
-    public static NodeEditorCommand Select { get; } = new(e => e.Graph != null, e => SelectAtPointer(e, extend: false));
+    public static NodeEditorCommand Select { get; } = new(e => e.CurrentGraph != null, e => SelectAtPointer(e, extend: false));
 
     /// <summary>Gets the command that adds the node or link under the pointer to the selection, or removes it (Shift+click).</summary>
-    public static NodeEditorCommand SelectExtend { get; } = new(e => e.Graph != null, e => SelectAtPointer(e, extend: true));
+    public static NodeEditorCommand SelectExtend { get; } = new(e => e.CurrentGraph != null, e => SelectAtPointer(e, extend: true));
 
     /// <summary>Gets the command that selects all nodes (A).</summary>
-    public static NodeEditorCommand SelectAll { get; } = new(e => e.Graph?.Nodes.Count > 0, e => e.Graph!.SelectAll());
+    public static NodeEditorCommand SelectAll { get; } = new(e => e.CurrentGraph?.Nodes.Count > 0, e => e.CurrentGraph!.SelectAll());
 
     /// <summary>Gets the command that deselects everything (Alt+A).</summary>
-    public static NodeEditorCommand DeselectAll { get; } = new(HasSelection, e => e.Graph!.ClearSelection());
+    public static NodeEditorCommand DeselectAll { get; } = new(HasSelection, e => e.CurrentGraph!.ClearSelection());
 
     /// <summary>Gets the command that deletes the selected nodes and links (Delete).</summary>
-    public static NodeEditorCommand Delete { get; } = new(HasSelection, e => e.Graph!.DeleteSelection());
+    public static NodeEditorCommand Delete { get; } = new(HasSelection, e => e.CurrentGraph!.DeleteSelection());
 
     /// <summary>Gets the command that deletes the selected nodes, connecting their neighbors directly (Ctrl+X).</summary>
-    public static NodeEditorCommand DeleteReconnect { get; } = new(e => e.Graph?.SelectedNodes.Any() == true, DeleteWithReconnect);
+    public static NodeEditorCommand DeleteReconnect { get; } = new(e => e.CurrentGraph?.SelectedNodes.Any() == true, DeleteWithReconnect);
 
     /// <summary>Gets the command that copies the selected nodes (and the links between them) to the clipboard (Ctrl+C).</summary>
-    public static NodeEditorCommand Copy { get; } = new(e => e.Graph?.SelectedNodes.Any() == true,
-        e => Clipboard.SetText(NodeGraphSerializer.Copy(e.Graph!.SelectedNodes)));
+    public static NodeEditorCommand Copy { get; } = new(e => e.CurrentGraph?.SelectedNodes.Any() == true,
+        e => Clipboard.SetText(NodeGraphSerializer.Copy(e.CurrentGraph!.SelectedNodes)));
 
     /// <summary>Gets the command that pastes copied nodes at the pointer and selects them (Ctrl+V).</summary>
-    public static NodeEditorCommand Paste { get; } = new(e => e.Graph != null && NodeGraphSerializer.IsGraph(Clipboard.GetText()),
-        e => NodeGraphSerializer.Paste(e.Graph!, Clipboard.GetText()!, e.PointerPosition is { } p ? e.ViewToGraph(p) : null));
+    public static NodeEditorCommand Paste { get; } = new(e => e.CurrentGraph != null && NodeGraphSerializer.IsGraph(Clipboard.GetText()),
+        e => NodeGraphSerializer.Paste(e.CurrentGraph!, Clipboard.GetText()!, e.PointerPosition is { } p ? e.ViewToGraph(p) : null));
 
     /// <summary>Gets the command that duplicates the selected nodes and selects the copies (Shift+D).</summary>
-    public static NodeEditorCommand Duplicate { get; } = new(e => e.Graph?.SelectedNodes.Any() == true, DuplicateSelection);
+    public static NodeEditorCommand Duplicate { get; } = new(e => e.CurrentGraph?.SelectedNodes.Any() == true, DuplicateSelection);
 
     /// <summary>Gets the command that collapses the selected nodes, or expands them when all are collapsed (H).</summary>
-    public static NodeEditorCommand ToggleCollapse { get; } = new(e => e.Graph?.SelectedNodes.Any() == true,
+    public static NodeEditorCommand ToggleCollapse { get; } = new(e => e.CurrentGraph?.SelectedNodes.Any() == true,
         e => Toggle(e, "Collapse", n => n.IsCollapsed, (n, v) => n.IsCollapsed = v));
 
     /// <summary>Gets the command that mutes the selected nodes, or unmutes them when all are muted (M).</summary>
-    public static NodeEditorCommand ToggleMute { get; } = new(e => e.Graph?.SelectedNodes.Any() == true,
+    public static NodeEditorCommand ToggleMute { get; } = new(e => e.CurrentGraph?.SelectedNodes.Any() == true,
         e => Toggle(e, "Mute", n => n.IsMuted, (n, v) => n.IsMuted = v));
 
+    /// <summary>Gets the command that turns the selected nodes into a group, replacing them with a group node (Ctrl+G).</summary>
+    public static NodeEditorCommand MakeGroup { get; } = new(e => e.CurrentGraph?.SelectedNodes.Any(n => n.CanRemove) == true, MakeGroupOfSelection);
+
+    /// <summary>Gets the command that replaces the selected group nodes with the nodes inside their groups (Ctrl+Alt+G).</summary>
+    public static NodeEditorCommand Ungroup { get; } = new(e => SelectedGroupNode(e) != null, UngroupSelection);
+
+    /// <summary>Gets the command that enters the selected group node's group, or leaves the group the editor is in (Tab).</summary>
+    public static NodeEditorCommand EnterGroup { get; } = new(e => SelectedGroupNode(e) != null || e.GroupPath.Count > 0,
+        e =>
+        {
+            if (SelectedGroupNode(e) is { } node) e.EnterGroup(node);
+            else e.ExitGroup();
+        });
+
+    /// <summary>Gets the command that leaves the group the editor is in (Ctrl+Tab).</summary>
+    public static NodeEditorCommand ExitGroup { get; } = new(e => e.GroupPath.Count > 0, e => e.ExitGroup());
+
+    /// <summary>Gets the command that shows or hides the panel with the group's inputs and outputs (N).</summary>
+    public static NodeEditorCommand ToggleGroupInterface { get; } = new(e => e.GroupPath.Count > 0, e => e.ShowGroupInterface = !e.ShowGroupInterface);
+
     /// <summary>Gets the command that undoes the last change to the graph (Ctrl+Z).</summary>
-    public static NodeEditorCommand Undo { get; } = new(e => e.Graph?.Undo.CanUndo == true, e => e.Graph!.Undo.Undo());
+    public static NodeEditorCommand Undo { get; } = new(e => e.CurrentGraph?.Undo.CanUndo == true, e => e.CurrentGraph!.Undo.Undo());
 
     /// <summary>Gets the command that redoes the last undone change (Ctrl+Shift+Z).</summary>
-    public static NodeEditorCommand Redo { get; } = new(e => e.Graph?.Undo.CanRedo == true, e => e.Graph!.Undo.Redo());
+    public static NodeEditorCommand Redo { get; } = new(e => e.CurrentGraph?.Undo.CanRedo == true, e => e.CurrentGraph!.Undo.Redo());
 
     /// <summary>Gets the command that opens the searchable menu of node types to add at the pointer (Shift+A).</summary>
-    public static NodeEditorCommand AddNode { get; } = new(e => e.Graph?.Catalog.Types.Count > 0, e => e.ShowAddNodeMenu(e.PointerPosition));
+    public static NodeEditorCommand AddNode { get; } = new(e => e.CurrentGraph?.Catalog.Types.Count > 0, e => e.ShowAddNodeMenu(e.PointerPosition));
 
     /// <summary>Gets the command that opens the editor's context menu at the pointer (right click).</summary>
-    public static NodeEditorCommand ContextMenu { get; } = new(e => e.Graph != null, e => e.ShowContextMenu(e.PointerPosition));
+    public static NodeEditorCommand ContextMenu { get; } = new(e => e.CurrentGraph != null, e => e.ShowContextMenu(e.PointerPosition));
 
     /// <summary>
     /// Registers the commands that aren't registered yet (with the users' changes applied). Node editors call it when
@@ -136,6 +156,11 @@ public static class NodeEditorCommands
         Add("Duplicate", "Shift+D", Duplicate, "D_uplicate", "Copy the selected nodes with the links into them", MaterialIcons.CopyAll);
         Add("ToggleCollapse", "H", ToggleCollapse, "_Collapse", "Collapse or expand the selected nodes", MaterialIcons.UnfoldLess);
         Add("ToggleMute", "M", ToggleMute, "_Mute", "Mute or unmute the selected nodes: muted nodes pass their inputs through", MaterialIcons.Block);
+        Add("MakeGroup", "Ctrl+G", MakeGroup, "Make _group", "Turn the selected nodes into a reusable group", MaterialIcons.AccountTree);
+        Add("Ungroup", "Ctrl+Alt+G", Ungroup, "U_ngroup", "Replace the selected group nodes with the nodes inside their groups", MaterialIcons.CallSplit);
+        Add("EnterGroup", "Tab", EnterGroup, "_Enter or leave group", "Edit the selected group node's group, or go back out of the group", MaterialIcons.Login);
+        Add("ExitGroup", "Ctrl+Tab", ExitGroup, "Leave group", "Go back out of the group being edited", MaterialIcons.Logout);
+        Add("ToggleGroupInterface", "N", ToggleGroupInterface, "Group interface", "Show or hide the panel with the group's inputs and outputs", MaterialIcons.ViewSidebar);
         Add("Undo", "Ctrl+Z", Undo, "_Undo", "Undo the last change to the graph", MaterialIcons.Undo);
         Add("Redo", "Ctrl+Shift+Z", Redo, "_Redo", "Redo the last undone change", MaterialIcons.Redo);
         Add("ZoomIn", "WheelUp", ZoomIn, "Zoom in", "Zoom in around the pointer", MaterialIcons.ZoomIn);
@@ -155,11 +180,11 @@ public static class NodeEditorCommands
     }
 
     private static bool HasSelection(NodeEditor editor) =>
-        editor.Graph is { } graph && (graph.SelectedNodes.Any() || graph.SelectedLinks.Any());
+        editor.CurrentGraph is { } graph && (graph.SelectedNodes.Any() || graph.SelectedLinks.Any());
 
     private static void SelectAtPointer(NodeEditor editor, bool extend)
     {
-        if (editor.Graph is not { } graph || editor.PointerPosition is not { } position) return;
+        if (editor.CurrentGraph is not { } graph || editor.PointerPosition is not { } position) return;
         if (editor.NodeAt(position) is { } node)
         {
             if (!extend) editor.SelectOnly(node);
@@ -181,7 +206,7 @@ public static class NodeEditorCommands
 
     private static void DeleteWithReconnect(NodeEditor editor)
     {
-        var graph = editor.Graph!;
+        var graph = editor.CurrentGraph!;
         var nodes = graph.SelectedNodes.ToList();
         using (graph.Undo.Group(nodes.Count == 1 ? $"Delete {nodes[0].Title}" : "Delete"))
         {
@@ -193,9 +218,32 @@ public static class NodeEditorCommands
         }
     }
 
+    // The first selected group node, if any.
+    private static GroupNodeViewModel? SelectedGroupNode(NodeEditor editor) =>
+        editor.CurrentGraph?.SelectedNodes.OfType<GroupNodeViewModel>().FirstOrDefault();
+
+    private static void MakeGroupOfSelection(NodeEditor editor)
+    {
+        var graph = editor.CurrentGraph!;
+        if (graph.Groups.Group(graph, graph.SelectedNodes.ToList()) is { } node) editor.SelectOnly(node);
+    }
+
+    private static void UngroupSelection(NodeEditor editor)
+    {
+        var graph = editor.CurrentGraph!;
+        var nodes = graph.SelectedNodes.OfType<GroupNodeViewModel>().ToList();
+        var copies = new List<NodeViewModel>();
+        using (graph.Undo.Group(nodes.Count == 1 ? $"Ungroup {nodes[0].Definition.Name}" : "Ungroup"))
+        {
+            foreach (var node in nodes) copies.AddRange(graph.Groups.Ungroup(node));
+        }
+        graph.ClearSelection();
+        foreach (var copy in copies) copy.IsSelected = true;
+    }
+
     private static void DuplicateSelection(NodeEditor editor)
     {
-        var graph = editor.Graph!;
+        var graph = editor.CurrentGraph!;
         var copies = graph.Duplicate(graph.SelectedNodes.ToList(), DuplicateOffset);
         graph.ClearSelection();
         foreach (var copy in copies) copy.IsSelected = true;
@@ -204,7 +252,7 @@ public static class NodeEditorCommands
     // Sets a flag on all selected nodes: on, unless it's on for all of them already.
     private static void Toggle(NodeEditor editor, string name, Func<NodeViewModel, bool> get, Action<NodeViewModel, bool> set)
     {
-        var graph = editor.Graph!;
+        var graph = editor.CurrentGraph!;
         var nodes = graph.SelectedNodes.ToList();
         bool value = !nodes.All(get);
         using (graph.Undo.Group(value ? name : $"Un{name.ToLowerInvariant()}"))

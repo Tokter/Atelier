@@ -530,7 +530,30 @@ public abstract class GroupInterfaceNodeViewModel : ComputingNodeViewModel
         if (_inputsFollowGroupOutputs) Sync(Definition.Outputs, input: true);
         if (_outputsFollowGroupOutputs) Sync(Definition.Outputs, input: false);
         if (_outputsFollowGroupInputs) Sync(Definition.Inputs, input: false);
+
+        // The empty socket stays last.
+        switch (NewSocket)
+        {
+            case InputSocketViewModel input when input.Node == null:
+                InsertInput(Inputs.Count, input);
+                break;
+            case InputSocketViewModel input when Inputs.IndexOf(input) != Inputs.Count - 1:
+                MoveSocket(input, Inputs.Count - 1);
+                break;
+            case OutputSocketViewModel output when output.Node == null:
+                InsertOutput(Outputs.Count, output);
+                break;
+            case OutputSocketViewModel output when Outputs.IndexOf(output) != Outputs.Count - 1:
+                MoveSocket(output, Outputs.Count - 1);
+                break;
+        }
     }
+
+    /// <summary>
+    /// Gets the empty socket at the end of a Group Input node's outputs or a Group Output node's inputs: dragging a link
+    /// onto it adds a socket to the group's interface (see <see cref="GroupSockets.NewSocket"/>). <c>null</c> for group nodes.
+    /// </summary>
+    public SocketViewModel? NewSocket { get; private protected init; }
 
     private void Sync(IReadOnlyList<GroupSocket> interfaceSockets, bool input)
     {
@@ -609,6 +632,22 @@ public sealed class GroupNodeViewModel : GroupInterfaceNodeViewModel
         }
     }
 
+    /// <summary>
+    /// Computes the graph inside the group with this node's inputs (as last computed), so the nodes inside show its values,
+    /// for example when the editor enters the group through it.
+    /// </summary>
+    public void ShowValuesInside()
+    {
+        try
+        {
+            Definition.Evaluate(_lastInputs ?? Inputs.Select(i => i.EffectiveValue).ToArray());
+        }
+        catch (InvalidOperationException)
+        {
+            // The error is shown on the node inside that failed.
+        }
+    }
+
     /// <inheritdoc/>
     protected override NodeViewModel CreateCopy() => new GroupNodeViewModel(Definition);
 
@@ -645,6 +684,8 @@ public sealed class GroupInputNodeViewModel : GroupInterfaceNodeViewModel
     internal GroupInputNodeViewModel(NodeGroupDefinition definition)
         : base(definition, "Group Input", inputsFollowGroupInputs: false, outputsFollowGroupOutputs: false, outputsFollowGroupInputs: true, inputsFollowGroupOutputs: false)
     {
+        NewSocket = new OutputSocketViewModel(string.Empty, GroupSockets.NewSocket);
+        SyncSockets();
         HeaderColor = Color.FromRgb(0x3C, 0x3C, 0x3C);
         Width = NodeGroupDefinition.InterfaceNodeWidth;
     }
@@ -665,6 +706,8 @@ public sealed class GroupOutputNodeViewModel : GroupInterfaceNodeViewModel
     internal GroupOutputNodeViewModel(NodeGroupDefinition definition)
         : base(definition, "Group Output", inputsFollowGroupInputs: false, outputsFollowGroupOutputs: false, outputsFollowGroupInputs: false, inputsFollowGroupOutputs: true)
     {
+        NewSocket = new InputSocketViewModel(string.Empty, GroupSockets.NewSocket) { Editor = InputEditor.None };
+        SyncSockets();
         HeaderColor = Color.FromRgb(0x3C, 0x3C, 0x3C);
         Width = NodeGroupDefinition.InterfaceNodeWidth;
     }
@@ -677,4 +720,17 @@ public sealed class GroupOutputNodeViewModel : GroupInterfaceNodeViewModel
     {
         // The group node reads its inputs.
     }
+}
+
+/// <summary>Socket types of groups' own nodes.</summary>
+public static class GroupSockets
+{
+    /// <summary>
+    /// The type of the empty socket of Group Input and Group Output nodes, which connects to nothing by itself: the
+    /// editor adds a socket to the group's interface when a link is dragged onto it.
+    /// </summary>
+    public static readonly SocketType NewSocket = new("group-new-socket", "New socket", Color.FromArgb(0x99, 0x9E, 0x9E, 0x9E));
+
+    /// <summary>Gets whether <paramref name="socket"/> is such an empty socket.</summary>
+    public static bool IsNewSocket(SocketViewModel? socket) => socket?.Type == NewSocket;
 }
