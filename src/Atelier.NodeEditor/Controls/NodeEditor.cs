@@ -78,6 +78,14 @@ public class NodeEditor : KeybindingHandler
     public static readonly BindableProperty<float> SnapSpacingProperty =
         BindableProperty.Register<NodeEditor, float>(nameof(SnapSpacing), 20f, validateValue: v => float.IsFinite(v) && v > 0);
 
+    /// <summary>Identifies the <see cref="AutoInsert"/> property.</summary>
+    public static readonly BindableProperty<bool> AutoInsertProperty =
+        BindableProperty.Register<NodeEditor, bool>(nameof(AutoInsert), true);
+
+    /// <summary>Identifies the <see cref="SearchOnLinkDrop"/> property.</summary>
+    public static readonly BindableProperty<bool> SearchOnLinkDropProperty =
+        BindableProperty.Register<NodeEditor, bool>(nameof(SearchOnLinkDrop), true);
+
     /// <summary>Identifies the <see cref="InputEditorFactory"/> property.</summary>
     public static readonly BindableProperty<Func<InputSocketViewModel, UIElement?>?> InputEditorFactoryProperty =
         BindableProperty.Register<NodeEditor, Func<InputSocketViewModel, UIElement?>?>(nameof(InputEditorFactory), null,
@@ -356,6 +364,8 @@ public class NodeEditor : KeybindingHandler
             menu.Items.Add(add);
             menu.Items.Add(new Separator());
         }
+        AddCommands(NodeEditorCommands.Copy, NodeEditorCommands.Paste);
+        menu.Items.Add(new Separator());
         AddCommands(NodeEditorCommands.Delete, NodeEditorCommands.DeleteReconnect, NodeEditorCommands.Duplicate, NodeEditorCommands.ToggleCollapse, NodeEditorCommands.ToggleMute);
         menu.Items.Add(new Separator());
         AddCommands(NodeEditorCommands.SelectAll, NodeEditorCommands.FrameAll, NodeEditorCommands.FrameSelected);
@@ -393,13 +403,13 @@ public class NodeEditor : KeybindingHandler
     /// Gets or sets whether dropping a node that has no links onto a link inserts it there (and makes room for it, moving
     /// the nodes after it to the right). The default is <c>true</c>.
     /// </summary>
-    public bool AutoInsert { get; set; } = true;
+    public bool AutoInsert { get => GetValue(AutoInsertProperty); set => SetValue(AutoInsertProperty, value); }
 
     /// <summary>
     /// Gets or sets whether dropping a new link on empty space opens the add-node menu with the node types it can
     /// connect to; the picked node is added there and connected. The default is <c>true</c>.
     /// </summary>
-    public bool SearchOnLinkDrop { get; set; } = true;
+    public bool SearchOnLinkDrop { get => GetValue(SearchOnLinkDropProperty); set => SetValue(SearchOnLinkDropProperty, value); }
 
     /// <summary>Gets the socket a link is being dragged from, or <c>null</c>.</summary>
     public SocketViewModel? DraggedFrom { get; private set; }

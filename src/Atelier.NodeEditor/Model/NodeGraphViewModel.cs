@@ -53,6 +53,14 @@ public class NodeGraphViewModel : NodeGraphObject
     /// <summary>Gets the selected nodes.</summary>
     public IEnumerable<NodeViewModel> SelectedNodes => _nodes.Where(n => n.IsSelected);
 
+    /// <summary>Removes all nodes and links and forgets the undo history (for example before loading another graph).</summary>
+    public void Clear()
+    {
+        foreach (var link in _links.ToList()) RemoveLink(link);
+        foreach (var node in _nodes.ToList()) RemoveNodeFromList(node);
+        Undo.Clear();
+    }
+
     /// <summary>Gets the selected links.</summary>
     public IEnumerable<LinkViewModel> SelectedLinks => _links.Where(l => l.IsSelected);
 

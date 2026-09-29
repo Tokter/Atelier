@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Atelier.Core.Primitives;
 
 namespace Atelier.Nodes;
@@ -24,6 +26,8 @@ public enum SocketShape
 public sealed class SocketType
 {
     private readonly Dictionary<SocketType, Func<object?, object?>> _conversions = [];
+    private Func<object?, JsonNode?>? _write;
+    private Func<JsonNode, object?>? _read;
 
     /// <summary>Initializes a socket type.</summary>
     /// <param name="id">A stable identifier, such as <c>"float"</c>, used when saving graphs.</param>
@@ -85,6 +89,52 @@ public sealed class SocketType
         return _conversions.TryGetValue(from, out var convert)
             ? convert(value)
             : throw new InvalidOperationException($"Sockets of type '{Id}' don't accept '{from.Id}'.");
+    }
+
+    /// <summary>
+    /// Sets how values of this type are saved (see <see cref="NodeGraphSerializer"/>), for value types JSON doesn't handle
+    /// on its own, such as colors. Without it values are written and read by <see cref="JsonSerializer"/> as
+    /// <see cref="ValueType"/>.
+    /// </summary>
+    /// <returns>This type, to chain calls.</returns>
+    public SocketType SetSerialization(Func<object?, JsonNode?> write, Func<JsonNode, object?> read)
+    {
+        ArgumentNullException.ThrowIfNull(write);
+        ArgumentNullException.ThrowIfNull(read);
+        _write = write;
+        _read = read;
+        return this;
+    }
+
+    /// <summary>Converts <paramref name="value"/> to JSON for saving, or <c>null</c> if it can't be.</summary>
+    public JsonNode? WriteValue(object? value)
+    {
+        if (value is null) return null;
+        if (_write != null) return _write(value);
+        try
+        {
+            return JsonSerializer.SerializeToNode(value, ValueType ?? value.GetType());
+        }
+        catch (Exception ex) when (ex is NotSupportedException or JsonException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Reads a value saved by <see cref="WriteValue"/>; <c>false</c> if it can't be read.</summary>
+    public bool TryReadValue(JsonNode? json, out object? value)
+    {
+        value = null;
+        if (json is null) return true;
+        try
+        {
+            value = _read != null ? _read(json) : ValueType != null ? json.Deserialize(ValueType) : null;
+            return _read != null || ValueType != null;
+        }
+        catch (Exception ex) when (ex is NotSupportedException or JsonException or InvalidOperationException or FormatException)
+        {
+            return false;
+        }
     }
 
     /// <inheritdoc/>

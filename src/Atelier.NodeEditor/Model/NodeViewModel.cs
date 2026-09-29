@@ -187,12 +187,16 @@ public class NodeViewModel : NodeGraphObject
 
     /// <summary>
     /// Copies <paramref name="source"/>'s state onto this new node for <see cref="Copy"/>: title, header color, width,
-    /// collapsed and muted flags, position, type id, and the values of the inputs that match by position and type.
+    /// collapsed and muted flags, position, type id, the values of the inputs that match by position and type, and the
+    /// settings <see cref="WriteState"/> saves.
     /// Override it to copy the node's own settings too.
     /// </summary>
     protected virtual void CopyStateFrom(NodeViewModel source)
     {
         ArgumentNullException.ThrowIfNull(source);
+        var state = new System.Text.Json.Nodes.JsonObject();
+        source.WriteState(state);
+        if (state.Count > 0) ReadState(state);
         TypeId = source.TypeId;
         Title = source.Title;
         HeaderColor = source.HeaderColor;
@@ -204,6 +208,19 @@ public class NodeViewModel : NodeGraphObject
         {
             if (_inputs[i].Type == source._inputs[i].Type) _inputs[i].Value = source._inputs[i].Value;
         }
+    }
+
+    /// <summary>
+    /// Saves the node's own settings (beyond its sockets' values), such as a math node's operation, into
+    /// <paramref name="state"/> for <see cref="NodeGraphSerializer"/>. Does nothing unless overridden.
+    /// </summary>
+    public virtual void WriteState(System.Text.Json.Nodes.JsonObject state)
+    {
+    }
+
+    /// <summary>Restores the settings <see cref="WriteState"/> saved. Does nothing unless overridden.</summary>
+    public virtual void ReadState(System.Text.Json.Nodes.JsonObject state)
+    {
     }
 
     /// <summary>Gets whether any of the node's sockets is connected.</summary>

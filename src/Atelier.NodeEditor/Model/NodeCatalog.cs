@@ -96,6 +96,10 @@ public sealed class NodeCatalog
     public NodeType Register(string id, string title, string category, Func<NodeViewModel> factory) =>
         Register(new NodeType(id, title, category, factory));
 
+    /// <summary>Gets the socket type with <paramref name="id"/> that one of the registered node types uses, or <c>null</c>.</summary>
+    public SocketType? FindSocketType(string id) =>
+        _types.SelectMany(t => t.InputTypes.Concat(t.OutputTypes)).FirstOrDefault(s => s.Id == id);
+
     /// <summary>Gets the type with <paramref name="id"/>, or <c>null</c>.</summary>
     public NodeType? Find(string id) => _byId.GetValueOrDefault(id);
 

@@ -1,6 +1,7 @@
 using Atelier.Controls;
 using Atelier.Core.Events;
 using Atelier.Core.Keybinding;
+using Atelier.Core.Platform;
 using Atelier.Core.Primitives;
 
 namespace Atelier.Nodes;
@@ -75,6 +76,14 @@ public static class NodeEditorCommands
     /// <summary>Gets the command that deletes the selected nodes, connecting their neighbors directly (Ctrl+X).</summary>
     public static NodeEditorCommand DeleteReconnect { get; } = new(e => e.Graph?.SelectedNodes.Any() == true, DeleteWithReconnect);
 
+    /// <summary>Gets the command that copies the selected nodes (and the links between them) to the clipboard (Ctrl+C).</summary>
+    public static NodeEditorCommand Copy { get; } = new(e => e.Graph?.SelectedNodes.Any() == true,
+        e => Clipboard.SetText(NodeGraphSerializer.Copy(e.Graph!.SelectedNodes)));
+
+    /// <summary>Gets the command that pastes copied nodes at the pointer and selects them (Ctrl+V).</summary>
+    public static NodeEditorCommand Paste { get; } = new(e => e.Graph != null && NodeGraphSerializer.IsGraph(Clipboard.GetText()),
+        e => NodeGraphSerializer.Paste(e.Graph!, Clipboard.GetText()!, e.PointerPosition is { } p ? e.ViewToGraph(p) : null));
+
     /// <summary>Gets the command that duplicates the selected nodes and selects the copies (Shift+D).</summary>
     public static NodeEditorCommand Duplicate { get; } = new(e => e.Graph?.SelectedNodes.Any() == true, DuplicateSelection);
 
@@ -122,7 +131,9 @@ public static class NodeEditorCommands
         Add("ContextMenu", "RightClick", ContextMenu, "Context menu", "Open the node editor's menu", MaterialIcons.Menu);
         Add("Delete", "Delete", Delete, "_Delete", "Delete the selected nodes and links", MaterialIcons.Delete);
         Add("DeleteReconnect", "Ctrl+X", DeleteReconnect, "Delete with reconnect", "Delete the selected nodes, connecting what fed them to what they fed", MaterialIcons.LinkOff);
-        Add("Duplicate", "Shift+D", Duplicate, "D_uplicate", "Copy the selected nodes with the links into them", MaterialIcons.ContentCopy);
+        Add("Copy", "Ctrl+C", Copy, "_Copy", "Copy the selected nodes to the clipboard", MaterialIcons.ContentCopy);
+        Add("Paste", "Ctrl+V", Paste, "_Paste", "Paste copied nodes at the pointer", MaterialIcons.ContentPaste);
+        Add("Duplicate", "Shift+D", Duplicate, "D_uplicate", "Copy the selected nodes with the links into them", MaterialIcons.CopyAll);
         Add("ToggleCollapse", "H", ToggleCollapse, "_Collapse", "Collapse or expand the selected nodes", MaterialIcons.UnfoldLess);
         Add("ToggleMute", "M", ToggleMute, "_Mute", "Mute or unmute the selected nodes: muted nodes pass their inputs through", MaterialIcons.Block);
         Add("Undo", "Ctrl+Z", Undo, "_Undo", "Undo the last change to the graph", MaterialIcons.Undo);
