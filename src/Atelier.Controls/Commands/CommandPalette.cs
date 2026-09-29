@@ -125,7 +125,8 @@ public class CommandPalette : ContentControl
 
     /// <summary>
     /// Opens a palette of the commands that work where the focus is in the window of <paramref name="element"/>: in a
-    /// popup near the top of the window, with the focus in its search field.
+    /// popup near the top of the window, with the focus in its search field. Drag commands (<see cref="IDragCommand"/>)
+    /// are left out, as they only run from the pointer.
     /// </summary>
     /// <param name="element">Any element of the window.</param>
     /// <param name="filter">Leaves out commands it returns <c>false</c> for, e.g. the command that opens the palette.</param>
@@ -135,7 +136,8 @@ public class CommandPalette : ContentControl
         ArgumentNullException.ThrowIfNull(element);
         var root = WindowRoot(element);
         var focused = FocusManager.GetFocusedElement(root) ?? root;
-        var commands = KeybindingHandler.GetActiveCommands(focused);
+        // Drag commands only run from the pointer.
+        var commands = KeybindingHandler.GetActiveCommands(focused).Where(c => c.Descriptor.Command is not IDragCommand).ToList();
         if (filter != null) commands = commands.Where(filter).ToList();
 
         var palette = new CommandPalette(commands);

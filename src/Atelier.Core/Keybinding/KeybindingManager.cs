@@ -170,6 +170,27 @@ public static partial class KeybindingManager
     }
 
     /// <summary>
+    /// Gets every keybinding in <paramref name="group"/> bound to the single stroke <paramref name="stroke"/>, in
+    /// registration order. Several drag commands can share a pointer gesture (see <see cref="IDragCommand"/>).
+    /// </summary>
+    public static IReadOnlyList<IKeybindingDescriptor> FindKeybindings(string group, KeybindingGesture stroke)
+    {
+        if (string.IsNullOrEmpty(group) || !RegisteredKeybindings.TryGetValue(group, out var groupKeybindings))
+            return Array.Empty<IKeybindingDescriptor>();
+
+        List<IKeybindingDescriptor>? found = null;
+        foreach (var descriptor in groupKeybindings.Values)
+        {
+            var sequence = GetParsedSequence(descriptor.Keybinding);
+            if (sequence is { Length: 1 } && sequence[0].Equals(stroke))
+            {
+                (found ??= new List<IKeybindingDescriptor>()).Add(descriptor);
+            }
+        }
+        return found ?? (IReadOnlyList<IKeybindingDescriptor>)Array.Empty<IKeybindingDescriptor>();
+    }
+
+    /// <summary>
     /// Determines whether <paramref name="strokes"/> is the beginning of a longer chord registered in <paramref name="group"/>,
     /// i.e. whether more keys are needed to complete a keybinding.
     /// </summary>
@@ -235,7 +256,8 @@ public static partial class KeybindingManager
 
     /// <summary>
     /// Finds keybindings that shadow each other within a group: identical key sequences (only the first registered one
-    /// fires) and single keybindings that are the first stroke of a chord (the chord can never be completed).
+    /// fires) and single keybindings that are the first stroke of a chord (the chord can never be completed). Drag
+    /// commands sharing a pointer gesture don't conflict: each applies where its drags start (see <see cref="IDragCommand"/>).
     /// </summary>
     /// <returns>The conflicts, in registration order.</returns>
     public static IReadOnlyList<KeybindingConflict> GetConflicts()
@@ -263,7 +285,7 @@ public static partial class KeybindingManager
         conflict = null!;
         var sa = GetParsedSequence(a.Keybinding);
         var sb = GetParsedSequence(b.Keybinding);
-        if (sa == null || sb == null)
+        if (sa == null || sb == null || (a.Command is IDragCommand && b.Command is IDragCommand))
         {
             return false;
         }

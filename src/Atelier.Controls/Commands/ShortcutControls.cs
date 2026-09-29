@@ -76,9 +76,9 @@ public class ShortcutView : StackPanel
 }
 
 /// <summary>
-/// A field that records a keyboard shortcut, with instructions below it: click it (or press Enter or Space while it has
-/// the focus) and press the keys. A second stroke makes a chord (<c>"Ctrl+K, Ctrl+C"</c>); Enter accepts a single
-/// stroke, Escape cancels.
+/// A field that records a shortcut, with instructions below it: click it (or press Enter or Space while it has the
+/// focus) and press the keys, or click, drag or turn the wheel for a pointer gesture (see <see cref="PointerGesture"/>).
+/// A second key makes a chord (<c>"Ctrl+K, Ctrl+C"</c>); Enter accepts a single stroke, Escape cancels.
 /// </summary>
 /// <remarks>
 /// While recording, the field handles every key, so shortcuts of the window (and menu access keys) don't run. Tab
@@ -101,6 +101,9 @@ public class ShortcutRecorder : ContentControl
         BindableProperty.Register<ShortcutRecorder, string>(nameof(Placeholder), "No shortcut", (s, o, n) => ((ShortcutRecorder)s).UpdateDisplay());
 
     private readonly List<KeybindingGesture> _strokes = [];
+    private const long DoubleClickMs = 500;
+    private (PointerButtons Button, ModifierKeys Modifiers, Point ScreenPosition, bool Dragged)? _pointerPress;
+    private (long AtMs, ModifierKeys Modifiers)? _lastPointerClick;
     private readonly Border _frame;
     private readonly ShortcutView _keys = new();
     // A short status in the field, and the instructions below it (they wrap, so the field keeps its width).
@@ -165,13 +168,84 @@ public class ShortcutRecorder : ContentControl
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// Not recording, a left click starts recording. While recording (before any key), pressing a button records a
+    /// pointer gesture: a click, or a drag once the pointer moves; a double click right after recording a click records
+    /// the double click.
+    /// </remarks>
     public override void OnPointerPressed(PointerEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (e.Button != PointerButtons.Left || e.Handled) return;
+        if (e.Handled) return;
+
+        if (IsRecording && _strokes.Count == 0 && KeybindingGesture.ClickOf(e.Button) != PointerGesture.None)
+        {
+            _pointerPress = (e.Button, e.Modifiers, e.ScreenPosition, false);
+            CapturePointer();
+            e.Handled = true;
+            return;
+        }
+        if (e.Button != PointerButtons.Left) return;
+
+        // The second press of a double click that started as a recorded click.
+        if (!IsRecording && e.ClickCount == 2 && _lastPointerClick is { } click
+            && Environment.TickCount64 - click.AtMs < DoubleClickMs && click.Modifiers == e.Modifiers)
+        {
+            _lastPointerClick = null;
+            Accept([new KeybindingGesture(PointerGesture.DoubleClick, e.Modifiers)]);
+            e.Handled = true;
+            return;
+        }
+
         if (IsRecording) CancelRecording();
         else StartRecording();
         e.Handled = true;
+    }
+
+    /// <inheritdoc/>
+    public override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_pointerPress is not { } press) return;
+
+        e.Handled = true;
+        var moved = e.ScreenPosition - press.ScreenPosition;
+        if (moved.X * moved.X + moved.Y * moved.Y >= KeybindingHandler.DragThreshold * KeybindingHandler.DragThreshold)
+        {
+            _pointerPress = press with { Dragged = true };
+        }
+    }
+
+    /// <inheritdoc/>
+    public override void OnPointerReleased(PointerEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (_pointerPress is not { } press || press.Button != e.Button) return;
+
+        _pointerPress = null;
+        e.Handled = true;
+        if (IsPointerCaptured) ReleasePointerCapture();
+        var pointer = press.Dragged ? KeybindingGesture.DragOf(press.Button) : KeybindingGesture.ClickOf(press.Button);
+        _lastPointerClick = pointer == PointerGesture.LeftClick ? (Environment.TickCount64, press.Modifiers) : null;
+        Accept([new KeybindingGesture(pointer, press.Modifiers)]);
+    }
+
+    /// <inheritdoc/>
+    protected override void OnLostPointerCapture()
+    {
+        base.OnLostPointerCapture();
+        _pointerPress = null;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>While recording (before any key), turning the wheel records <c>"WheelUp"</c> or <c>"WheelDown"</c>.</remarks>
+    public override void OnPointerWheel(PointerWheelEventArgs e)
+    {
+        base.OnPointerWheel(e);
+        if (e.Handled || !IsRecording || _strokes.Count > 0 || e.DeltaY == 0) return;
+
+        e.Handled = true;
+        Accept([new KeybindingGesture(e.DeltaY > 0 ? PointerGesture.WheelUp : PointerGesture.WheelDown, e.Modifiers)]);
     }
 
     /// <inheritdoc/>
@@ -216,9 +290,11 @@ public class ShortcutRecorder : ContentControl
         CancelRecording();
     }
 
-    private void Accept()
+    private void Accept() => Accept(_strokes.ToArray());
+
+    private void Accept(IReadOnlyList<KeybindingGesture> strokes)
     {
-        string shortcut = KeybindingGesture.FormatSequence(_strokes);
+        string shortcut = KeybindingGesture.FormatSequence(strokes);
         IsRecording = false;
         _strokes.Clear();
         Shortcut = shortcut;
@@ -234,7 +310,7 @@ public class ShortcutRecorder : ContentControl
             _keys.ShowStrokes(_strokes);
             _status.Text = _strokes.Count == 0 ? "Press the keys…" : string.Empty;
             _instructions.Text = _strokes.Count == 0
-                ? "Press the shortcut's keys. Esc cancels."
+                ? "Press the shortcut's keys, or click, drag or turn the wheel. Esc cancels."
                 : "Press a second key for a chord, or Enter to accept. Esc cancels.";
         }
         else

@@ -19,6 +19,11 @@ namespace Atelier.Controls;
 /// never affects a pending chord.
 /// </para>
 /// <para>
+/// Pointer gestures work like keys: clicks (<c>"RightClick"</c>), double clicks, wheel turns (<c>"Ctrl+WheelUp"</c>) and
+/// drags (<c>"MiddleDrag"</c>, which run an <see cref="IDragCommand"/>) that reach the handler run the keybindings bound
+/// to them; see <see cref="OnPointerPressed"/>.
+/// </para>
+/// <para>
 /// The command's target is resolved in order: the <see cref="BindableObject.DataContext"/> of the element the key event
 /// originated from, the distinct data contexts of its ancestors up to this handler, then this handler's own data context
 /// (or <c>null</c> when there is none).
@@ -89,6 +94,8 @@ public partial class KeybindingHandler : ContentControl
     {
         base.OnKeyDown(e);
 
+        if (!e.Handled && HandleDragKey(e))
+            return;
         if (e.Handled || e.Key == Key.None || IsModifierKey(e.Key))
             return;
         if (string.IsNullOrEmpty(Group) && !HasAdditionalGroups())
