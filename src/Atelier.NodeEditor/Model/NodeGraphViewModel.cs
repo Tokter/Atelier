@@ -53,11 +53,86 @@ public class NodeGraphViewModel : NodeGraphObject
     /// <summary>Gets the selected nodes.</summary>
     public IEnumerable<NodeViewModel> SelectedNodes => _nodes.Where(n => n.IsSelected);
 
+    /// <summary>Gets the selected links.</summary>
+    public IEnumerable<LinkViewModel> SelectedLinks => _links.Where(l => l.IsSelected);
+
     /// <summary>Deselects all nodes and links.</summary>
     public void ClearSelection()
     {
         foreach (var node in _nodes) node.IsSelected = false;
         foreach (var link in _links) link.IsSelected = false;
+    }
+
+    /// <summary>Selects all nodes (and no links).</summary>
+    public void SelectAll()
+    {
+        foreach (var node in _nodes) node.IsSelected = true;
+        foreach (var link in _links) link.IsSelected = false;
+    }
+
+    /// <summary>Moves <paramref name="node"/> in front of the others (to the end of <see cref="Nodes"/>); not recorded for undo.</summary>
+    public void BringToFront(NodeViewModel node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        int index = _nodes.IndexOf(node);
+        if (index >= 0 && index < _nodes.Count - 1) _nodes.Move(index, _nodes.Count - 1);
+    }
+
+    /// <summary>Removes the selected nodes (with their links) and the selected links, as one undo step.</summary>
+    /// <returns><c>false</c> if nothing was selected.</returns>
+    public bool DeleteSelection()
+    {
+        var nodes = SelectedNodes.ToList();
+        var links = SelectedLinks.Where(l => !l.From.Node!.IsSelected && !l.To.Node!.IsSelected).ToList();
+        if (nodes.Count == 0 && links.Count == 0) return false;
+        using (Undo.Group(nodes.Count == 1 && links.Count == 0 ? $"Delete {nodes[0].Title}" : "Delete"))
+        {
+            foreach (var link in links) Disconnect(link);
+            foreach (var node in nodes) RemoveNodeRecorded(node);
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Adds copies of <paramref name="nodes"/> (see <see cref="NodeViewModel.Copy"/>) moved by <paramref name="offset"/>,
+    /// as one undo step: links between the copied nodes are copied between the copies, and links into them from other
+    /// nodes feed the copies too, like Blender's Shift+D.
+    /// </summary>
+    /// <returns>The copies, in the order of <paramref name="nodes"/>.</returns>
+    public IReadOnlyList<NodeViewModel> Duplicate(IEnumerable<NodeViewModel> nodes, Point offset)
+    {
+        ArgumentNullException.ThrowIfNull(nodes);
+        var originals = nodes.Where(n => n.Graph == this).Distinct().ToList();
+        var copies = new Dictionary<NodeViewModel, NodeViewModel>();
+        if (originals.Count == 0) return [];
+
+        using (Undo.Group(originals.Count == 1 ? $"Duplicate {originals[0].Title}" : "Duplicate"))
+        {
+            foreach (var node in originals)
+            {
+                var copy = node.Copy();
+                copy.Position = node.Position + offset;
+                copies[node] = copy;
+                AddNode(copy);
+            }
+            foreach (var node in originals)
+            {
+                var copy = copies[node];
+                for (int i = 0; i < node.Inputs.Count && i < copy.Inputs.Count; i++)
+                {
+                    if (node.Inputs[i].Link is not { } link) continue;
+                    var from = link.From;
+                    if (copies.TryGetValue(from.Node!, out var fromCopy))
+                    {
+                        int output = from.Node!.Outputs.IndexOf(from);
+                        if (output >= fromCopy.Outputs.Count) continue;
+                        from = fromCopy.Outputs[output];
+                    }
+                    Connect(from, copy.Inputs[i]);
+                }
+            }
+        }
+        return originals.Select(n => copies[n]).ToList();
     }
 
     /// <summary>Adds <paramref name="node"/> on top of the others.</summary>
@@ -69,7 +144,7 @@ public class NodeGraphViewModel : NodeGraphObject
         if (node.HasLinks) throw new InvalidOperationException($"The node '{node}' has links from another graph.");
         int index = _nodes.Count;
         InsertNode(node, index);
-        Undo.Push(new DelegateUndoAction($"Add {node.Title}", () => RemoveNodeAt(index), () => InsertNode(node, index)));
+        Undo.Push(new DelegateUndoAction($"Add {node.Title}", () => RemoveNodeFromList(node), () => InsertNode(node, index)));
         return node;
     }
 
@@ -276,20 +351,20 @@ public class NodeGraphViewModel : NodeGraphObject
     {
         foreach (var link in LinksOf(node).ToList()) Disconnect(link);
         int index = _nodes.IndexOf(node);
-        RemoveNodeAt(index);
-        Undo.Push(new DelegateUndoAction($"Delete {node.Title}", () => InsertNode(node, index), () => RemoveNodeAt(index)));
+        RemoveNodeFromList(node);
+        Undo.Push(new DelegateUndoAction($"Delete {node.Title}", () => InsertNode(node, index), () => RemoveNodeFromList(node)));
     }
 
+    // Undo and redo insert at the recorded index where possible (the order can have changed since) and remove by reference.
     private void InsertNode(NodeViewModel node, int index)
     {
         node.Graph = this;
-        _nodes.Insert(index, node);
+        _nodes.Insert(Math.Min(index, _nodes.Count), node);
     }
 
-    private void RemoveNodeAt(int index)
+    private void RemoveNodeFromList(NodeViewModel node)
     {
-        var node = _nodes[index];
-        _nodes.RemoveAt(index);
+        _nodes.Remove(node);
         node.Graph = null;
     }
 
@@ -297,7 +372,7 @@ public class NodeGraphViewModel : NodeGraphObject
     {
         link.To.Link = link;
         link.From.AddLink(link);
-        _links.Insert(index, link);
+        _links.Insert(Math.Min(index, _links.Count), link);
     }
 
     private void RemoveLink(LinkViewModel link)

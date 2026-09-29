@@ -41,6 +41,7 @@ public sealed class UndoStack
     private readonly Stack<CompositeAction> _groups = new();
     private PropertyChange? _lastChange;
     private long _lastChangeTicks;
+    private int _suspended;
 
     /// <summary>Occurs after the history changed (a change was recorded, undone or redone, or it was cleared).</summary>
     public event EventHandler? Changed;
@@ -56,6 +57,19 @@ public sealed class UndoStack
 
     /// <summary>Gets whether an undo or redo is being applied; changes made meanwhile aren't recorded.</summary>
     public bool IsApplying { get; private set; }
+
+    /// <summary>Gets whether recording is suspended (see <see cref="Suspend"/>); changes made meanwhile aren't recorded.</summary>
+    public bool IsSuspended => _suspended > 0;
+
+    /// <summary>
+    /// Stops recording until the returned object is disposed, for live previews such as dragging nodes: the tool then
+    /// records the whole change as one step when it's done (and records nothing when it's canceled).
+    /// </summary>
+    public IDisposable Suspend()
+    {
+        _suspended++;
+        return new SuspendScope(this);
+    }
 
     /// <summary>Gets whether there is a step to undo.</summary>
     public bool CanUndo => _undo.Count > 0;
@@ -81,11 +95,11 @@ public sealed class UndoStack
         return new GroupScope(this, group);
     }
 
-    /// <summary>Records a change that has already been made; ignored while <see cref="IsApplying"/>.</summary>
+    /// <summary>Records a change that has already been made; ignored while <see cref="IsApplying"/> or <see cref="IsSuspended"/>.</summary>
     public void Push(IUndoAction action)
     {
         ArgumentNullException.ThrowIfNull(action);
-        if (IsApplying) return;
+        if (IsApplying || IsSuspended) return;
         _lastChange = null;
         Add(action);
     }
@@ -99,7 +113,7 @@ public sealed class UndoStack
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(apply);
-        if (IsApplying || EqualityComparer<T>.Default.Equals(oldValue, newValue)) return;
+        if (IsApplying || IsSuspended || EqualityComparer<T>.Default.Equals(oldValue, newValue)) return;
 
         long now = TimeProvider.GetTimestamp();
         if (_lastChange != null && Equals(_lastChange.Key, key) && _lastChange.Group == CurrentGroup
@@ -210,6 +224,18 @@ public sealed class UndoStack
 
         public void Undo() => apply(oldValue);
         public void Redo() => apply(NewValue);
+    }
+
+    private sealed class SuspendScope(UndoStack stack) : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            stack._suspended--;
+        }
     }
 
     private sealed class GroupScope(UndoStack stack, CompositeAction group) : IDisposable

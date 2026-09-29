@@ -148,6 +148,61 @@ public class NodeViewModel : NodeGraphObject
     /// <summary>Gets the output named <paramref name="name"/>, or <c>null</c>.</summary>
     public OutputSocketViewModel? FindOutput(string name) => _outputs.FirstOrDefault(s => s.Name == name);
 
+    /// <summary>
+    /// Creates an unlinked copy of the node, not in a graph: a new node of the same kind (see <see cref="CreateCopy"/>)
+    /// with this node's title, colors, size, flags, position and input values (see <see cref="CopyStateFrom"/>).
+    /// </summary>
+    public NodeViewModel Copy()
+    {
+        var copy = CreateCopy();
+        copy.CopyStateFrom(this);
+        return copy;
+    }
+
+    /// <summary>
+    /// Creates a new node of the same kind for <see cref="Copy"/>: from the graph's catalog when the node has a
+    /// <see cref="TypeId"/>, a plain node with the same sockets for a plain <see cref="NodeViewModel"/>, otherwise with
+    /// the type's parameterless constructor. Override it for node types that need arguments.
+    /// </summary>
+    /// <exception cref="NotSupportedException">The node's type can't be created.</exception>
+    protected virtual NodeViewModel CreateCopy()
+    {
+        if (TypeId != null && Graph?.Catalog.Find(TypeId) is { } type) return type.CreateNode();
+        if (GetType() == typeof(NodeViewModel))
+        {
+            var copy = new NodeViewModel(Title);
+            foreach (var input in _inputs)
+            {
+                copy.AddInput(new InputSocketViewModel(input.Name, input.Type, input.Value) { Editor = input.Editor, Minimum = input.Minimum, Maximum = input.Maximum });
+            }
+            foreach (var output in _outputs) copy.AddOutput(output.Name, output.Type);
+            return copy;
+        }
+        if (GetType().GetConstructor(Type.EmptyTypes) != null) return (NodeViewModel)Activator.CreateInstance(GetType())!;
+        throw new NotSupportedException($"Nodes of type {GetType().Name} can't be copied: register it in the catalog or override CreateCopy.");
+    }
+
+    /// <summary>
+    /// Copies <paramref name="source"/>'s state onto this new node for <see cref="Copy"/>: title, header color, width,
+    /// collapsed and muted flags, position, type id, and the values of the inputs that match by position and type.
+    /// Override it to copy the node's own settings too.
+    /// </summary>
+    protected virtual void CopyStateFrom(NodeViewModel source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        TypeId = source.TypeId;
+        Title = source.Title;
+        HeaderColor = source.HeaderColor;
+        Width = source.Width;
+        IsCollapsed = source.IsCollapsed;
+        IsMuted = source.IsMuted;
+        Position = source.Position;
+        for (int i = 0; i < _inputs.Count && i < source._inputs.Count; i++)
+        {
+            if (_inputs[i].Type == source._inputs[i].Type) _inputs[i].Value = source._inputs[i].Value;
+        }
+    }
+
     /// <summary>Gets whether any of the node's sockets is connected.</summary>
     public bool HasLinks => _inputs.Any(s => s.IsConnected) || _outputs.Any(s => s.IsConnected);
 

@@ -163,10 +163,10 @@ public class NodeEditorTests
             (e, a) => e.OnPreviewPointerMoved(a), (e, a) => e.OnPointerMoved(a));
     }
 
-    internal static void Release(UIElement root, Point at, PointerButtons button)
+    internal static void Release(UIElement root, Point at, PointerButtons button, ModifierKeys modifiers = ModifierKeys.None)
     {
         var target = UIElement.CapturedElement ?? root.HitTest(at) ?? root;
-        target.DispatchPointerEvent(new PointerEventArgs(at, at, button),
+        target.DispatchPointerEvent(new PointerEventArgs(at, at, button, modifiers: modifiers),
             (e, a) => e.OnPreviewPointerReleased(a), (e, a) => e.OnPointerReleased(a));
     }
 

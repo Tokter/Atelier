@@ -23,6 +23,7 @@ public static class NodeEditorTheme
         theme.Renderers.Register(new NodeEditorRenderer());
         theme.Renderers.Register(new NodeEditorLayerRenderer());
         theme.Renderers.Register(new LinkLayerRenderer());
+        theme.Renderers.Register(new OverlayLayerRenderer());
         theme.Renderers.Register(new NodeViewRenderer());
         theme.Renderers.Register(new SocketViewRenderer());
         theme.Styles.AddRange(theme is MaterialTheme material ? CreateMaterialStyles(material.Colors, material.IsDark) : CreateNeutralStyles(theme.IsDark));
@@ -55,6 +56,16 @@ public static class NodeEditorTheme
                 .Set(NodeView.ShadowColorProperty, colors.Shadow),
             new Style(typeof(SocketView))
                 .Set(SocketView.OutlineColorProperty, Color.Black.WithAlpha(isDark ? 0.6f : 0.45f)),
+            // The add-node menu: a surface-container menu at elevation level 2, primary label-medium category headers.
+            new Style(AddNodeMenu.PopupStyleKey, typeof(Atelier.Controls.Popup))
+                .Set(Atelier.Controls.Control.CornerRadiusProperty, new CornerRadius(MaterialShape.Medium))
+                .Set(Atelier.Controls.Popup.ElevationProperty, MaterialElevation.Level2)
+                .Set(Atelier.Controls.Control.BackgroundProperty, colors.SurfaceContainer)
+                .Set(Atelier.Controls.Popup.BorderThicknessProperty, Thickness.Zero),
+            new Style(AddNodeMenu.CategoryStyleKey, typeof(Atelier.Controls.TextBlock))
+                .Set(Atelier.Controls.TextBlock.ForegroundProperty, colors.Primary)
+                .Set(Atelier.Controls.TextBlock.FontSizeProperty, MaterialTypescale.LabelMedium.Size)
+                .Set(Atelier.Controls.TextBlock.FontWeightProperty, MaterialTypescale.LabelMedium.Weight),
         ];
     }
 
@@ -113,7 +124,7 @@ internal sealed class LinkLayerRenderer : ControlRenderer<LinkLayer>
         var visible = new Rect(Point.Zero, layer.Bounds.Size);
         foreach (var link in graph.Links)
         {
-            if (editor.GetNodeView(link.From.Node!) is null || editor.GetNodeView(link.To.Node!) is null) continue;
+            if (editor.GetNodeView(link.From.Node!) is null || editor.GetNodeView(link.To.Node!) is null || link == editor.HiddenLink) continue;
             var start = editor.GraphToView(link.From.Anchor);
             var end = editor.GraphToView(link.To.Anchor);
             var (c1, c2) = LinkGeometry.GetControlPoints(start, end, zoom);
@@ -153,6 +164,40 @@ internal sealed class LinkLayerRenderer : ControlRenderer<LinkLayer>
         float top = Math.Min(Math.Min(a.Y, b.Y), Math.Min(c.Y, d.Y));
         float bottom = Math.Max(Math.Max(a.Y, b.Y), Math.Max(c.Y, d.Y));
         return right >= visible.Left && left <= visible.Right && bottom >= visible.Top && top <= visible.Bottom;
+    }
+}
+
+/// <summary>
+/// Draws the tools' feedback: the selection box (the selection color, faintly filled), and a link being dragged from a
+/// socket to the pointer in the socket's type color, with a ring around the socket it would connect to.
+/// </summary>
+internal sealed class OverlayLayerRenderer : ControlRenderer<OverlayLayer>
+{
+    public override void Render(OverlayLayer layer, ref DrawingContext context)
+    {
+        var editor = layer.Editor;
+        if (editor.SelectionBox is { } box)
+        {
+            context.DrawRect(box, editor.SelectionColor.WithAlpha(0.12f));
+            context.DrawRoundedRectOutline(box, CornerRadius.Zero, editor.SelectionColor, 1f);
+        }
+
+        if (editor.DraggedFrom is not { } socket) return;
+        var anchor = editor.GraphToView(socket.Anchor);
+        var loose = editor.DropTarget is { } target ? editor.GraphToView(target.Anchor) : editor.DraggedTo;
+        var (start, end) = socket is OutputSocketViewModel ? (anchor, loose) : (loose, anchor);
+        var (c1, c2) = LinkGeometry.GetControlPoints(start, end, editor.Zoom);
+        using var builder = new SKPathBuilder();
+        builder.MoveTo(start.X, start.Y);
+        builder.CubicTo(c1.X, c1.Y, c2.X, c2.Y, end.X, end.Y);
+        using var path = builder.Detach();
+        float width = Math.Max(1f, editor.LinkThickness * Math.Min(1f, editor.Zoom));
+        context.DrawRoundPathOutline(path, Color.Black.WithAlpha(0.35f), width + 2);
+        context.DrawRoundPathOutline(path, socket.Type.Color, width);
+        if (editor.DropTarget is { } drop)
+        {
+            context.DrawCircleOutline(editor.GraphToView(drop.Anchor), SocketView.HoverRadius + 3, editor.SelectionColor, 2f);
+        }
     }
 }
 

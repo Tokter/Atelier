@@ -70,6 +70,14 @@ public class NodeEditor : KeybindingHandler
     public static readonly BindableProperty<Color> ErrorColorProperty =
         BindableProperty.Register<NodeEditor, Color>(nameof(ErrorColor), Color.FromRgb(0xE5, 0x39, 0x35), options: PropertyOptions.AffectsRender);
 
+    /// <summary>Identifies the <see cref="SnapToGrid"/> property.</summary>
+    public static readonly BindableProperty<bool> SnapToGridProperty =
+        BindableProperty.Register<NodeEditor, bool>(nameof(SnapToGrid), false);
+
+    /// <summary>Identifies the <see cref="SnapSpacing"/> property.</summary>
+    public static readonly BindableProperty<float> SnapSpacingProperty =
+        BindableProperty.Register<NodeEditor, float>(nameof(SnapSpacing), 20f, validateValue: v => float.IsFinite(v) && v > 0);
+
     /// <summary>Identifies the <see cref="InputEditorFactory"/> property.</summary>
     public static readonly BindableProperty<Func<InputSocketViewModel, UIElement?>?> InputEditorFactoryProperty =
         BindableProperty.Register<NodeEditor, Func<InputSocketViewModel, UIElement?>?>(nameof(InputEditorFactory), null,
@@ -80,6 +88,9 @@ public class NodeEditor : KeybindingHandler
     private readonly Surface _surface = new();
     private readonly LinkLayer _links;
     private readonly NodeLayer _nodes;
+    private readonly OverlayLayer _overlay;
+    private Rect? _selectionBox;
+    private LinkViewModel? _hiddenLink;
     private readonly Dictionary<NodeViewModel, NodeView> _views = [];
 
     static NodeEditor()
@@ -98,6 +109,8 @@ public class NodeEditor : KeybindingHandler
         _nodes = new NodeLayer(this);
         _surface.AddChild(_links);
         _surface.AddChild(_nodes);
+        _overlay = new OverlayLayer(this);
+        _surface.AddChild(_overlay);
         Content = _surface;
         BackgroundLayers = [new GridLayer()];
         BackgroundLayers.CollectionChanged += (_, _) => SyncLayers();
@@ -145,6 +158,204 @@ public class NodeEditor : KeybindingHandler
 
     /// <summary>Gets the view of <paramref name="node"/>, or <c>null</c>.</summary>
     public NodeView? GetNodeView(NodeViewModel node) => _views.GetValueOrDefault(node);
+
+    /// <summary>Gets or sets whether moving nodes snaps them to multiples of <see cref="SnapSpacing"/>; holding Ctrl while moving does the opposite. The default is <c>false</c>.</summary>
+    public bool SnapToGrid { get => GetValue(SnapToGridProperty); set => SetValue(SnapToGridProperty, value); }
+
+    /// <summary>Gets or sets the grid moved nodes snap to, in graph units. The default is 20, the default grid's spacing.</summary>
+    public float SnapSpacing { get => GetValue(SnapSpacingProperty); set => SetValue(SnapSpacingProperty, value); }
+
+    /// <summary>Gets the element at <paramref name="viewPoint"/> (in the editor's coordinates), or <c>null</c> over the background.</summary>
+    public UIElement? ElementAt(Point viewPoint)
+    {
+        var hit = _surface.HitTest(viewPoint);
+        return hit == _surface || hit == _nodes ? null : hit;
+    }
+
+    /// <summary>Gets the node whose view is at <paramref name="viewPoint"/>, or <c>null</c>.</summary>
+    public NodeViewModel? NodeAt(Point viewPoint) => NodeViewOf(ElementAt(viewPoint))?.Node;
+
+    /// <summary>Gets the view <paramref name="element"/> is part of, or <c>null</c>.</summary>
+    public static NodeView? NodeViewOf(UIElement? element)
+    {
+        for (VisualNode? node = element; node != null; node = node.Parent)
+        {
+            if (node is NodeView view) return view;
+            if (node is NodeEditor) return null;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Gets the socket nearest to <paramref name="viewPoint"/> within <paramref name="radius"/> pixels of its anchor (and
+    /// accepted by <paramref name="filter"/>), or <c>null</c>.
+    /// </summary>
+    public SocketViewModel? SocketAt(Point viewPoint, float radius = 10, Func<SocketViewModel, bool>? filter = null)
+    {
+        SocketViewModel? best = null;
+        float bestDistance = radius * radius;
+        foreach (var node in Graph?.Nodes ?? (IReadOnlyList<NodeViewModel>)[])
+        {
+            foreach (var socket in node.Inputs.Cast<SocketViewModel>().Concat(node.Outputs))
+            {
+                if (filter != null && !filter(socket)) continue;
+                if (node.IsCollapsed && !socket.IsConnected) continue;
+                var offset = GraphToView(socket.Anchor) - viewPoint;
+                float distance = offset.X * offset.X + offset.Y * offset.Y;
+                if (distance <= bestDistance)
+                {
+                    bestDistance = distance;
+                    best = socket;
+                }
+            }
+        }
+        return best;
+    }
+
+    /// <summary>Gets the link nearest to <paramref name="viewPoint"/> within <paramref name="tolerance"/> pixels, or <c>null</c>.</summary>
+    public LinkViewModel? LinkAt(Point viewPoint, float tolerance = 6)
+    {
+        LinkViewModel? best = null;
+        float bestDistance = tolerance;
+        foreach (var link in Graph?.Links ?? (IReadOnlyList<LinkViewModel>)[])
+        {
+            float distance = LinkGeometry.DistanceTo(viewPoint, GraphToView(link.From.Anchor), GraphToView(link.To.Anchor), Zoom);
+            if (distance <= bestDistance)
+            {
+                bestDistance = distance;
+                best = link;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>Gets the nodes whose area overlaps <paramref name="viewRect"/> (in the editor's coordinates).</summary>
+    public IReadOnlyList<NodeViewModel> NodesIn(Rect viewRect)
+    {
+        var graphRect = new Rect(ViewToGraph(viewRect.Location), new Size(viewRect.Width / Zoom, viewRect.Height / Zoom));
+        return (Graph?.Nodes ?? (IReadOnlyList<NodeViewModel>)[]).Where(n => GetNodeArea(n).IntersectsWith(graphRect)).ToList();
+    }
+
+    /// <summary>Selects only <paramref name="node"/> (none when <c>null</c>) and brings it to the front.</summary>
+    public void SelectOnly(NodeViewModel? node)
+    {
+        Graph?.ClearSelection();
+        if (node == null) return;
+        node.IsSelected = true;
+        Graph?.BringToFront(node);
+    }
+
+    /// <summary>
+    /// Adds a node of <paramref name="type"/> with its top-left corner at <paramref name="viewPoint"/> (the view's center
+    /// when <c>null</c>) and selects only it.
+    /// </summary>
+    /// <returns>The new node, or <c>null</c> without a graph.</returns>
+    public NodeViewModel? AddNode(NodeType type, Point? viewPoint = null)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        if (Graph is not { } graph) return null;
+        var node = type.CreateNode();
+        node.Position = Snap(ViewToGraph(viewPoint ?? new Point(Bounds.Width / 2, Bounds.Height / 2)), SnapToGrid);
+        graph.AddNode(node);
+        SelectOnly(node);
+        return node;
+    }
+
+    /// <summary>
+    /// Opens the <see cref="AddNodeMenu"/> of the graph's catalog at the pointer; the picked node is added at
+    /// <paramref name="viewPoint"/> (the view's center when <c>null</c>).
+    /// </summary>
+    /// <returns>The menu, or <c>null</c> without a graph.</returns>
+    public AddNodeMenu? ShowAddNodeMenu(Point? viewPoint = null)
+    {
+        if (Graph is not { } graph) return null;
+        var at = viewPoint ?? new Point(Bounds.Width / 2, Bounds.Height / 2);
+        var menu = new AddNodeMenu(graph.Catalog);
+        menu.TypePicked += (_, type) => AddNode(type, at);
+        menu.Show(this);
+        return menu;
+    }
+
+    /// <summary>Opens the editor's context menu (see <see cref="CreateContextMenu"/>) at the pointer.</summary>
+    /// <returns>The menu, or <c>null</c> if it didn't open.</returns>
+    public ContextMenu? ShowContextMenu(Point? viewPoint = null)
+    {
+        if (Graph == null) return null;
+        var menu = CreateContextMenu(viewPoint ?? new Point(Bounds.Width / 2, Bounds.Height / 2));
+        return menu.Open(this) ? menu : null;
+    }
+
+    /// <summary>
+    /// Creates the context menu for <paramref name="viewPoint"/>: an "Add" submenu of the catalog's types by category
+    /// (added there), then the commands for the selection, the view and undo. Override it to change the menu.
+    /// </summary>
+    public virtual ContextMenu CreateContextMenu(Point viewPoint)
+    {
+        var menu = new ContextMenu();
+        if (Graph is { Catalog.Types.Count: > 0 } graph)
+        {
+            var add = new MenuItem("_Add") { Icon = new Icon(MaterialIconKind.AddCircle, 18) };
+            foreach (var category in graph.Catalog.Categories)
+            {
+                var parent = add;
+                if (category.Length > 0)
+                {
+                    parent = new MenuItem(category);
+                    add.Items.Add(parent);
+                }
+                foreach (var type in graph.Catalog.Types.Where(t => t.Category == category))
+                {
+                    var item = new MenuItem(type.Title);
+                    item.Click += (_, _) => AddNode(type, viewPoint);
+                    parent.Items.Add(item);
+                }
+            }
+            menu.Items.Add(add);
+            menu.Items.Add(new Separator());
+        }
+        AddCommands(NodeEditorCommands.Delete, NodeEditorCommands.Duplicate, NodeEditorCommands.ToggleCollapse, NodeEditorCommands.ToggleMute);
+        menu.Items.Add(new Separator());
+        AddCommands(NodeEditorCommands.SelectAll, NodeEditorCommands.FrameAll, NodeEditorCommands.FrameSelected);
+        menu.Items.Add(new Separator());
+        AddCommands(NodeEditorCommands.Undo, NodeEditorCommands.Redo);
+        return menu;
+
+        void AddCommands(params System.Windows.Input.ICommand[] commands)
+        {
+            foreach (var command in commands) menu.Items.Add(new MenuItem(null, command) { CommandParameter = this });
+        }
+    }
+
+    /// <summary>Snaps <paramref name="graphPoint"/> to <see cref="SnapSpacing"/> when <paramref name="snap"/>.</summary>
+    public Point Snap(Point graphPoint, bool snap)
+    {
+        if (!snap) return graphPoint;
+        float spacing = SnapSpacing;
+        return new Point(MathF.Round(graphPoint.X / spacing) * spacing, MathF.Round(graphPoint.Y / spacing) * spacing);
+    }
+
+    /// <summary>Gets the box being drawn by box selection, in the editor's coordinates, or <c>null</c>.</summary>
+    public Rect? SelectionBox { get => _selectionBox; internal set { _selectionBox = value; _overlay.InvalidateVisual(); } }
+
+    /// <summary>Gets the socket a link is being dragged from, or <c>null</c>.</summary>
+    public SocketViewModel? DraggedFrom { get; private set; }
+
+    /// <summary>Gets where the dragged link's loose end is, in the editor's coordinates.</summary>
+    public Point DraggedTo { get; private set; }
+
+    /// <summary>Gets the socket the dragged link would connect to if dropped now, or <c>null</c>.</summary>
+    public SocketViewModel? DropTarget { get; private set; }
+
+    /// <summary>Gets the link a connect drag picked up from its input (not drawn until the drag ends), or <c>null</c>.</summary>
+    public LinkViewModel? HiddenLink { get => _hiddenLink; internal set { _hiddenLink = value; _links.InvalidateVisual(); } }
+
+    internal void ShowDraggedLink(SocketViewModel? from, Point to, SocketViewModel? target)
+    {
+        DraggedFrom = from;
+        DraggedTo = to;
+        DropTarget = target;
+        _overlay.InvalidateVisual();
+    }
 
     /// <summary>Converts a point in graph coordinates to the editor's coordinates.</summary>
     public Point GraphToView(Point graphPoint) => new(graphPoint.X * Zoom + Offset.X, graphPoint.Y * Zoom + Offset.Y);

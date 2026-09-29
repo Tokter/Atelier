@@ -76,3 +76,21 @@ internal sealed class LinkLayer : UIElement
 
     protected override Size MeasureOverride(Size availableSize) => Size.Zero;
 }
+
+/// <summary>Draws what the editor's tools show over the nodes: the selection box and the link being dragged.</summary>
+internal sealed class OverlayLayer : UIElement
+{
+    static OverlayLayer()
+    {
+        IsHitTestVisibleProperty.OverrideDefaultValue<OverlayLayer>(false);
+    }
+
+    public OverlayLayer(NodeEditor editor)
+    {
+        Editor = editor;
+    }
+
+    public NodeEditor Editor { get; }
+
+    protected override Size MeasureOverride(Size availableSize) => Size.Zero;
+}
