@@ -22,6 +22,7 @@ public class MainView : KeybindingHandler
     {
         _vm = viewModel;
         DataContext = _vm;
+        _vm.ShowCommandEditorAction = ShowCommandEditor;
 
         _search = new TextBox()
             .Placeholder("Search pages (Ctrl+F)")
@@ -47,6 +48,14 @@ public class MainView : KeybindingHandler
                 .Children(TitleBar(), body.Row(1)));
     }
 
+    // The command editor in a dialog; changes apply at once and are saved (see CommandSettings).
+    private void ShowCommandEditor() =>
+        _ = new Dialog("Customize commands")
+            .Content(new KeybindingEditor().Width(1080).Height(580))
+            .AddButton("Close", DialogResult.Ok, isDefault: true, isCancel: true)
+            .MaxWidth(1160)
+            .ShowAsync(this);
+
     public override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
@@ -63,6 +72,13 @@ public class MainView : KeybindingHandler
         else if (_vm.CurrentPage != null && KeybindingManager.TryExecuteGesture(Group, e.Key, e.Modifiers, _vm.CurrentPage))
         {
             // Global keybindings declared on the current page's view model work wherever the focus is.
+            e.Handled = true;
+        }
+        else if (_vm.CurrentPage is { CommandGroup: { Length: > 0 } pageGroup } page && pageGroup != Group
+            && KeybindingManager.TryExecuteGesture(pageGroup, e.Key, e.Modifiers, page))
+        {
+            // The page runs its own shortcuts while the focus is on it (it is their KeybindingHandler); this makes
+            // single-key shortcuts work with the focus elsewhere too, e.g. in the navigation.
             e.Handled = true;
         }
     }
@@ -82,6 +98,7 @@ public class MainView : KeybindingHandler
             new MenuItem("_View").Items(
                 new MenuItem().Command(_vm.ToggleThemeCommand),
                 new MenuItem().Command(_vm.ToggleFpsOverlayCommand),
+                new MenuItem().Command(_vm.CustomizeCommandsCommand),
                 new Separator(),
                 new MenuItem("_Go to page").Icon(MaterialIconKind.Pageview).ItemsSource(_vm.Pages)),
             new MenuItem("_Help").Items(

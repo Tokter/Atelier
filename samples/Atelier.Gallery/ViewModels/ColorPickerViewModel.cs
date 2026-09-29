@@ -8,6 +8,9 @@ namespace Atelier.Gallery.ViewModels;
 
 public partial class ColorPickerViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "ColorPicker";
+
     private static readonly Color DefaultColor = Color.FromHex("#6750A4");
 
     [ObservableProperty]
@@ -49,11 +52,12 @@ public partial class ColorPickerViewModel : PageViewModel
     {
         PageIcon = MaterialIconKind.Palette;
         PageTitle = "Color Picker";
+        CommandGroup = Group;
         Keywords = "color colour picker wheel hex rgb rgba hsl hsb hsv alpha swatch slider gradient";
     }
 
     [RelayCommand]
-    [property: Command("Reset", "ColorPicker", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
+    [property: Command("Reset", Group, Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         PickedColor = DefaultColor;

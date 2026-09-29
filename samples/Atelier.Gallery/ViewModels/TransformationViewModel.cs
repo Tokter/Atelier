@@ -19,6 +19,9 @@ public enum TransformOriginPreset
 
 public partial class TransformationViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "Transformation";
+
     // Playground
     [ObservableProperty]
     private bool _useLayoutTransform;
@@ -78,6 +81,7 @@ public partial class TransformationViewModel : PageViewModel
     public TransformationViewModel()
     {
         PageTitle = "Transform & Zoom";
+        CommandGroup = Group;
         PageIcon = MaterialIconKind.CropRotate;
         Keywords = "transform rendertransform rotate scale skew translate origin matrix zoom hit testing";
     }
@@ -124,11 +128,11 @@ public partial class TransformationViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("CardClicked", "Transformation", Label = "Click me", Description = "Clicks and hit-testing follow the transform")]
+    [property: Command("CardClicked", Group, Label = "Click me", Description = "Clicks and hit-testing follow the transform")]
     private void CardClicked() => ClickCount++;
 
     [RelayCommand]
-    [property: Command("Preset", "Transformation", Label = "Apply preset", Description = "Apply this combination of rotation, skew and scale")]
+    [property: Command("Preset", Group, Label = "Apply preset", Description = "Apply this combination of rotation, skew and scale")]
     private void Preset(string name)
     {
         Reset();
@@ -155,7 +159,7 @@ public partial class TransformationViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("Reset", "Transformation", Label = "Reset transform", Icon = MaterialIcons.RestartAlt, Description = "Put the transform back to none")]
+    [property: Command("Reset", Group, Label = "Reset transform", Icon = MaterialIcons.RestartAlt, Description = "Put the transform back to none")]
     private void Reset()
     {
         UniformScale = true;
@@ -170,7 +174,7 @@ public partial class TransformationViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("SetZoom", "Transformation", Label = "Set zoom", Description = "Set the zoom of the layout transform")]
+    [property: Command("SetZoom", Group, Label = "Set zoom", Description = "Set the zoom of the layout transform")]
     private void SetZoom(string percent) => Zoom = float.Parse(percent, System.Globalization.CultureInfo.InvariantCulture) / 100f;
 
     private static float ToRadians(float degrees) => degrees * MathF.PI / 180f;

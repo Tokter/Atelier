@@ -206,6 +206,7 @@ public partial class KeybindingViewModel : PageViewModel
     public KeybindingViewModel()
     {
         PageTitle = "Keybindings";
+        CommandGroup = "Global"; // ResetDemos and ClearLog
         PageIcon = MaterialIconKind.Keyboard;
         Keywords = "keybinding keyboard shortcut hotkey chord gesture keybindinghandler";
 

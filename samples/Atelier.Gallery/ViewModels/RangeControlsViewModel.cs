@@ -9,6 +9,9 @@ namespace Atelier.Gallery.ViewModels;
 
 public partial class RangeControlsViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "RangeControls";
+
     private readonly DispatcherTimer _downloadTimer;
 
     [ObservableProperty]
@@ -69,13 +72,14 @@ public partial class RangeControlsViewModel : PageViewModel
     {
         PageIcon = MaterialIconKind.Tune;
         PageTitle = "Sliders & Progress";
+        CommandGroup = Group;
         Keywords = "slider progressbar progress range value indeterminate download";
 
         _downloadTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(50), (_, _) => AdvanceDownload());
     }
 
     [RelayCommand(CanExecute = nameof(CanStartDownload))]
-    [property: Command("StartDownload", "RangeControls", Label = "Download", Icon = MaterialIcons.Download, Description = "Start the simulated download")]
+    [property: Command("StartDownload", Group, Label = "Download", Icon = MaterialIcons.Download, Description = "Start the simulated download")]
     private void StartDownload()
     {
         DownloadProgress = 0;
@@ -87,7 +91,7 @@ public partial class RangeControlsViewModel : PageViewModel
     private bool CanStartDownload() => !IsDownloading;
 
     [RelayCommand(CanExecute = nameof(CanCancelDownload))]
-    [property: Command("CancelDownload", "RangeControls", Label = "Cancel", Icon = MaterialIcons.Cancel, Description = "Stop the download")]
+    [property: Command("CancelDownload", Group, Label = "Cancel", Icon = MaterialIcons.Cancel, Description = "Stop the download")]
     private void CancelDownload()
     {
         _downloadTimer.Stop();
@@ -110,7 +114,7 @@ public partial class RangeControlsViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("Reset", "RangeControls", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
+    [property: Command("Reset", Group, Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         ControlsEnabled = true;

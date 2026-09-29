@@ -62,6 +62,9 @@ public partial class FileEntry : ObservableObject
 
 public partial class DataGridViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "DataGrid";
+
     private static readonly (string Extension, string Type, long MaxSize)[] s_types =
     [
         (".png", "PNG image", 8_000_000), (".jpg", "JPEG image", 12_000_000), (".svg", "SVG drawing", 400_000),
@@ -107,6 +110,7 @@ public partial class DataGridViewModel : PageViewModel
     {
         PageIcon = MaterialIconKind.TableRows;
         PageTitle = "Data Grid";
+        CommandGroup = Group;
         Keywords = "datagrid data grid table listview columns sort filter virtualization virtualizing rows";
 
         var random = new Random(42);
@@ -153,7 +157,7 @@ public partial class DataGridViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("AddFile", "DataGrid", Label = "Add file", Icon = MaterialIcons.NoteAdd, Description = "Add a row to the bound collection")]
+    [property: Command("AddFile", Group, Label = "Add file", Icon = MaterialIcons.NoteAdd, Description = "Add a row to the bound collection")]
     private void AddFile()
     {
         var file = CreateFiles(new Random(), 1)[0];
@@ -162,7 +166,7 @@ public partial class DataGridViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("ClearFiles", "DataGrid", Label = "Clear", Icon = MaterialIcons.ClearAll, Description = "Remove all rows")]
+    [property: Command("ClearFiles", Group, Label = "Clear", Icon = MaterialIcons.ClearAll, Description = "Remove all rows")]
     private void ClearFiles()
     {
         SmallList.Clear();

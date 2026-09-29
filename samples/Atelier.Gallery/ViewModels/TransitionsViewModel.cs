@@ -25,6 +25,9 @@ public sealed record TransitionCard(string Title, string Subtitle, MaterialIconK
 
 public partial class TransitionsViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "Transitions";
+
     public IReadOnlyList<TransitionOption> Transitions { get; } =
     [
         new("Slide left", () => SlideTransition.Left()),
@@ -82,6 +85,7 @@ public partial class TransitionsViewModel : PageViewModel
     public TransitionsViewModel()
     {
         PageTitle = "Transitions";
+        CommandGroup = Group;
         PageIcon = MaterialIconKind.Animation;
         Keywords = "transition transitioningcontentcontrol animation slide fade zoom easing duration";
         _selectedTransition = Transitions[0];
@@ -98,11 +102,11 @@ public partial class TransitionsViewModel : PageViewModel
     partial void OnDurationMsChanged(float value) => OnPropertyChanged(nameof(Duration));
 
     [RelayCommand]
-    [property: Command("Next", "Transitions", Icon = MaterialIcons.ArrowForward, Description = "Show the next card with the chosen transition")]
+    [property: Command("Next", Group, Icon = MaterialIcons.ArrowForward, Description = "Show the next card with the chosen transition")]
     private void Next() => CardIndex = (CardIndex + 1) % Cards.Count;
 
     [RelayCommand]
-    [property: Command("Previous", "Transitions", Icon = MaterialIcons.ArrowBack, Description = "Show the previous card with the chosen transition")]
+    [property: Command("Previous", Group, Icon = MaterialIcons.ArrowBack, Description = "Show the previous card with the chosen transition")]
     private void Previous() => CardIndex = (CardIndex + Cards.Count - 1) % Cards.Count;
 
     public void OnTransitionStarted() => Status = $"Started: {++_started} · completed: {_completed}";

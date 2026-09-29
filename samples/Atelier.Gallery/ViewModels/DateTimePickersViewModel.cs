@@ -8,6 +8,9 @@ namespace Atelier.Gallery.ViewModels;
 
 public partial class DateTimePickersViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "DateTimePickers";
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DatesText))]
     private DateOnly? _dockedDate;
@@ -50,11 +53,12 @@ public partial class DateTimePickersViewModel : PageViewModel
     {
         PageIcon = MaterialIconKind.Event;
         PageTitle = "Date & Time Pickers";
+        CommandGroup = Group;
         Keywords = "date time picker calendar clock dial docked modal input 24h am pm hour minute";
     }
 
     [RelayCommand]
-    [property: Command("Reset", "DateTimePickers", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
+    [property: Command("Reset", Group, Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         DockedDate = null;

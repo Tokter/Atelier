@@ -42,6 +42,9 @@ public partial class SignUpForm : ObservableValidator
 
 public partial class TextBoxesViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "TextFields";
+
     public const int BioMaxLength = 80;
 
     [ObservableProperty]
@@ -71,6 +74,7 @@ public partial class TextBoxesViewModel : PageViewModel
     {
         PageIcon = MaterialIconKind.Edit;
         PageTitle = "Text Fields";
+        CommandGroup = Group;
         Keywords = "textbox text field input password label placeholder validation form";
     }
 
@@ -79,7 +83,7 @@ public partial class TextBoxesViewModel : PageViewModel
     public string BioCounter => $"{Bio.Length} / {BioMaxLength}";
 
     [RelayCommand]
-    [property: Command("Submit", "TextFields", Label = "Create account", Description = "Validate the form and show the result")]
+    [property: Command("Submit", Group, Label = "Create account", Description = "Validate the form and show the result")]
     private void Submit()
     {
         Form.Validate();
@@ -87,7 +91,7 @@ public partial class TextBoxesViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("Reset", "TextFields", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
+    [property: Command("Reset", Group, Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         ControlsEnabled = true;

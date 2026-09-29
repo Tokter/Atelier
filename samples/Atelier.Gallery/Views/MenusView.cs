@@ -31,7 +31,7 @@ public class MenusView : GalleryPage
     private UIElement MenuBarSection() => Ui.Section("Menu bar",
         "Click a header, then hover the others. The items only name their command: headers, access keys, icons and " +
         "shortcuts come from [property: Keybinding] on the view model's commands (group \"Menus\"). The shortcuts work " +
-        "while the focus is in this demo; Cut, Copy and Paste follow CanExecute and " +
+        "while the focus is on this page; Cut, Copy and Paste follow CanExecute and " +
         "Delete hides itself. Underscores in the headers are access keys: with the focus in the demo, press a letter in an " +
         "open menu. The gallery's own menu in the title bar opens with Alt or F10 and Alt+F/V/H.",
         new KeybindingHandler("Menus", new StackPanel().Spacing(12).Children(

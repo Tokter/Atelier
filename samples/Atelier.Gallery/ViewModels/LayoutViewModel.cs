@@ -9,6 +9,9 @@ namespace Atelier.Gallery.ViewModels;
 
 public partial class LayoutViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "Layout";
+
     // StackPanel
     [ObservableProperty]
     private bool _stackVertical;
@@ -118,12 +121,13 @@ public partial class LayoutViewModel : PageViewModel
     public LayoutViewModel()
     {
         PageTitle = "Layout Panels";
+        CommandGroup = Group;
         PageIcon = MaterialIconKind.Dashboard;
         Keywords = "stackpanel wrappanel dockpanel grid uniformgrid canvas border scrollviewer alignment margin visibility clip opacity layout";
     }
 
     [RelayCommand]
-    [property: Command("AddStackItem", "Layout", Label = "Add item", Icon = MaterialIcons.Add, Description = "Add a child to the stack panel")]
+    [property: Command("AddStackItem", Group, Label = "Add item", Icon = MaterialIcons.Add, Description = "Add a child to the stack panel")]
     private void AddStackItem()
     {
         if (StackItems.Count < 8)
@@ -133,7 +137,7 @@ public partial class LayoutViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("RemoveStackItem", "Layout", Label = "Remove item", Icon = MaterialIcons.Remove, Description = "Remove the last child of the stack panel")]
+    [property: Command("RemoveStackItem", Group, Label = "Remove item", Icon = MaterialIcons.Remove, Description = "Remove the last child of the stack panel")]
     private void RemoveStackItem()
     {
         if (StackItems.Count > 1)
@@ -143,7 +147,7 @@ public partial class LayoutViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("Reset", "Layout", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
+    [property: Command("Reset", Group, Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         SplitterShowsPreview = false;

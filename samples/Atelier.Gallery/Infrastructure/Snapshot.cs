@@ -20,7 +20,8 @@ namespace Atelier.Gallery.Infrastructure;
 /// Enabled with <c>ATELIER_GALLERY_SNAPSHOT=&lt;output directory&gt;</c>. Optional: <c>ATELIER_GALLERY_PAGES</c> (page
 /// indexes, comma-separated; all by default), <c>ATELIER_GALLERY_THEME=dark</c>, and <c>ATELIER_GALLERY_SIZE</c>
 /// (<c>WIDTHxHEIGHT</c>, 1280x860 by default; a taller size shows more of a page), <c>ATELIER_GALLERY_TOOLTIP</c> and
-/// <c>ATELIER_GALLERY_FILE_DIALOG</c> (see below), and <c>ATELIER_GALLERY_SEED</c> (<c>#RRGGBB[:Variant]</c>, a generated theme).
+/// <c>ATELIER_GALLERY_FILE_DIALOG</c> and <c>ATELIER_GALLERY_COMMAND_EDITOR</c> (see below), and <c>ATELIER_GALLERY_SEED</c>
+/// (<c>#RRGGBB[:Variant]</c>, a generated theme).
 /// </remarks>
 internal static class Snapshot
 {
@@ -85,6 +86,23 @@ internal static class Snapshot
                 {
                     var selected = System.Linq.Enumerable.FirstOrDefault(view.Entries, e => e.Name == "DataGrid.cs") ?? System.Linq.Enumerable.FirstOrDefault(view.Entries, e => !e.IsDirectory);
                     if (selected != null) view.FileList.SelectedItem = selected;
+                }
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    root.Measure(new Size(width, height));
+                    root.Arrange(new Rect(0, 0, width, height));
+                }
+            }
+
+            // ATELIER_GALLERY_COMMAND_EDITOR=Group/Name opens the command editor dialog with that command (and its group) selected.
+            if (Environment.GetEnvironmentVariable("ATELIER_GALLERY_COMMAND_EDITOR") is { Length: > 0 } command)
+            {
+                viewModel.CustomizeCommandsCommand.Execute(null);
+                var parts = command.Split('/');
+                if (parts.Length == 2 && Find<Dialog>(root) is { } dialog && Find<KeybindingEditor>(dialog) is { } editor)
+                {
+                    editor.ShowGroup(parts[0]);
+                    editor.Select(parts[0], parts[1]);
                 }
                 for (int pass = 0; pass < 2; pass++)
                 {
@@ -165,6 +183,16 @@ internal static class Snapshot
     }
 
     // Depth-first search for the index-th element with a tooltip.
+    private static T? Find<T>(VisualNode node) where T : class
+    {
+        if (node is T match) return match;
+        foreach (var child in node.Children)
+        {
+            if (Find<T>(child) is { } found) return found;
+        }
+        return null;
+    }
+
     private static UIElement? FindToolTipOwner(VisualNode node, ref int index)
     {
         if (node is UIElement element && ToolTipService.GetToolTip(element) != null && index-- == 0)

@@ -32,7 +32,7 @@ public class KeybindingView : GalleryPage
             new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetDemosCommand),
             new Button().Variant(ButtonVariant.Text).Command(_vm.ClearLogCommand));
 
-        Sections(ScopesSection(), ProbeSection(), CatalogSection());
+        Sections(ScopesSection(), ProbeSection(), EditorSection());
     }
 
     private UIElement ScopesSection() => Ui.Section("Scoped keybindings",
@@ -166,51 +166,16 @@ public class KeybindingView : GalleryPage
                     .OnClick(() => KeybindingManager.TryExecuteGesture("Player", Key.Space, ModifierKeys.None, _vm.Player))));
     }
 
-    private UIElement CatalogSection()
-    {
-        var bindings = KeybindingManager.RegisteredKeybindings.Values
-            .SelectMany(group => group.Values)
-            .OrderBy(b => b.Group == "Global" ? 0 : 1)
-            .ThenBy(b => b.Group)
-            .ThenBy(b => b.Name)
-            .ToList();
-
-        var table = new Grid()
-            .Columns(GridLength.Auto, GridLength.Auto, GridLength.Auto, GridLength.Star)
-            .Spacing(32, 10)
-            .Rows(Enumerable.Repeat(GridLength.Auto, bindings.Count + 1).ToArray());
-
-        table.Add(new TextBlock("Group").LabelLarge().Muted());
-        table.Add(new TextBlock("Command").LabelLarge().Muted().Column(1));
-        table.Add(new TextBlock("Gesture").LabelLarge().Muted().Column(2));
-        table.Add(new TextBlock("Description").LabelLarge().Muted().Column(3));
-        for (int i = 0; i < bindings.Count; i++)
-        {
-            var binding = bindings[i];
-            table.Add(new TextBlock(binding.Group).Row(i + 1).VerticalAlignment(VerticalAlignment.Center));
-            table.Add(new StackPanel().Orientation(Orientation.Horizontal).Spacing(10).Row(i + 1).Column(1).Children(
-                Icon.FromSource(binding.Icon, 20).VerticalAlignment(VerticalAlignment.Center),
-                new StackPanel().VerticalAlignment(VerticalAlignment.Center).Children(
-                    new TextBlock(AccessText.Parse(binding.Label, out _)),
-                    new TextBlock(binding.Name).BodySmall().Muted())));
-            table.Add(KeyCaps(binding.Keybinding).Row(i + 1).Column(2).VerticalAlignment(VerticalAlignment.Center));
-            table.Add(new TextBlock(binding.Description).BodyMedium().Muted().TextWrapping()
-                .Row(i + 1).Column(3).VerticalAlignment(VerticalAlignment.Center));
-        }
-
-        var conflicts = KeybindingManager.GetConflicts();
-        string conflictText = conflicts.Count == 0
-            ? "No conflicts: no gesture is bound twice or both alone and as a chord prefix in the same group."
-            : "Conflicts: " + string.Join("; ", conflicts.Select(c =>
-                $"{c.First.Name} and {c.Second.Name} in {c.Group}{(c.IsPrefix ? " (one is a prefix of the other)" : " (same gesture)")}"));
-
-        return Ui.Section("Registered commands",
-            "All commands the source generator registered, with their icon, label, name, shortcut and description, read " +
-            "from KeybindingManager.RegisteredKeybindings. " +
-            "GetConflicts reports gestures bound twice within a group.",
-            table,
-            Ui.Note(conflictText));
-    }
+    private UIElement EditorSection() => Ui.Section("Customize commands",
+        "A KeybindingEditor lists every registered command. Select one to change its label, icon or shortcut: click the " +
+        "shortcut field and press the keys (a second stroke makes a chord). Changes apply at once to buttons, menus, " +
+        "tooltips and the shortcuts, and are saved with KeybindingManager.ExportCustomizations; the gallery keeps them in " +
+        "%APPDATA%\\Atelier\\Gallery\\commands.json. The View menu opens the same editor in a dialog (Ctrl+K, Ctrl+S).",
+        new KeybindingEditor().Height(620),
+        Ui.Code("new KeybindingEditor()\n\n" +
+                "// Save and restore the user's changes\n" +
+                "File.WriteAllText(path, KeybindingManager.ExportCustomizations());\n" +
+                "KeybindingManager.ImportCustomizations(File.ReadAllText(path));"));
 
     private UIElement LogView() =>
         new Border()
@@ -240,31 +205,5 @@ public class KeybindingView : GalleryPage
         frame.OnPropertyChanged(UIElement.IsFocusedProperty, (_, _, focused) =>
             frame.BorderBrush = focused ? ThemeColors.Current.Primary : ThemeColors.Current.OutlineVariant);
         return frame;
-    }
-
-    /// <summary>A gesture shown as key caps, e.g. "Ctrl" "K".</summary>
-    private static UIElement KeyCaps(string gesture)
-    {
-        var row = new WrapPanel().Spacing(4, 4);
-        string[] strokes = gesture.Split(',', System.StringSplitOptions.TrimEntries | System.StringSplitOptions.RemoveEmptyEntries);
-        for (int i = 0; i < strokes.Length; i++)
-        {
-            if (i > 0)
-            {
-                row.Add(new TextBlock("then").BodySmall().Muted().Margin(4, 0).VerticalAlignment(VerticalAlignment.Center));
-            }
-
-            foreach (string key in strokes[i].Split('+', System.StringSplitOptions.TrimEntries | System.StringSplitOptions.RemoveEmptyEntries))
-            {
-                row.Add(new Border()
-                    .Padding(8, 2)
-                    .CornerRadius(6)
-                    .BorderThickness(1)
-                    .Themed(Border.BorderBrushProperty, c => c.OutlineVariant)
-                    .Themed(Border.BackgroundProperty, c => c.SurfaceContainerHighest)
-                    .Child(new TextBlock(key).FontFamily(Ui.MonospaceFont).FontSize(12)));
-            }
-        }
-        return row;
     }
 }

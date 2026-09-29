@@ -16,6 +16,9 @@ public sealed record Destination(string City, string Country, MaterialIconKind I
 
 public partial class ComboBoxViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "ComboBox";
+
     private int _nextTag = 4;
 
     [ObservableProperty]
@@ -47,6 +50,7 @@ public partial class ComboBoxViewModel : PageViewModel
     {
         PageIcon = MaterialIconKind.ArrowDropDownCircle;
         PageTitle = "ComboBox";
+        CommandGroup = Group;
         Keywords = "combobox select dropdown picker";
         Destination = Destinations[1];
     }
@@ -67,7 +71,7 @@ public partial class ComboBoxViewModel : PageViewModel
     public string[] Numbers { get; } = Enumerable.Range(1, 60).Select(i => $"Item {i:00}").ToArray();
 
     [RelayCommand]
-    [property: Command("AddTag", "ComboBox", Label = "Add", Icon = MaterialIcons.Add, Description = "Add a tag to the bound collection; the drop-down updates")]
+    [property: Command("AddTag", Group, Label = "Add", Icon = MaterialIcons.Add, Description = "Add a tag to the bound collection; the drop-down updates")]
     private void AddTag()
     {
         string tag = $"Tag {_nextTag++}";
@@ -76,7 +80,7 @@ public partial class ComboBoxViewModel : PageViewModel
     }
 
     [RelayCommand(CanExecute = nameof(CanRemoveTag))]
-    [property: Command("RemoveTag", "ComboBox", Label = "Remove selected", Icon = MaterialIcons.Delete, Description = "Remove the selected tag from the collection")]
+    [property: Command("RemoveTag", Group, Label = "Remove selected", Icon = MaterialIcons.Delete, Description = "Remove the selected tag from the collection")]
     private void RemoveTag()
     {
         if (SelectedTag != null)
@@ -88,11 +92,11 @@ public partial class ComboBoxViewModel : PageViewModel
     private bool CanRemoveTag() => SelectedTag != null;
 
     [RelayCommand]
-    [property: Command("OpenDropDown", "ComboBox", Label = "Open drop-down", Description = "Set IsDropDownOpen from the view model")]
+    [property: Command("OpenDropDown", Group, Label = "Open drop-down", Description = "Set IsDropDownOpen from the view model")]
     private void OpenDropDown() => IsDropDownOpen = true;
 
     [RelayCommand]
-    [property: Command("Reset", "ComboBox", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
+    [property: Command("Reset", Group, Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         ControlsEnabled = true;

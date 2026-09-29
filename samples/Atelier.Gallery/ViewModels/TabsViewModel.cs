@@ -24,6 +24,9 @@ public partial class DocumentTab : ObservableObject
 
 public partial class TabsViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "Tabs";
+
     private int _untitled;
 
     public ObservableCollection<DocumentTab> Documents { get; } = [];
@@ -50,6 +53,7 @@ public partial class TabsViewModel : PageViewModel
     {
         PageIcon = MaterialIconKind.Tab;
         PageTitle = "Tabs";
+        CommandGroup = Group;
         Keywords = "tab tabs tabcontrol tabitem browser close reorder drag header template";
         Documents.CollectionChanged += (_, _) => UpdateOrder();
         Reset();
@@ -66,7 +70,7 @@ public partial class TabsViewModel : PageViewModel
     };
 
     [RelayCommand]
-    [property: Command("Reset", "Tabs", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
+    [property: Command("Reset", Group, Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         _untitled = 0;

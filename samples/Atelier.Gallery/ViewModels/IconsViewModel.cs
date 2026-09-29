@@ -12,6 +12,9 @@ public sealed record IconItemInfo(MaterialIconKind Kind, string Name);
 
 public partial class IconsViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "Icons";
+
     private const int PageSize = 64;
 
     private static readonly IconItemInfo[] _allIcons = CreateCatalog();
@@ -69,6 +72,7 @@ public partial class IconsViewModel : PageViewModel
     {
         PageIcon = MaterialIconKind.Mood;
         PageTitle = "Icons & Images";
+        CommandGroup = Group;
         Keywords = "icon material symbols glyph svg path image picture stretch bitmap";
         ApplyFilter();
     }
@@ -121,7 +125,7 @@ public partial class IconsViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("ShowMore", "Icons", Label = "Show more", Icon = MaterialIcons.ExpandMore, Description = "Show the next icons of the catalog")]
+    [property: Command("ShowMore", Group, Label = "Show more", Icon = MaterialIcons.ExpandMore, Description = "Show the next icons of the catalog")]
     private void ShowMore()
     {
         DisplayLimit += PageSize;
@@ -129,19 +133,19 @@ public partial class IconsViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("ClearSearch", "Icons", Label = "Clear", Description = "Clear the search and show all icons")]
+    [property: Command("ClearSearch", Group, Label = "Clear", Description = "Clear the search and show all icons")]
     private void ClearSearch() => SearchText = string.Empty;
 
     [RelayCommand]
-    [property: Command("SelectIcon", "Icons", Label = "Select icon", Description = "Load the icon into the playground")]
+    [property: Command("SelectIcon", Group, Label = "Select icon", Description = "Load the icon into the playground")]
     private void SelectIcon(MaterialIconKind kind) => Kind = kind;
 
     [RelayCommand]
-    [property: Command("ToggleFilled", "Icons", Label = "Toggle filled", Icon = MaterialIcons.FormatColorFill, Description = "Switch the playground icon between outlined and filled")]
+    [property: Command("ToggleFilled", Group, Label = "Toggle filled", Icon = MaterialIcons.FormatColorFill, Description = "Switch the playground icon between outlined and filled")]
     private void ToggleFilled() => Fill = Fill >= 0.5f ? 0f : 1f;
 
     [RelayCommand]
-    [property: Command("Reset", "Icons", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
+    [property: Command("Reset", Group, Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         Kind = MaterialIconKind.Favorite;

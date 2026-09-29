@@ -14,6 +14,9 @@ public enum QualitySetting
 
 public partial class CheckboxesViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "SelectionControls";
+
     [ObservableProperty]
     private bool _controlsEnabled = true;
 
@@ -77,15 +80,16 @@ public partial class CheckboxesViewModel : PageViewModel
     {
         PageIcon = MaterialIconKind.CheckBox;
         PageTitle = "Selection Controls";
+        CommandGroup = Group;
         Keywords = "checkbox radio button switch toggle tri-state";
     }
 
     [RelayCommand]
-    [property: Command("ToggleNotifications", "SelectionControls", Label = "Toggle from the view model", Description = "Change EnableNotifications in the view model; the check box follows its binding")]
+    [property: Command("ToggleNotifications", Group, Label = "Toggle from the view model", Description = "Change EnableNotifications in the view model; the check box follows its binding")]
     private void ToggleNotifications() => EnableNotifications = !EnableNotifications;
 
     [RelayCommand]
-    [property: Command("ToggleWireless", "SelectionControls", Label = "Toggle both", Description = "Switch Wi-Fi and Bluetooth in the view model")]
+    [property: Command("ToggleWireless", Group, Label = "Toggle both", Description = "Switch Wi-Fi and Bluetooth in the view model")]
     private void ToggleWireless()
     {
         bool target = !(WifiEnabled && BluetoothEnabled);
@@ -94,7 +98,7 @@ public partial class CheckboxesViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("Reset", "SelectionControls", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
+    [property: Command("Reset", Group, Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         ControlsEnabled = true;

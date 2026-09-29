@@ -1,20 +1,24 @@
 using Atelier.Controls;
 using Atelier.Core.Primitives;
+using Atelier.Core.Properties;
 using Atelier.Core.Tree;
 using Atelier.Layout;
 using Atelier.Markup;
+using Atelier.Gallery.ViewModels;
 
 namespace Atelier.Gallery.Infrastructure;
 
 /// <summary>
 /// The layout every gallery page shares: a header with the page's icon, title, description and optional page-wide
-/// settings, followed by the page's sections, all in one scrolling column.
+/// settings, followed by the page's sections, all in one scrolling column. It is the <see cref="KeybindingHandler"/> of
+/// its view model's <see cref="PageViewModel.CommandGroup"/>, so the shortcuts of the page's commands work while the focus
+/// is on the page (and single keys from anywhere in the window; see MainView).
 /// </summary>
 /// <remarks>
 /// Pages derive from this class, call the constructor with their header texts, and add their content with
 /// <see cref="Settings"/> and <see cref="Sections"/>, usually built with the <see cref="Ui"/> helpers.
 /// </remarks>
-public class GalleryPage : ContentControl
+public class GalleryPage : KeybindingHandler
 {
     private readonly StackPanel _column;
     private readonly WrapPanel _settings;
@@ -44,6 +48,17 @@ public class GalleryPage : ContentControl
                 .Spacing(28)
                 .Margin(32, 24, 32, 32)
                 .Children(header, _column));
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>The page's view model (its DataContext) sets the keybinding group.</remarks>
+    protected override void OnPropertyValueChanged<T>(BindableProperty<T> property, T oldValue, T newValue)
+    {
+        base.OnPropertyValueChanged(property, oldValue, newValue);
+        if (ReferenceEquals(property, DataContextProperty))
+        {
+            Group = (DataContext as PageViewModel)?.CommandGroup ?? string.Empty;
+        }
     }
 
     /// <summary>

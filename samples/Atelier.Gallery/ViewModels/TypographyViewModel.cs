@@ -9,6 +9,9 @@ namespace Atelier.Gallery.ViewModels;
 
 public partial class TypographyViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "Typography";
+
     public const string DefaultSampleText =
         "The quick brown fox jumps over the lazy dog. Good typography makes text easy to read, at every size.";
 
@@ -81,6 +84,7 @@ public partial class TypographyViewModel : PageViewModel
     {
         PageIcon = MaterialIconKind.TextFields;
         PageTitle = "Typography";
+        CommandGroup = Group;
         Keywords = "textblock text font type scale typography weight bold italic wrap trimming ellipsis line height";
     }
 
@@ -99,15 +103,15 @@ public partial class TypographyViewModel : PageViewModel
     partial void OnFontWeightChanged(float value) => OnPropertyChanged(nameof(EffectiveFontWeight));
 
     [RelayCommand]
-    [property: Command("ToggleBold", "Typography", Label = "Toggle bold", Icon = MaterialIcons.FormatBold, Description = "Make the samples bold, or normal again")]
+    [property: Command("ToggleBold", Group, Label = "Toggle bold", Icon = MaterialIcons.FormatBold, Description = "Make the samples bold, or normal again")]
     private void ToggleBold() => IsBold = !IsBold;
 
     [RelayCommand]
-    [property: Command("ToggleItalic", "Typography", Label = "Toggle italic", Icon = MaterialIcons.FormatItalic, Description = "Make the samples italic, or upright again")]
+    [property: Command("ToggleItalic", Group, Label = "Toggle italic", Icon = MaterialIcons.FormatItalic, Description = "Make the samples italic, or upright again")]
     private void ToggleItalic() => IsItalic = !IsItalic;
 
     [RelayCommand]
-    [property: Command("Reset", "Typography", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
+    [property: Command("Reset", Group, Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         SampleText = DefaultSampleText;

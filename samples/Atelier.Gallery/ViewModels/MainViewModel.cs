@@ -33,6 +33,9 @@ public partial class MainViewModel : ObservableObject
     /// <summary>Set by the window: shows or hides the frame-rate overlay.</summary>
     public Action? ToggleFpsOverlayAction { get; set; }
 
+    /// <summary>Set by the view: shows the command editor.</summary>
+    public Action? ShowCommandEditorAction { get; set; }
+
     public MainViewModel()
     {
         _allPages =
@@ -121,6 +124,11 @@ public partial class MainViewModel : ObservableObject
     [property: Command("ToggleFpsOverlay", "Global", Label = "_FPS overlay", Icon = MaterialIcons.Speed,
         Description = "Show or hide the frame rate", DefaultKeybinding = "Ctrl+Shift+F")]
     private void ToggleFpsOverlay() => ToggleFpsOverlayAction?.Invoke();
+
+    [RelayCommand]
+    [property: Command("CustomizeCommands", "Global", Label = "_Customize commands…", Icon = MaterialIcons.Tune,
+        Description = "Change the labels, icons and shortcuts of the commands", DefaultKeybinding = "Ctrl+K, Ctrl+S")]
+    private void CustomizeCommands() => ShowCommandEditorAction?.Invoke();
 
     private void UpdateThemeToggle()
     {

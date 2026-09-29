@@ -10,6 +10,9 @@ namespace Atelier.Gallery.ViewModels;
 
 public partial class DialogHostViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "Dialogs";
+
     private readonly List<string> _dialogEvents = [];
 
     // Dialogs
@@ -72,6 +75,7 @@ public partial class DialogHostViewModel : PageViewModel
     public DialogHostViewModel()
     {
         PageTitle = "Popups & Dialogs";
+        CommandGroup = Group;
         PageIcon = MaterialIconKind.WebAsset;
         Keywords = "dialog dialoghost popup modal overlay flyout menu placement confirm alert";
     }
@@ -92,15 +96,15 @@ public partial class DialogHostViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("ToggleLocalHost", "Dialogs", Label = "Close all", Description = "Close the dialogs of the local host (enabled while it is open)")]
+    [property: Command("ToggleLocalHost", Group, Label = "Close all", Description = "Close the dialogs of the local host (enabled while it is open)")]
     private void ToggleLocalHost() => IsLocalHostOpen = !IsLocalHostOpen;
 
     [RelayCommand]
-    [property: Command("TogglePlacementPopup", "Dialogs", Label = "Open popup", Description = "Open or close the popup placed at this button")]
+    [property: Command("TogglePlacementPopup", Group, Label = "Open popup", Description = "Open or close the popup placed at this button")]
     private void TogglePlacementPopup() => IsPlacementPopupOpen = !IsPlacementPopupOpen;
 
     [RelayCommand]
-    [property: Command("Reset", "Dialogs", Label = "Reset options", Icon = MaterialIcons.RestartAlt, Description = "Put the dialog options back as they were")]
+    [property: Command("Reset", Group, Label = "Reset options", Icon = MaterialIcons.RestartAlt, Description = "Put the dialog options back as they were")]
     private void Reset()
     {
         CloseOnEscape = true;

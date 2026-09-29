@@ -18,6 +18,9 @@ public enum InspectedObject
 
 public partial class PropertyGridViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "PropertyGrid";
+
     private static readonly Color[] Palette =
     [
         Color.FromHex("#6750A4"), Color.FromHex("#006A6A"), Color.FromHex("#B3261E"),
@@ -69,6 +72,7 @@ public partial class PropertyGridViewModel : PageViewModel
     public PropertyGridViewModel()
     {
         PageTitle = "Property Grid";
+        CommandGroup = Group;
         PageIcon = MaterialIconKind.Tune;
         Keywords = "propertygrid property grid inspector editor properties";
     }
@@ -83,7 +87,7 @@ public partial class PropertyGridViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("RandomizeShape", "PropertyGrid", Label = "Change shape in code", Icon = MaterialIcons.Shuffle, Description = "Change the shape in the view model; the grid follows")]
+    [property: Command("RandomizeShape", Group, Label = "Change shape in code", Icon = MaterialIcons.Shuffle, Description = "Change the shape in the view model; the grid follows")]
     private void RandomizeShape()
     {
         Inspected = InspectedObject.Shape;
@@ -96,7 +100,7 @@ public partial class PropertyGridViewModel : PageViewModel
     }
 
     [RelayCommand]
-    [property: Command("Reset", "PropertyGrid", Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
+    [property: Command("Reset", Group, Icon = MaterialIcons.RestartAlt, Description = "Put the demos of this page back as they were")]
     private void Reset()
     {
         Shape.Reset();

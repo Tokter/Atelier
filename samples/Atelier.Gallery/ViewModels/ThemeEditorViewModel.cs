@@ -88,6 +88,9 @@ public partial class ThemeRoleRow : ObservableObject
 
 public partial class ThemeEditorViewModel : PageViewModel
 {
+    /// <summary>The keybinding group of this page's commands.</summary>
+    public const string Group = "ThemeEditor";
+
     private bool _isSyncing;
 
     [ObservableProperty]
@@ -114,6 +117,7 @@ public partial class ThemeEditorViewModel : PageViewModel
     {
         PageIcon = MaterialIconKind.FormatPaint;
         PageTitle = "Theme Editor";
+        CommandGroup = Group;
         Keywords = "theme editor color scheme accent seed palette tonal light dark mode primary secondary tertiary surface role customize";
 
         Roles = CreateRoles();
@@ -196,23 +200,23 @@ public partial class ThemeEditorViewModel : PageViewModel
     partial void OnIsDarkChanged(bool value) => GalleryTheme.IsDark = value;
 
     [RelayCommand]
-    [property: Command("UsePreset", "ThemeEditor", Label = "Use preset", Description = "Generate the light and dark schemes from this accent color")]
+    [property: Command("UsePreset", Group, Label = "Use preset", Description = "Generate the light and dark schemes from this accent color")]
     private void UsePreset(AccentPreset preset) => SeedColor = preset.Color;
 
     [RelayCommand]
-    [property: Command("Reset", "ThemeEditor", Label = "Reset to baseline", Icon = MaterialIcons.RestartAlt, Description = "Go back to the Material 3 baseline schemes, in light and dark")]
+    [property: Command("Reset", Group, Label = "Reset to baseline", Icon = MaterialIcons.RestartAlt, Description = "Go back to the Material 3 baseline schemes, in light and dark")]
     private void Reset() => GalleryTheme.Reset();
 
     [RelayCommand]
-    [property: Command("CopyLight", "ThemeEditor", Label = "Copy the light scheme", Icon = MaterialIcons.ContentCopy, Description = "Copy the light scheme with every role as C#")]
+    [property: Command("CopyLight", Group, Label = "Copy the light scheme", Icon = MaterialIcons.ContentCopy, Description = "Copy the light scheme with every role as C#")]
     private void CopyLight() => CopyScheme(false);
 
     [RelayCommand]
-    [property: Command("CopyDark", "ThemeEditor", Label = "Copy the dark scheme", Icon = MaterialIcons.ContentCopy, Description = "Copy the dark scheme with every role as C#")]
+    [property: Command("CopyDark", Group, Label = "Copy the dark scheme", Icon = MaterialIcons.ContentCopy, Description = "Copy the dark scheme with every role as C#")]
     private void CopyDark() => CopyScheme(true);
 
     [RelayCommand]
-    [property: Command("CopySeedCode", "ThemeEditor", Label = "Copy this code", Icon = MaterialIcons.ContentCopy, Description = "Copy the FromSeed code to the clipboard")]
+    [property: Command("CopySeedCode", Group, Label = "Copy this code", Icon = MaterialIcons.ContentCopy, Description = "Copy the FromSeed code to the clipboard")]
     private void CopySeedCode()
     {
         Clipboard.SetText(SeedCode);

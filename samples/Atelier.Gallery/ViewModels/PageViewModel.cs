@@ -12,6 +12,12 @@ public partial class PageViewModel : ObservableObject
     [ObservableProperty]
     private string _pageTitle = "Untitled Page";
 
+    /// <summary>
+    /// The keybinding group of the page's commands (their [Command] group): the page runs their shortcuts while it is
+    /// shown (see GalleryPage). <c>null</c> if the page has none of its own.
+    /// </summary>
+    public string? CommandGroup { get; protected set; }
+
     /// <summary>Extra words the navigation search matches, such as the names of the controls on the page.</summary>
     public string Keywords { get; protected set; } = string.Empty;
 
