@@ -25,6 +25,7 @@ public class NodeViewModel : NodeGraphObject
     private bool _isMuted;
     private bool _isSelected;
     private object? _content;
+    private string? _error;
 
     /// <summary>Initializes a node.</summary>
     public NodeViewModel(string title = "Node")
@@ -90,6 +91,13 @@ public class NodeViewModel : NodeGraphObject
     {
         get => _isSelected;
         set => SetProperty(ref _isSelected, value);
+    }
+
+    /// <summary>Gets or sets what went wrong with the node, shown on it; <c>null</c> when nothing did. Evaluation sets it for computing nodes.</summary>
+    public string? Error
+    {
+        get => _error;
+        set => SetProperty(ref _error, value);
     }
 
     /// <summary>Gets or sets what is shown between the title bar and the sockets: an element, or a view model the editor finds a template for.</summary>
