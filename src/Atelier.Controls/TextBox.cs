@@ -1526,7 +1526,19 @@ public class TextBox : Control
             e.Handled = true;
             InvalidateVisual();
         }
+        else if (!readOnly && IsCharacterKey(key) && (e.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows)) == 0)
+        {
+            // The key types a character (it arrives as text input): keep it from running single-key shortcuts such as
+            // a node editor's "X".
+            e.Handled = true;
+        }
     }
+
+    private static bool IsCharacterKey(Key key) => key is
+        (>= Key.A and <= Key.Z) or (>= Key.D0 and <= Key.D9) or (>= Key.NumPad0 and <= Key.NumPad9) or
+        Key.Space or Key.Minus or Key.Equal or Key.Comma or Key.Period or Key.Slash or Key.Semicolon or Key.Apostrophe or
+        Key.LeftBracket or Key.RightBracket or Key.Backslash or Key.GraveAccent or
+        Key.NumPadAdd or Key.NumPadSubtract or Key.NumPadMultiply or Key.NumPadDivide or Key.NumPadDecimal;
 
     private void HandleNavigationKey(Key key, bool shift, bool ctrl)
     {
