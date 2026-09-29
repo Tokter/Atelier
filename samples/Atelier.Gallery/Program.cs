@@ -67,7 +67,11 @@ internal static class Program
             .Register<TransitionsViewModel>(vm => new TransitionsView(vm))
             .Register<PropertyGridViewModel>(vm => new PropertyGridView(vm))
             .Register<KeybindingViewModel>(vm => new KeybindingView(vm))
-            .Register<ThemeEditorViewModel>(vm => new ThemeEditorView(vm));
+            .Register<ThemeEditorViewModel>(vm => new ThemeEditorView(vm))
+            .Register<NodeEditorViewModel>(vm => new NodeEditorView(vm))
+            // The node editor page's node contents.
+            .Register<MathSettings>(NodeEditorView.MathSettingsView)
+            .Register<ViewerDisplay>(NodeEditorView.ViewerDisplayView);
 
     /// <summary>
     /// Opens a gallery window with its own view model. Works before and while the application runs.

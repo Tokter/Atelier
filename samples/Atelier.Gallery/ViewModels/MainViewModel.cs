@@ -68,6 +68,7 @@ public partial class MainViewModel : ObservableObject
             new PropertyGridViewModel(),
             new KeybindingViewModel(),
             new ThemeEditorViewModel(),
+            new NodeEditorViewModel(),
         ];
 
         // The navigation lists the pages alphabetically.
