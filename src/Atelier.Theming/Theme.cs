@@ -204,6 +204,55 @@ public abstract class Theme
     /// <see cref="ThemeManager.Current"/>, so creating a theme has no global side effects.
     /// </summary>
     public StyleCollection Styles { get; } = new();
+
+    // The extensions (see ThemeExtensions) already applied to this theme.
+    internal HashSet<Action<Theme>> AppliedExtensions { get; } = new();
+}
+
+/// <summary>
+/// Lets libraries with controls of their own (such as a node editor) add their renderers and styles to themes, since a
+/// theme only knows the controls of the libraries it was built with.
+/// </summary>
+/// <remarks>
+/// An extension is applied once to each theme: to the current one when it's registered, and to every other theme when it
+/// becomes <see cref="ThemeManager.Current"/>. It can check the theme's type (for example for a Material theme's colors)
+/// and should fall back to a neutral look for themes it doesn't know.
+/// </remarks>
+public static class ThemeExtensions
+{
+    private static readonly List<Action<Theme>> s_extensions = new();
+
+    /// <summary>Registers <paramref name="extend"/>, which adds renderers and styles to a theme; registering it again does nothing.</summary>
+    public static void Register(Action<Theme> extend)
+    {
+        ArgumentNullException.ThrowIfNull(extend);
+        lock (s_extensions)
+        {
+            if (s_extensions.Contains(extend)) return;
+            s_extensions.Add(extend);
+        }
+        if (ThemeManager.HasTheme)
+        {
+            var theme = ThemeManager.Current;
+            ApplyTo(theme);
+            StyleManager.ThemeStyles.ReplaceAll(theme.Styles);
+        }
+    }
+
+    /// <summary>Applies the registered extensions that <paramref name="theme"/> doesn't have yet.</summary>
+    public static void ApplyTo(Theme theme)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+        Action<Theme>[] extensions;
+        lock (s_extensions)
+        {
+            extensions = s_extensions.ToArray();
+        }
+        foreach (var extend in extensions)
+        {
+            if (theme.AppliedExtensions.Add(extend)) extend(theme);
+        }
+    }
 }
 
 /// <summary>
@@ -217,7 +266,7 @@ public static class ThemeManager
     public static event Action<Theme>? ThemeChanged;
 
     /// <summary>
-    /// Gets or sets the active theme. Setting it installs the theme's <see cref="Theme.Styles"/> as
+    /// Gets or sets the active theme. Setting it applies the registered <see cref="ThemeExtensions"/> to the theme, installs its <see cref="Theme.Styles"/> as
     /// <see cref="StyleManager.ThemeStyles"/> (windows then restyle their trees) and raises <see cref="ThemeChanged"/>.
     /// </summary>
     /// <exception cref="InvalidOperationException">Reading it before a theme was set.</exception>
@@ -230,6 +279,7 @@ public static class ThemeManager
             if (_currentTheme != value)
             {
                 _currentTheme = value;
+                ThemeExtensions.ApplyTo(value);
                 StyleManager.ThemeStyles.ReplaceAll(value.Styles);
                 ThemeChanged?.Invoke(value);
             }

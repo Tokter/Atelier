@@ -450,6 +450,67 @@ public readonly ref struct DrawingContext
         Canvas.DrawPath(path, paint);
     }
 
+    [ThreadStatic] private static SKPaint? t_roundStrokePaint;
+
+    // A reused antialiased stroke paint with round caps and joins; the caller clears any shader after drawing.
+    private static SKPaint GetRoundStrokePaint(float strokeWidth)
+    {
+        var paint = t_roundStrokePaint ??= new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeCap = SKStrokeCap.Round,
+            StrokeJoin = SKStrokeJoin.Round,
+        };
+        paint.StrokeWidth = strokeWidth;
+        return paint;
+    }
+
+    /// <summary>
+    /// Strokes an arc of the circle around <paramref name="center"/> with round ends, from <paramref name="startAngle"/>
+    /// through <paramref name="sweepAngle"/> degrees, both clockwise from the right (3 o'clock).
+    /// </summary>
+    public void DrawArc(in Point center, float radius, float startAngle, float sweepAngle, in Color color, float strokeWidth)
+    {
+        if (color.A == 0 || radius <= 0 || strokeWidth <= 0 || sweepAngle == 0) return;
+        var paint = GetRoundStrokePaint(strokeWidth);
+        paint.Color = ToSkColor(ApplyOpacity(color));
+        Canvas.DrawArc(new SKRect(center.X - radius, center.Y - radius, center.X + radius, center.Y + radius), startAngle, sweepAngle, false, paint);
+    }
+
+    /// <summary>Strokes <paramref name="path"/> with round ends and joins.</summary>
+    public void DrawRoundPathOutline(SKPath path, in Color color, float strokeWidth)
+    {
+        if (color.A == 0 || strokeWidth <= 0) return;
+        var paint = GetRoundStrokePaint(strokeWidth);
+        paint.Color = ToSkColor(ApplyOpacity(color));
+        Canvas.DrawPath(path, paint);
+    }
+
+    /// <summary>
+    /// Strokes <paramref name="path"/> with round ends and joins in a linear gradient from <paramref name="startColor"/>
+    /// at <paramref name="start"/> to <paramref name="endColor"/> at <paramref name="end"/>.
+    /// </summary>
+    public void DrawRoundPathOutline(SKPath path, in Point start, in Point end, in Color startColor, in Color endColor, float strokeWidth)
+    {
+        if (strokeWidth <= 0 || (startColor.A == 0 && endColor.A == 0)) return;
+        if (startColor == endColor || start == end)
+        {
+            DrawRoundPathOutline(path, startColor, strokeWidth);
+            return;
+        }
+        using var shader = SKShader.CreateLinearGradient(
+            new SKPoint(start.X, start.Y), new SKPoint(end.X, end.Y),
+            [ToSkColor(ApplyOpacity(startColor)), ToSkColor(ApplyOpacity(endColor))], SKShaderTileMode.Clamp);
+        var paint = GetRoundStrokePaint(strokeWidth);
+        paint.Color = SKColors.White;
+        paint.Shader = shader;
+        Canvas.DrawPath(path, paint);
+        paint.Shader = null;
+    }
+
+    private static SKColor ToSkColor(in Color c) => new(c.R, c.G, c.B, c.A);
+
     public void DrawImage(SKImage? image, in Rect destRect, float opacity = 1.0f)
     {
         if (image == null || destRect.Width <= 0 || destRect.Height <= 0) return;

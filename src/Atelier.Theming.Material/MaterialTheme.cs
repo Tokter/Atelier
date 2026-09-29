@@ -48,6 +48,7 @@ public class MaterialTheme : Theme
         renderers.Register(new MaterialSwitchRenderer(colors, Sizing));
         renderers.Register(new MaterialTextBoxRenderer(colors));
         renderers.Register(new MaterialSliderRenderer(colors, Sizing));
+        renderers.Register(new MaterialKnobRenderer(colors));
         renderers.Register(new MaterialColorSliderRenderer(colors));
         renderers.Register(new MaterialColorWheelRenderer(colors));
         renderers.Register(new MaterialColorSwatchRenderer(colors));
