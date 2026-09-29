@@ -131,11 +131,11 @@ public class PointerKeybindingTests : IDisposable
     [Fact]
     public void DragCommands_SharingAGesture_PickByWhereTheDragStarts()
     {
-        var onInner = new RecordingDragCommand(start => start.Source == _inner);
+        var onInner = new RecordingDragCommand(start => start.Source == _inner, contextual: true);
         var anywhere = new RecordingDragCommand(_ => true);
         Register("MoveInner", "LeftDrag", onInner);
         Register("Other", "LeftDrag", anywhere);
-        Assert.Empty(KeybindingManager.GetConflicts());
+        Assert.Empty(KeybindingManager.GetConflicts()); // the first only takes drags on the inner border
 
         _handler.Content = new Canvas();
         ((Canvas)_handler.Content).Add(_inner);
@@ -162,6 +162,18 @@ public class PointerKeybindingTests : IDisposable
     }
 
     [Fact]
+    public void ADragCommandThatTakesEveryDrag_ShadowsLaterOnes()
+    {
+        var everywhere = new RecordingDragCommand(_ => true);
+        var later = new RecordingDragCommand(_ => true, contextual: true);
+        Register("Pan", "MiddleDrag", everywhere);
+        Register("Tool", "MiddleDrag", later);
+        var conflict = Assert.Single(KeybindingManager.GetConflicts());
+        Assert.Equal("Pan", conflict.First.Name);
+        Assert.Equal("Tool", conflict.Second.Name);
+    }
+
+    [Fact]
     public void SameClickGestures_StillConflict()
     {
         Register("A", "RightClick", new CountingCommand());
@@ -175,8 +187,10 @@ public class PointerKeybindingTests : IDisposable
         public override void Execute(object? parameter) => Count++;
     }
 
-    private sealed class RecordingDragCommand(Func<DragStart, bool> applies) : DragCommand
+    private sealed class RecordingDragCommand(Func<DragStart, bool> applies, bool contextual = false) : DragCommand
     {
+        public override bool IsContextual => contextual;
+
         public List<string> Log { get; } = [];
 
         public override IDragOperation? BeginDrag(DragStart start)

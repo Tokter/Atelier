@@ -13,11 +13,19 @@ namespace Atelier.Core.Keybinding;
 /// </summary>
 /// <remarks>
 /// Several drag commands of a group can share a gesture: the first one whose <see cref="BeginDrag"/> returns an operation
-/// runs, so each can decide by where the drag starts (<see cref="DragStart.Source"/>), like Blender's tools. Drag
+/// runs, so each can decide by where the drag starts (<see cref="DragStart.Source"/>), like Blender's tools. Such commands
+/// say so with <see cref="IsContextual"/>; the order they're registered in decides which is asked first. Drag
 /// commands can't run from a menu or the command palette.
 /// </remarks>
 public interface IDragCommand : ICommand
 {
+    /// <summary>
+    /// Gets whether the command only applies where some drags start (over its kind of element), so that another drag
+    /// command with the same gesture registered after it still runs elsewhere. A command that takes every drag (such as
+    /// panning) returns <c>false</c>, and the keybinding editor reports any later command with its gesture as shadowed.
+    /// </summary>
+    bool IsContextual => false;
+
     /// <summary>Starts a drag, or returns <c>null</c> if the command doesn't apply to it (for example not over its kind of element).</summary>
     IDragOperation? BeginDrag(DragStart start);
 }
@@ -77,6 +85,9 @@ public sealed class DragStart
 /// </summary>
 public abstract class DragCommand : AtelierCommand, IDragCommand
 {
+    /// <inheritdoc/>
+    public virtual bool IsContextual => false;
+
     /// <inheritdoc/>
     public abstract IDragOperation? BeginDrag(DragStart start);
 

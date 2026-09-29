@@ -257,7 +257,9 @@ public static partial class KeybindingManager
     /// <summary>
     /// Finds keybindings that shadow each other within a group: identical key sequences (only the first registered one
     /// fires) and single keybindings that are the first stroke of a chord (the chord can never be completed). Drag
-    /// commands sharing a pointer gesture don't conflict: each applies where its drags start (see <see cref="IDragCommand"/>).
+    /// commands sharing a pointer gesture only conflict when the earlier one applies everywhere: one that only applies where
+    /// its drags start (<see cref="IDragCommand.IsContextual"/>) leaves the other places to the next (see
+    /// <see cref="IDragCommand"/>).
     /// </summary>
     /// <returns>The conflicts, in registration order.</returns>
     public static IReadOnlyList<KeybindingConflict> GetConflicts()
@@ -285,7 +287,13 @@ public static partial class KeybindingManager
         conflict = null!;
         var sa = GetParsedSequence(a.Keybinding);
         var sb = GetParsedSequence(b.Keybinding);
-        if (sa == null || sb == null || (a.Command is IDragCommand && b.Command is IDragCommand))
+        if (sa == null || sb == null)
+        {
+            return false;
+        }
+
+        // A drag command that only applies where its drags start (a) leaves the other places to the next one (b).
+        if (a.Command is IDragCommand { IsContextual: true } && b.Command is IDragCommand)
         {
             return false;
         }
