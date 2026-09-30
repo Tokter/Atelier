@@ -13,7 +13,13 @@ namespace Atelier.Gallery.Views;
 
 public class TimelineView : GalleryPage
 {
-    private static readonly string[] Tracks = ["Drums", "Bass", "Keys"];
+    // Each track: its sound, color and the bars its clips start at.
+    private static readonly (string Name, WaveformData Sound, int Color, int[] Bars)[] Tracks =
+    [
+        ("Drums", TimelineSounds.Drums, 1, [.. Enumerable.Range(1, 16), .. Enumerable.Range(33, 16)]),
+        ("Bass", TimelineSounds.Bass, 5, [9, 13, 17, 21, 25, 29, 49, 53]),
+        ("Keys", TimelineSounds.Pad, 6, [17, 25, 33, 41]),
+    ];
 
     private readonly TimelineViewModel _vm;
     private readonly TimelineRuler _ruler;
@@ -43,9 +49,12 @@ public class TimelineView : GalleryPage
             tracks.Children(new Border()
                 .Row(i + 1).Padding(12, 0).Margin(0, 1, 0, 0)
                 .Themed(Border.BackgroundProperty, c => c.SurfaceContainerHigh)
-                .Child(new TextBlock(Tracks[i]).LabelLarge().VerticalAlignment(VerticalAlignment.Center)));
-            var lane = new TimelineLane().Timeline(_vm.Song).Row(i + 1).Column(1).Margin(0, 1, 0, 0).BindMode(_vm, v => v.Mode);
-            if (Tracks[i] == "Bass") lane.Markers(_vm.BassDrop);
+                .Child(new TextBlock(Tracks[i].Name).LabelLarge().VerticalAlignment(VerticalAlignment.Center)));
+            var (name, sound, colorIndex, bars) = Tracks[i];
+            var color = TimelineMarker.Palette[colorIndex].Color;
+            var clips = new TimelinePanel().Children(bars.Select(bar => Clip(name, sound, TimelinePosition.Bar(_vm.Song.TempoMap, bar), color)).ToArray());
+            var lane = new TimelineLane { Content = clips }.Timeline(_vm.Song).Row(i + 1).Column(1).Margin(0, 1, 0, 0).BindMode(_vm, v => v.Mode);
+            if (name == "Bass") lane.Markers(_vm.BassDrop);
             tracks.Children(lane);
         }
 
@@ -53,15 +62,33 @@ public class TimelineView : GalleryPage
             "Like Bitwig's ruler: drag it up or down to zoom around the point you grabbed and sideways to scroll, turn " +
             "the wheel over it to zoom, double-click it to see the whole song, and right-click it to choose what it " +
             "counts in. Over the lanes, Ctrl+Alt+wheel zooms, Shift+wheel and middle drag scroll, and = and - zoom " +
-            "once a lane has the focus. All of these are commands you can rebind.",
+            "once a lane has the focus. All of these are commands you can rebind. Each lane holds a TimelinePanel of clips: a " +
+            "WaveformView in a box, placed on a bar and as long as its sound. The drum clips all share one WaveformData, " +
+            "and zooming in far enough shows the single samples.",
             new Border().CornerRadius(8).ClipToBounds(true).Child(tracks),
             Ui.Row(
                 new Button("Zoom to fit").Variant(ButtonVariant.Outlined).OnClick(() => _ruler.ZoomToFit()),
                 Ui.Readout(_vm, v => v.ViewText)),
             Ui.Code("var song = new TimelineContext { TempoMap = TempoMap.Constant(120) };\n" +
                     "new TimelineRuler().Timeline(song).SecondaryMode(TimelineRulerMode.Time);\n" +
-                    "new TimelineLane().Timeline(song).Height(56);   // zooms and scrolls with the ruler"));
+                    "new TimelineLane { Content = new TimelinePanel().Children(\n" +
+                    "    new Border().TimelineRange(TimelinePosition.Bar(song.TempoMap, 9), TimelinePosition.Seconds(drums.Duration))\n" +
+                    "        .Child(new WaveformView().Source(drums))) }.Timeline(song);   // zooms and scrolls with the ruler"));
     }
+
+    // A clip: a tinted box with the sound's name over its waveform, starting on a bar and as long as the sound.
+    private static Border Clip(string name, WaveformData sound, TimelinePosition start, Color color) =>
+        new Border()
+            .CornerRadius(4)
+            .Margin(0, 2)
+            .ClipToBounds(true)
+            .Background(color.WithAlpha(0.18f))
+            .BorderBrush(color.WithAlpha(0.6f))
+            .BorderThickness(1)
+            .TimelineRange(start, TimelinePosition.Seconds(sound.Duration))
+            .Child(new Grid().Rows("13,*").Children(
+                new TextBlock(name).FontSize(10).Margin(4, 0, 0, 0).Foreground(color),
+                new WaveformView().Source(sound).Foreground(color).Row(1)));
 
     private UIElement TransportSection() => Ui.Section("Markers, loop and playback",
         "Click the ruler to move the play start marker (the triangle); clicks and drags snap to the finest ticks in view, " +

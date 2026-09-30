@@ -25,6 +25,8 @@ public static class AudioTheme
         ArgumentNullException.ThrowIfNull(theme);
         theme.Renderers.Register(new TimelineRulerRenderer());
         theme.Renderers.Register(new TimelineLaneRenderer());
+        theme.Renderers.Register(new TimelineLaneOverlayRenderer());
+        theme.Renderers.Register(new WaveformViewRenderer());
         if (theme is MaterialTheme material)
         {
             theme.Renderers.Register(new MaterialKnobRenderer(material.Colors));
@@ -39,7 +41,8 @@ public static class AudioTheme
     /// <summary>
     /// Creates the styles for a Material theme: a surface-container ruler with on-surface labels, on-surface-variant
     /// ticks and second row, and surface-container-low lanes with outline-variant grid lines; the loop in primary, the
-    /// playhead and play start in tertiary, and markers without a color of their own in secondary.
+    /// playhead and play start in tertiary, markers without a color of their own in secondary, and waveforms in primary
+    /// with outline-variant zero lines.
     /// </summary>
     public static List<Style> CreateMaterialStyles(MaterialColorScheme colors, bool isDark)
     {
@@ -55,7 +58,9 @@ public static class AudioTheme
             laneMajorLine: colors.OutlineVariant.WithAlpha(isDark ? 0.9f : 1f),
             marker: colors.Secondary,
             loop: colors.Primary,
-            playhead: colors.Tertiary);
+            playhead: colors.Tertiary,
+            waveform: colors.Primary,
+            centerLine: colors.OutlineVariant);
     }
 
     /// <summary>Creates the styles for other themes, in neutral grays.</summary>
@@ -74,11 +79,14 @@ public static class AudioTheme
             laneMajorLine: gray.WithAlpha(0.55f),
             marker: Color.FromRgb(0xFB, 0x8C, 0x00),
             loop: Color.FromRgb(0x42, 0x85, 0xF4),
-            playhead: Color.FromRgb(0xE5, 0x39, 0x35));
+            playhead: Color.FromRgb(0xE5, 0x39, 0x35),
+            waveform: isDark ? Color.FromRgb(0x64, 0xB5, 0xF6) : Color.FromRgb(0x19, 0x76, 0xD2),
+            centerLine: gray.WithAlpha(0.4f));
     }
 
     private static List<Style> CreateStyles(Color rulerBackground, Color laneBackground, Color label, Color secondaryLabel,
-        Color rulerLine, Color rulerMajorLine, Color laneLine, Color laneMajorLine, Color marker, Color loop, Color playhead) =>
+        Color rulerLine, Color rulerMajorLine, Color laneLine, Color laneMajorLine, Color marker, Color loop, Color playhead,
+        Color waveform, Color centerLine) =>
     [
         new Style(typeof(TimelineRuler))
             .Set(Control.BackgroundProperty, rulerBackground)
@@ -98,5 +106,8 @@ public static class AudioTheme
             .Set(TimelineControl.MarkerColorProperty, marker)
             .Set(TimelineControl.LoopColorProperty, loop)
             .Set(TimelineControl.PlayheadColorProperty, playhead),
+        new Style(typeof(WaveformView))
+            .Set(Control.ForegroundProperty, waveform)
+            .Set(WaveformView.CenterLineColorProperty, centerLine),
     ];
 }

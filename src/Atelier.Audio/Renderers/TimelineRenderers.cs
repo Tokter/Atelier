@@ -214,8 +214,8 @@ public sealed class TimelineRulerRenderer : ControlRenderer<TimelineRuler>
 /// <summary>
 /// Draws a <see cref="TimelineLane"/>: its background; a vertical line per tick of its grid (labeled and emphasized ticks
 /// in <see cref="TimelineControl.MajorLineColor"/>, medium ticks in <see cref="TimelineControl.LineColor"/> and the finest
-/// at half its opacity); the loop's shade while it's on; a line per marker (shared and its own) in the marker's color;
-/// and the playhead.
+/// at half its opacity) and the loop's shade while it's on, all behind the lane's content; over the content, a line per
+/// marker (shared and its own) in the marker's color, and the playhead.
 /// </summary>
 public sealed class TimelineLaneRenderer : ControlRenderer<TimelineLane>
 {
@@ -243,6 +243,20 @@ public sealed class TimelineLaneRenderer : ControlRenderer<TimelineLane>
         }
 
         TimelineDrawing.LoopShade(ref context, lane, width, 0, height);
+    }
+}
+
+/// <summary>Draws the markers and the playhead of a <see cref="TimelineLane"/> over its content.</summary>
+internal sealed class TimelineLaneOverlayRenderer : ControlRenderer<TimelineLaneOverlay>
+{
+    public override void Render(TimelineLaneOverlay overlay, ref DrawingContext context)
+    {
+        var lane = overlay.Lane;
+        float width = overlay.Bounds.Width;
+        float height = overlay.Bounds.Height;
+        if (width <= 0 || height <= 0) return;
+
+        using var clip = context.PushClip(new Rect(0, 0, width, height));
         var map = lane.CurrentTimeline.TempoMap;
         if (lane.ShowSharedMarkers)
         {
