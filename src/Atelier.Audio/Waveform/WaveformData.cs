@@ -12,9 +12,10 @@ public readonly record struct WaveformPeak(float Min, float Max);
 /// <remarks>
 /// <para>
 /// The peak pyramid holds the min and max of blocks of <see cref="FirstBlockSize"/> samples, then of blocks twice as
-/// long, and so on up to the whole sound: about a quarter as many values again as there are samples. It's built once,
-/// when the data is created; share one <see cref="WaveformData"/> between every <see cref="WaveformView"/> that shows the
-/// same sound, such as the copies of a sample placed along a song.
+/// long, and so on up to the whole sound: about a quarter as many values again as there are samples. Running sums of
+/// squares per block give the RMS of any range (<see cref="GetRms"/>). Both are built once, when the data is created;
+/// share one <see cref="WaveformData"/> between every <see cref="WaveformView"/> that shows the same sound, such as the
+/// copies of a sample placed along a song.
 /// </para>
 /// <para>
 /// The data is immutable: it keeps the sample arrays it's given, so don't change them afterwards. Decoding audio files is
@@ -35,6 +36,7 @@ public sealed class WaveformData
     private readonly float[][] _channels;
     // _levels[channel][level] holds min/max pairs of blocks of FirstBlockSize << level samples.
     private readonly WaveformPeak[][][] _levels;
+    private readonly double[][] _squareSums;
 
     /// <summary>Creates the data from one sample array per channel, all equally long.</summary>
     /// <param name="channels">The samples of each channel (at least one); the arrays are kept, not copied.</param>
@@ -54,7 +56,12 @@ public sealed class WaveformData
         _channels = channels;
         SampleRate = sampleRate;
         _levels = new WaveformPeak[channels.Length][][];
-        for (int c = 0; c < channels.Length; c++) _levels[c] = BuildLevels(channels[c]);
+        _squareSums = new double[channels.Length][];
+        for (int c = 0; c < channels.Length; c++)
+        {
+            _levels[c] = BuildLevels(channels[c]);
+            _squareSums[c] = BuildSquareSums(channels[c]);
+        }
     }
 
     /// <summary>Creates the data from interleaved samples (frame by frame: left, right, left, right, …).</summary>
@@ -129,7 +136,54 @@ public sealed class WaveformData
         return new WaveformPeak(min, max);
     }
 
+    /// <summary>
+    /// Gets the root mean square (the average level, which follows loudness better than peaks) of a channel from sample
+    /// <paramref name="start"/> up to (not including) <paramref name="end"/>, clipped to the sound; 0 when nothing of it
+    /// is in the sound.
+    /// </summary>
+    /// <remarks>
+    /// Exact, in constant time: whole blocks of <see cref="FirstBlockSize"/> samples come from running sums of squares,
+    /// and the ends are read sample by sample.
+    /// </remarks>
+    public float GetRms(int channel, long start, long end)
+    {
+        start = Math.Max(0, start);
+        end = Math.Min(SampleCount, end);
+        if (end <= start) return 0;
+
+        var samples = _channels[channel];
+        long firstBlock = (start + FirstBlockSize - 1) >> BlockShift;
+        long lastBlock = end >> BlockShift;
+        double sum = 0;
+        if (firstBlock >= lastBlock)
+        {
+            for (long i = start; i < end; i++) sum += (double)samples[i] * samples[i];
+        }
+        else
+        {
+            for (long i = start; i < firstBlock << BlockShift; i++) sum += (double)samples[i] * samples[i];
+            sum += _squareSums[channel][lastBlock] - _squareSums[channel][firstBlock];
+            for (long i = lastBlock << BlockShift; i < end; i++) sum += (double)samples[i] * samples[i];
+        }
+        return (float)Math.Sqrt(Math.Max(0, sum) / (end - start));
+    }
+
     private const int BlockShift = 4; // log2(FirstBlockSize)
+
+    // The sums of the squares of the samples before each block boundary: [b] covers samples 0 to b × FirstBlockSize.
+    private static double[] BuildSquareSums(float[] samples)
+    {
+        int blocks = samples.Length >> BlockShift;
+        var sums = new double[blocks + 1];
+        double sum = 0;
+        for (int b = 0; b < blocks; b++)
+        {
+            int from = b << BlockShift;
+            for (int i = from; i < from + FirstBlockSize; i++) sum += (double)samples[i] * samples[i];
+            sums[b + 1] = sum;
+        }
+        return sums;
+    }
 
     private static void Include(float value, ref float min, ref float max)
     {

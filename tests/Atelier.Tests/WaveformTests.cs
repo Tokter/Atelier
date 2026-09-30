@@ -184,13 +184,13 @@ public class WaveformRenderingTests
     }
 
     // The waveform of `sound` drawn 300 × 60 at `samplesPerPixel`, scrolled to `start` seconds: which pixels are lit.
-    private static bool[,] Render(WaveformData sound, double samplesPerPixel, double start)
+    private static bool[,] Render(WaveformData sound, double samplesPerPixel, double start, int threshold = 128)
     {
         using var _ = ActiveTheme.Use(MaterialTheme.CreateDark());
         var song = new TimelineContext { PixelsPerSecond = 48000 / samplesPerPixel };
         song.Start = start;
         var view = new WaveformView { Source = sound, Foreground = Color.White };
-        var panel = new TimelinePanel { Timeline = song }.Children(new Border { Child = view }.TimelineRange(TimelinePosition.Seconds(0), TimelinePosition.Seconds(1)));
+        var panel = new TimelinePanel { Timeline = song }.Children(new Border { Child = view }.TimelineRange(TimelinePosition.Seconds(0), TimelinePosition.Seconds(sound.Duration)));
         panel.Measure(new Size(300, 60));
         panel.Arrange(new Rect(0, 0, 300, 60));
         using var bitmap = new SkiaSharp.SKBitmap(300, 60);
@@ -202,7 +202,7 @@ public class WaveformRenderingTests
         var lit = new bool[300, 60];
         for (int x = 0; x < 300; x++)
         {
-            for (int y = 0; y < 60; y++) lit[x, y] = bitmap.GetPixel(x, y).Red > 128;
+            for (int y = 0; y < 60; y++) lit[x, y] = bitmap.GetPixel(x, y).Red > threshold;
         }
         return lit;
     }
@@ -232,6 +232,48 @@ public class WaveformRenderingTests
             return true;
         }
         Assert.True(Matches(0) || Matches(1), "the columns should show the same samples, at most a pixel apart");
+    }
+
+    [Fact]
+    public void ZoomedOut_ASteadyLowTone_IsAFlatFilledEnvelope_WithoutMoire()
+    {
+        // 55 Hz at 100 px/s: a cycle is less than two pixel columns, which made the tops of the columns zigzag.
+        var samples = new float[48000 * 8];
+        for (int i = 0; i < samples.Length; i++) samples[i] = (float)(0.8 * Math.Sin(2 * Math.PI * 55 * i / 48000));
+        var sound = new WaveformData([samples], 48000);
+        foreach (double samplesPerPixel in new[] { 480.0, 300, 1000 })
+        {
+            var lit = Render(sound, samplesPerPixel, 0.5, threshold: 40);
+            int? highest = null, lowest = null;
+            for (int x = 0; x < 300; x++)
+            {
+                Assert.True(lit[x, 30] && lit[x, 29], $"a hole in the middle at column {x} ({samplesPerPixel} samples per pixel)");
+                int top = Enumerable.Range(0, 60).First(y => lit[x, y]);
+                highest = Math.Min(highest ?? top, top);
+                lowest = Math.Max(lowest ?? top, top);
+            }
+            Assert.True(lowest - highest <= 1, $"the top edge varies by {lowest - highest} px ({samplesPerPixel} samples per pixel)");
+        }
+    }
+
+    [Fact]
+    public void TheRms_ShowsInsideTheZoomedOutEnvelope_AndNotZoomedIn()
+    {
+        var samples = new float[48000 * 8];
+        for (int i = 0; i < samples.Length; i++) samples[i] = (float)(0.8 * Math.Sin(2 * Math.PI * 55 * i / 48000));
+        var sound = new WaveformData([samples], 48000);
+        Assert.Equal(0.8 / Math.Sqrt(2), sound.GetRms(0, 0, 48000), 3);
+
+        // Zoomed out: the peaks are dim and the RMS (about 70% of the peak) bright inside them.
+        var bright = Render(sound, 480, 0.5, threshold: 200);
+        var dim = Render(sound, 480, 0.5, threshold: 40);
+        int brightTop = Enumerable.Range(0, 60).First(y => bright[100, y]);
+        int dimTop = Enumerable.Range(0, 60).First(y => dim[100, y]);
+        Assert.True(brightTop > dimTop + 2, "the RMS band should sit inside the peak envelope");
+
+        // Zoomed in, the waveform's own shape shows in full color: no bright band hides it.
+        var zoomedIn = Render(sound, 8, 0.5, threshold: 200);
+        Assert.Contains(Enumerable.Range(0, 300), x => !zoomedIn[x, 20] && zoomedIn[x, 45]);
     }
 
     [Fact]

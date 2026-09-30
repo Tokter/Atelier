@@ -7,14 +7,16 @@ namespace Atelier.Audio.Renderers;
 /// <summary>
 /// Draws a <see cref="WaveformView"/>: its background, a zero line per channel, and the waveform in
 /// <see cref="Atelier.Controls.Control.Foreground"/>: from <see cref="WaveformView.LineSamplesPerPixel"/> samples per
-/// pixel a min/max bar per pixel column, else an antialiased line through the samples (with dots from
+/// pixel the peak envelope with the RMS inside, else an antialiased line through the samples (with dots from
 /// <see cref="WaveformView.SampleDotSpacing"/> pixels per sample). Only columns that are both visible (inside the canvas
 /// clip) and inside the sound are drawn.
 /// </summary>
 /// <remarks>
-/// To avoid aliasing, the bars show the exact peaks of their samples (see <see cref="WaveformData.GetPeak"/>), each bar
-/// also covers the next bar's first sample so neighbors always touch, and the bars sit on a pixel grid fixed to the
-/// sound, so scrolling doesn't change which samples a bar shows (the waveform moves in whole pixels instead).
+/// To avoid aliasing and moiré, each column of the envelope is filled through zero from the exact peaks of its samples
+/// (see <see cref="WaveformData.GetPeak"/>), reaching the next column's first sample so neighbors always touch; zoomed
+/// out, columns take their peaks from <see cref="WaveformView.EnvelopeWindow"/> around them. The columns sit on a pixel
+/// grid fixed to the sound, so scrolling doesn't change which samples a column shows (the waveform moves in whole
+/// pixels instead).
 /// </remarks>
 public sealed class WaveformViewRenderer : ControlRenderer<WaveformView>
 {
@@ -61,27 +63,54 @@ public sealed class WaveformViewRenderer : ControlRenderer<WaveformView>
 
             if (samplesPerPixel >= WaveformView.LineSamplesPerPixel)
             {
-                // The columns sit on a grid fixed to the sound, its first sample on a whole pixel: scrolling by a fraction
-                // of a pixel moves the waveform a whole pixel at times instead of changing which samples each column
-                // shows (which makes the waveform shimmer).
-                double origin = Math.Round(-timeAtZero * pixelsPerSecond);
-                for (int x = (int)Math.Floor(from); x < (int)Math.Ceiling(to); x++)
-                {
-                    long start = Math.Max(firstSample, (long)Math.Floor((x - origin) * samplesPerPixel));
-                    // Up to and including the next column's first sample, so neighboring columns always touch.
-                    long end = Math.Min(endSample, (long)Math.Floor((x + 1 - origin) * samplesPerPixel) + 1);
-                    if (end <= start) continue;
-                    var peak = combined ? CombinedPeak(source, start, end) : source.GetPeak(row, start, end);
-                    float top = center - Math.Clamp(peak.Max, -1, 1) * scale;
-                    float bottom = center - Math.Clamp(peak.Min, -1, 1) * scale;
-                    context.DrawRect(new Rect(x, top, 1, Math.Max(1, bottom - top)), color);
-                }
+                DrawEnvelope(ref context, view, source, combined ? -1 : row, timeAtZero, pixelsPerSecond, from, to, firstSample, endSample, center, scale, color);
             }
             else
             {
                 DrawSamples(ref context, source, combined ? -1 : row, timeAtZero, pixelsPerSecond, from, to, firstSample, endSample, center, scale, color);
             }
         }
+    }
+
+    // The peak envelope, a column per pixel filled from its lowest to its highest sample through zero, with the RMS inside.
+    private static void DrawEnvelope(ref DrawingContext context, WaveformView view, WaveformData source, int channel, double timeAtZero,
+        double pixelsPerSecond, double from, double to, long firstSample, long endSample, float center, float scale, Color color)
+    {
+        double samplesPerPixel = source.SampleRate / pixelsPerSecond;
+        // The columns sit on a grid fixed to the sound, its first sample on a whole pixel: scrolling by a fraction of a
+        // pixel moves the waveform a whole pixel at times instead of changing which samples each column shows.
+        double origin = Math.Round(-timeAtZero * pixelsPerSecond);
+        // How many columns on each side the smoothed values come from, so they span at least the envelope window.
+        double windowSamples = WaveformView.EnvelopeWindow * source.SampleRate;
+        int smoothing = (int)Math.Max(0, Math.Ceiling((windowSamples / samplesPerPixel - 1) / 2));
+        // Zooming out, the smoothed envelope and the RMS fade in over an octave up to EnvelopeSamplesPerPixel: closer in,
+        // the columns show their own peaks (the waveform's shape) in full color, which the RMS would hide.
+        double envelope = Math.Clamp(Math.Log2(samplesPerPixel / WaveformView.EnvelopeSamplesPerPixel) + 1, 0, 1);
+        int peakSmoothing = (int)Math.Round(smoothing * envelope);
+        bool rms = view.ShowRms && envelope > 0;
+        var peakColor = rms ? color.WithAlpha(color.A / 255f * (1 - (1 - view.PeakOpacity) * (float)envelope)) : color;
+        var rmsColor = color.WithAlpha(color.A / 255f * (float)envelope);
+
+        for (int x = (int)Math.Floor(from); x < (int)Math.Ceiling(to); x++)
+        {
+            // Up to and including the next column's first sample, so neighboring columns always touch.
+            long start = Math.Max(firstSample, Bin(x - peakSmoothing));
+            long end = Math.Min(endSample, Bin(x + 1 + peakSmoothing) + 1);
+            if (end <= start) continue;
+            var peak = channel < 0 ? CombinedPeak(source, start, end) : source.GetPeak(channel, start, end);
+            // Through zero, so a column that only sees part of a cycle doesn't leave a hole in the middle.
+            float top = center - Math.Clamp(Math.Max(peak.Max, 0), 0, 1) * scale;
+            float bottom = center - Math.Clamp(Math.Min(peak.Min, 0), -1, 0) * scale;
+            context.DrawRect(new Rect(x, top, 1, Math.Max(1, bottom - top)), peakColor);
+
+            if (!rms) continue;
+            long rmsStart = Math.Max(firstSample, Bin(x - smoothing));
+            long rmsEnd = Math.Min(endSample, Bin(x + 1 + smoothing));
+            float level = Math.Min(1, channel < 0 ? CombinedRms(source, rmsStart, rmsEnd) : source.GetRms(channel, rmsStart, rmsEnd)) * scale;
+            if (level > 0.25f) context.DrawRect(new Rect(x, center - level, 1, 2 * level), rmsColor);
+        }
+
+        long Bin(int column) => (long)Math.Floor((column - origin) * samplesPerPixel);
     }
 
     // A line through the samples in view (and one beyond each side), with dots when they're far enough apart.
@@ -113,6 +142,14 @@ public sealed class WaveformViewRenderer : ControlRenderer<WaveformView>
             max = Math.Max(max, peak.Max);
         }
         return new WaveformPeak(min, max);
+    }
+
+    // The loudest channel's RMS.
+    private static float CombinedRms(WaveformData source, long start, long end)
+    {
+        float level = 0;
+        for (int c = 0; c < source.ChannelCount; c++) level = Math.Max(level, source.GetRms(c, start, end));
+        return level;
     }
 
     // The channel with the largest magnitude, so a combined view shows the loudest signal.

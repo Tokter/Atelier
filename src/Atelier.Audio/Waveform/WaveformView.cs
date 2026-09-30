@@ -17,8 +17,8 @@ public enum WaveformChannelLayout
 
 /// <summary>
 /// A lightweight, read-only waveform: draws part of a sound (<see cref="Source"/>, from <see cref="SourceStart"/> for
-/// <see cref="SourceLength"/> seconds) across its bounds, as min/max peaks, or as the samples themselves when zoomed in
-/// far enough.
+/// <see cref="SourceLength"/> seconds) across its bounds, like a DAW: as a peak envelope with its RMS inside, or as the
+/// samples themselves when zoomed in far enough.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -28,9 +28,18 @@ public enum WaveformChannelLayout
 /// after it and a shorter one cuts it off. Many views can share one <see cref="WaveformData"/>.
 /// </para>
 /// <para>
-/// Drawing takes time proportional to the visible width, whatever the length of the sound: each pixel column reads the
-/// peak pyramid, and only the columns inside the clip region are drawn. With fewer than one sample per pixel it draws a
-/// line through the samples, with a dot on each from <see cref="SampleDotSpacing"/> pixels per sample.
+/// From <see cref="LineSamplesPerPixel"/> samples per pixel it draws the peak envelope: each pixel column is filled from
+/// its lowest to its highest sample, always through zero, so the shape's top edge connects the positive peaks and its
+/// bottom edge the negative ones. Zoomed out further (from <see cref="EnvelopeSamplesPerPixel"/>), each column takes its
+/// peaks from at least <see cref="EnvelopeWindow"/> seconds around it, so it always spans whole cycles of low notes and
+/// the outline doesn't break into moiré patterns that change with the zoom. With <see cref="ShowRms"/>, the envelope is
+/// drawn at <see cref="PeakOpacity"/> and the RMS over the same window (the average level) in full color inside it.
+/// Below <see cref="LineSamplesPerPixel"/> it draws a line through the samples, with a dot on each from
+/// <see cref="SampleDotSpacing"/> pixels per sample.
+/// </para>
+/// <para>
+/// Drawing takes time proportional to the visible width, whatever the length of the sound: each pixel column is one
+/// exact query of the <see cref="WaveformData"/>, and only the columns inside the clip region are drawn.
 /// </para>
 /// <para>
 /// The waveform is drawn in <see cref="Control.Foreground"/> over <see cref="Control.Background"/>, with a
@@ -63,11 +72,32 @@ public class WaveformView : Control
     public static readonly BindableProperty<Color> CenterLineColorProperty =
         BindableProperty.Register<WaveformView, Color>(nameof(CenterLineColor), Color.Transparent, options: PropertyOptions.AffectsRender);
 
+    /// <summary>Identifies the <see cref="ShowRms"/> property.</summary>
+    public static readonly BindableProperty<bool> ShowRmsProperty =
+        BindableProperty.Register<WaveformView, bool>(nameof(ShowRms), true, options: PropertyOptions.AffectsRender);
+
+    /// <summary>Identifies the <see cref="PeakOpacity"/> property.</summary>
+    public static readonly BindableProperty<float> PeakOpacityProperty =
+        BindableProperty.Register<WaveformView, float>(nameof(PeakOpacity), 0.5f, options: PropertyOptions.AffectsRender, validateValue: v => v >= 0 && v <= 1);
+
     /// <summary>
-    /// The samples per pixel below which the view draws a line through the samples instead of a min/max bar per pixel
-    /// column: with only a few samples per column, the bars look jagged and broken up.
+    /// The samples per pixel below which the view draws a line through the samples instead of the peak envelope: with
+    /// only a few samples per column, the envelope looks jagged and broken up.
     /// </summary>
     public const double LineSamplesPerPixel = 4;
+
+    /// <summary>
+    /// The samples per pixel from which each column of the peak envelope takes its peaks from at least
+    /// <see cref="EnvelopeWindow"/> around it (about 375 px/s at 48 kHz). Closer in, each column shows its own peaks, so
+    /// transients stay sharp.
+    /// </summary>
+    public const double EnvelopeSamplesPerPixel = 128;
+
+    /// <summary>
+    /// The seconds of sound (at least) a column of the zoomed-out peak envelope and every column of the RMS take their
+    /// values from: 25 ms, a cycle of a 40 Hz tone.
+    /// </summary>
+    public const double EnvelopeWindow = 0.025;
 
     /// <summary>The pixels per sample from which each sample gets a dot.</summary>
     public const float SampleDotSpacing = 6f;
@@ -94,6 +124,15 @@ public class WaveformView : Control
 
     /// <summary>Gets or sets the color of the zero line of each channel; transparent (the default) for none.</summary>
     public Color CenterLineColor { get => GetValue(CenterLineColorProperty); set => SetValue(CenterLineColorProperty, value); }
+
+    /// <summary>
+    /// Gets or sets whether the peak envelope shows the RMS (the average level) inside it in full color, the peaks drawn
+    /// at <see cref="PeakOpacity"/>. The default is <c>true</c>.
+    /// </summary>
+    public bool ShowRms { get => GetValue(ShowRmsProperty); set => SetValue(ShowRmsProperty, value); }
+
+    /// <summary>Gets or sets the opacity of the peak envelope while the RMS is shown (0 to 1). The default is 0.5.</summary>
+    public float PeakOpacity { get => GetValue(PeakOpacityProperty); set => SetValue(PeakOpacityProperty, value); }
 
     /// <summary>Gets the seconds of the sound shown: <see cref="SourceLength"/>, or the rest of the sound from <see cref="SourceStart"/>.</summary>
     public double ShownLength =>
