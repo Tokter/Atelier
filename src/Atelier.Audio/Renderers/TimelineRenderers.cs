@@ -56,6 +56,39 @@ internal static class TimelineDrawing
         float x = control.TimeToX(time);
         if (x >= -1 && x <= width + 1) VerticalLine(ref context, x, top, bottom, control.PlayheadColor);
     }
+
+    /// <summary>Draws a line per marker of a control (the shared ones unless it hides them, and its own) across its height.</summary>
+    public static void MarkerLines(ref DrawingContext context, TimelineControl control, float width, float height)
+    {
+        var map = control.CurrentTimeline.TempoMap;
+        if (control.ShowSharedMarkers)
+        {
+            foreach (var marker in control.CurrentTimeline.Markers) MarkerLine(ref context, control, marker, map, width, height);
+        }
+        foreach (var marker in control.Markers) MarkerLine(ref context, control, marker, map, width, height);
+    }
+
+    /// <summary>Draws the grid of a control as vertical lines: labeled and emphasized ticks strongest, the finest faintest.</summary>
+    public static void GridLines(ref DrawingContext context, TimelineControl control, TimelineGrid grid, float height)
+    {
+        var line = control.LineColor;
+        var minor = line.WithAlpha(line.A / 255f * 0.5f);
+        var major = control.MajorLineColor;
+        foreach (var tick in grid.Ticks)
+        {
+            var color = tick.Level == TimelineGrid.LabelLevel || tick.IsEmphasized ? major
+                : tick.Level == TimelineGrid.MediumLevel ? line
+                : minor;
+            VerticalLine(ref context, tick.X, 0, height, color);
+        }
+    }
+
+    private static void MarkerLine(ref DrawingContext context, TimelineControl control, TimelineMarker marker, TempoMap map, float width, float height)
+    {
+        float x = control.TimeToX(marker.Position.ToSeconds(map));
+        if (x < -1 || x > width + 1) return;
+        VerticalLine(ref context, x, 0, height, MarkerColor(control, marker).WithAlpha(0.8f));
+    }
 }
 
 /// <summary>
@@ -256,18 +289,7 @@ public sealed class TimelineLaneRenderer : ControlRenderer<TimelineLane>
 
         using var clip = context.PushClip(new Rect(0, 0, width, height));
         context.DrawRect(new Rect(0, 0, width, height), lane.Background);
-        var line = lane.LineColor;
-        var minor = line.WithAlpha(line.A / 255f * 0.5f);
-        var major = lane.MajorLineColor;
-        var grid = lane.UpdateGrid(_charWidth.Get(ref context, lane.FontSize));
-        foreach (var tick in grid.Ticks)
-        {
-            var color = tick.Level == TimelineGrid.LabelLevel || tick.IsEmphasized ? major
-                : tick.Level == TimelineGrid.MediumLevel ? line
-                : minor;
-            TimelineDrawing.VerticalLine(ref context, tick.X, 0, height, color);
-        }
-
+        TimelineDrawing.GridLines(ref context, lane, lane.UpdateGrid(_charWidth.Get(ref context, lane.FontSize)), height);
         TimelineDrawing.LoopShade(ref context, lane, width, 0, height);
     }
 }
@@ -283,19 +305,7 @@ internal sealed class TimelineLaneOverlayRenderer : ControlRenderer<TimelineLane
         if (width <= 0 || height <= 0) return;
 
         using var clip = context.PushClip(new Rect(0, 0, width, height));
-        var map = lane.CurrentTimeline.TempoMap;
-        if (lane.ShowSharedMarkers)
-        {
-            foreach (var marker in lane.CurrentTimeline.Markers) DrawMarkerLine(lane, ref context, marker, map, width, height);
-        }
-        foreach (var marker in lane.Markers) DrawMarkerLine(lane, ref context, marker, map, width, height);
+        TimelineDrawing.MarkerLines(ref context, lane, width, height);
         TimelineDrawing.Playhead(ref context, lane, width, 0, height);
-    }
-
-    private static void DrawMarkerLine(TimelineLane lane, ref DrawingContext context, TimelineMarker marker, TempoMap map, float width, float height)
-    {
-        float x = lane.TimeToX(marker.Position.ToSeconds(map));
-        if (x < -1 || x > width + 1) return;
-        TimelineDrawing.VerticalLine(ref context, x, 0, height, TimelineDrawing.MarkerColor(lane, marker).WithAlpha(0.8f));
     }
 }

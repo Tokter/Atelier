@@ -37,7 +37,40 @@ public class TimelineView : GalleryPage
             .BindSecondaryMode(_vm, v => v.SecondaryMode, (v, m) => v.SecondaryMode = m);
 
         Settings(new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
-        Sections(TracksSection(), TransportSection(), SettingsSection(), AnywhereSection());
+        Sections(TracksSection(), TransportSection(), EditorSection(), SettingsSection(), AnywhereSection());
+    }
+
+    private UIElement EditorSection()
+    {
+        var editor = new AudioWaveformEditor()
+            .Timeline(_vm.EditorSong)
+            .Source(TimelineSounds.Bass)
+            .StartTime(TimelinePosition.Bar(_vm.EditorSong.TempoMap, 2))
+            .Height(150)
+            .BindTrimStart(_vm, v => v.TrimStart, (v, t) => v.TrimStart = t)
+            .BindTrimEnd(_vm, v => v.TrimEnd, (v, t) => v.TrimEnd = t)
+            .BindFadeIn(_vm, v => v.FadeIn, (v, t) => v.FadeIn = t)
+            .BindFadeOut(_vm, v => v.FadeOut, (v, t) => v.FadeOut = t)
+            .BindGain(_vm, v => v.Gain, (v, g) => v.Gain = g);
+        var ruler = new TimelineRuler().Timeline(_vm.EditorSong).ShowMarkers(false).SecondaryMode(TimelineRulerMode.Time);
+
+        return Ui.Section("Editing a sound",
+            "AudioWaveformEditor edits one sound like a clip in a DAW, without changing its samples: drag the edges of " +
+            "the audible region to trim it (the trimmed parts stay dimmed, so you can drag them back), the square handles " +
+            "at its top corners to fade it in and out, and the dB chip up or down to change its gain (Shift for fine " +
+            "steps; double-click a handle or the chip to reset it). Drag across the sound to select, double-click to " +
+            "select the audible region, Ctrl+T trims to the selection, and right-click for the menu. The waveform is " +
+            "drawn at the level the gain and fades give it, and the edits are bound to the view model.",
+            new Border().CornerRadius(8).ClipToBounds(true).Child(new StackPanel().Children(ruler, editor)),
+            Ui.Row(
+                new Button("Trim to selection").Variant(ButtonVariant.Outlined).OnClick(() => editor.TrimToSelection()),
+                new Button("Zoom to fit").Variant(ButtonVariant.Outlined).OnClick(() => editor.ZoomToFit()),
+                Ui.Readout(_vm, v => v.EditText)),
+            Ui.Code("new AudioWaveformEditor().Timeline(song).Source(bass).StartTime(TimelinePosition.Bar(song.TempoMap, 2))\n" +
+                    "    .BindTrimStart(vm, v => v.TrimStart, (v, t) => v.TrimStart = t)\n" +
+                    "    .BindFadeOut(vm, v => v.FadeOut, (v, t) => v.FadeOut = t)\n" +
+                    "    .BindGain(vm, v => v.Gain, (v, g) => v.Gain = g);\n" +
+                    "var level = editor.GetGain().At(t);   // the same fades and gain for playback"));
     }
 
     private UIElement TracksSection()

@@ -41,6 +41,34 @@ public partial class TimelineViewModel : PageViewModel
     [ObservableProperty]
     private bool _tempoChanges;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EditText))]
+    private double _trimStart;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EditText))]
+    private double _trimEnd = double.NaN;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EditText))]
+    private double _fadeIn = 0.1;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EditText))]
+    private double _fadeOut = 1.5;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EditText))]
+    private float _gain;
+
+    /// <summary>Gets the context of the editing demo: its own view of a short song, so it zooms on its own.</summary>
+    public TimelineContext EditorSong { get; } = new() { PixelsPerSecond = 80, Duration = 12 };
+
+    /// <summary>Gets the edits of the editing demo as text, as the editor writes them to the view model.</summary>
+    public string EditText =>
+        $"Trim {TimelineFormat.Time(TrimStart)} to {(double.IsNaN(TrimEnd) ? "end" : TimelineFormat.Time(TrimEnd))}, " +
+        $"fades {FadeIn:0.00} s / {FadeOut:0.00} s, gain {Gain:+0.0;-0.0;0} dB";
+
     public TimelineViewModel()
     {
         PageIcon = MaterialIconKind.Straighten;
@@ -221,6 +249,13 @@ public partial class TimelineViewModel : PageViewModel
 
 
         BassDrop.Position = TimelinePosition.Seconds(20);
+        TrimStart = 0;
+        TrimEnd = double.NaN;
+        FadeIn = 0.1;
+        FadeOut = 1.5;
+        Gain = 0;
+        EditorSong.PixelsPerSecond = 80;
+        EditorSong.Start = 0;
         AddMarkers();
         LoopChorus();
     }

@@ -27,6 +27,7 @@ public static class AudioTheme
         theme.Renderers.Register(new TimelineLaneRenderer());
         theme.Renderers.Register(new TimelineLaneOverlayRenderer());
         theme.Renderers.Register(new WaveformViewRenderer());
+        theme.Renderers.Register(new AudioWaveformEditorRenderer());
         if (theme is MaterialTheme material)
         {
             theme.Renderers.Register(new MaterialKnobRenderer(material.Colors));
@@ -41,8 +42,8 @@ public static class AudioTheme
     /// <summary>
     /// Creates the styles for a Material theme: a surface-container ruler with on-surface labels, on-surface-variant
     /// ticks and second row, and surface-container-low lanes with outline-variant grid lines; the loop in primary, the
-    /// playhead and play start in tertiary, markers without a color of their own in secondary, and waveforms in primary
-    /// with outline-variant zero lines.
+    /// playhead and play start in tertiary, markers without a color of their own in secondary, waveforms in primary
+    /// with outline-variant zero lines, and the audio editor like a lane with a primary selection and on-surface handles.
     /// </summary>
     public static List<Style> CreateMaterialStyles(MaterialColorScheme colors, bool isDark)
     {
@@ -109,5 +110,16 @@ public static class AudioTheme
         new Style(typeof(WaveformView))
             .Set(Control.ForegroundProperty, waveform)
             .Set(WaveformView.CenterLineColorProperty, centerLine),
+        new Style(typeof(AudioWaveformEditor))
+            .Set(Control.BackgroundProperty, laneBackground)
+            .Set(Control.ForegroundProperty, waveform)
+            .Set(Control.FontSizeProperty, TimelineFontSize)
+            .Set(TimelineControl.LineColorProperty, laneLine)
+            .Set(TimelineControl.MajorLineColorProperty, laneMajorLine)
+            .Set(TimelineControl.MarkerColorProperty, marker)
+            .Set(TimelineControl.LoopColorProperty, loop)
+            .Set(TimelineControl.PlayheadColorProperty, playhead)
+            .Set(AudioWaveformEditor.SelectionColorProperty, loop)
+            .Set(AudioWaveformEditor.HandleColorProperty, label),
     ];
 }
