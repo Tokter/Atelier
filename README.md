@@ -224,7 +224,7 @@ anywhere in a window), so they appear in menus, the command palette and the keyb
 | [`Atelier.Markup`](src/Atelier.Markup) | The fluent markup API |
 | [`Atelier.Generators`](src/Atelier.Generators) | Source generators for commands, keybindings and property-grid metadata |
 | [`Atelier.NodeEditor`](src/Atelier.NodeEditor) | Node graph view models, undo, dataflow evaluation and the `NodeEditor` control (namespace `Atelier.Nodes`) |
-| [`Atelier.Audio`](src/Atelier.Audio) | Controls for audio tools: the `Knob`, with timelines and waveform views to come |
+| [`Atelier.Audio`](src/Atelier.Audio) | Controls for audio tools: the `Knob`, and the timeline model shared by connected timeline controls (`TimelineContext` for zoom and scroll, `TempoMap` with tempo and meter changes, `TimelinePosition` in seconds or beats, and the adaptive beat, time and sample `TimelineGrid`); ruler and waveform views to come |
 | [`Atelier.Platform.Silk`](src/Atelier.Platform.Silk) | Windows, OpenGL context, input and clipboard via Silk.NET |
 | [`Atelier.DevTools`](src/Atelier.DevTools) | The F12 developer tools (Debug builds only) |
 | [`Atelier.Gallery`](samples/Atelier.Gallery) | Showcase application for every control |
