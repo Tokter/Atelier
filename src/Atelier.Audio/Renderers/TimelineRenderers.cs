@@ -88,6 +88,8 @@ public sealed class TimelineRulerRenderer : ControlRenderer<TimelineRuler>
         float height = ruler.Bounds.Height;
         if (width <= 0 || height <= 0) return;
 
+        // Labels and flags near the edges would spill out: ClipToBounds clips children, not the control's own drawing.
+        using var clip = context.PushClip(new Rect(0, 0, width, height));
         context.DrawRect(new Rect(0, 0, width, height), ruler.Background);
         var line = ruler.LineColor;
         var lane = ruler.MarkerLaneBounds;
@@ -226,6 +228,7 @@ public sealed class TimelineLaneRenderer : ControlRenderer<TimelineLane>
         float height = lane.Bounds.Height;
         if (width <= 0 || height <= 0) return;
 
+        using var clip = context.PushClip(new Rect(0, 0, width, height));
         context.DrawRect(new Rect(0, 0, width, height), lane.Background);
         var line = lane.LineColor;
         var minor = line.WithAlpha(line.A / 255f * 0.5f);

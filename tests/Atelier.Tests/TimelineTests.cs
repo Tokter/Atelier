@@ -619,3 +619,54 @@ public class TimelineMarkerAndLoopTests
         Assert.NotEqual(bitmap.GetPixel(350, 20), bitmap.GetPixel(450, 20)); // the playhead at 3.5 s, not a beat line
     }
 }
+
+public class TimelineRulerFeedbackTests
+{
+    [Fact]
+    public void TheCursor_ShowsWhetherADragResizesOrMovesTheLoop()
+    {
+        var song = new TimelineContext { PixelsPerSecond = 100 };
+        song.Loop = new TimelineRange(TimelinePosition.Seconds(1), TimelinePosition.Seconds(3));
+        song.Markers.Add(new TimelineMarker(TimelinePosition.Seconds(5), "Verse"));
+        var ruler = new TimelineRuler { Timeline = song };
+        ruler.Measure(new Size(800, 100));
+        ruler.Arrange(new Rect(0, 0, 800, ruler.DesiredSize.Height));
+        float loopY = ruler.LoopBarBounds.Y + 6;
+
+        Assert.Equal(CursorType.SizeWestEast, ruler.CursorAt(new Point(101, loopY)));
+        Assert.Equal(CursorType.SizeWestEast, ruler.CursorAt(new Point(299, loopY)));
+        Assert.Equal(CursorType.SizeAll, ruler.CursorAt(new Point(200, loopY)));
+        Assert.Equal(CursorType.Crosshair, ruler.CursorAt(new Point(500, loopY)));
+        Assert.Equal(CursorType.Hand, ruler.CursorAt(new Point(505, 9)));
+        Assert.Equal(CursorType.Default, ruler.CursorAt(new Point(200, ruler.RowBounds.Y + 10)));
+
+        ruler.OnPreviewPointerMoved(new PointerEventArgs(new Point(101, loopY), new Point(101, loopY)));
+        Assert.Equal(CursorType.SizeWestEast, ruler.Cursor);
+        ruler.OnPreviewPointerMoved(new PointerEventArgs(new Point(200, loopY), new Point(200, loopY)));
+        Assert.Equal(CursorType.SizeAll, ruler.Cursor);
+    }
+
+    [Fact]
+    public void TheRulerAndLanes_DrawOnlyWithinTheirBounds()
+    {
+        using var _ = ActiveTheme.Use(MaterialTheme.CreateLight());
+        var song = new TimelineContext { PixelsPerSecond = 100 };
+        song.Markers.Add(new TimelineMarker(TimelinePosition.Seconds(0.9), "A long marker label", TimelineMarker.Palette[5].Color));
+        var ruler = new TimelineRuler { Timeline = song, Background = Color.White };
+        ruler.Measure(new Size(100, 100));
+        ruler.Arrange(new Rect(0, 0, 100, ruler.DesiredSize.Height));
+
+        using var bitmap = new SkiaSharp.SKBitmap(300, 60);
+        using var canvas = new SkiaSharp.SKCanvas(bitmap);
+        canvas.Clear(SkiaSharp.SKColors.Transparent);
+        using var paints = new PaintRegistry();
+        var context = new DrawingContext(canvas, paints);
+        VisualTreeRenderer.Render(ruler, ref context, ThemeVisualPresenter.Instance);
+        Assert.NotEqual(0, bitmap.GetPixel(95, 6).Alpha); // the flag inside
+        for (int x = 101; x < 300; x += 3)
+        {
+            Assert.Equal(0, bitmap.GetPixel(x, 6).Alpha); // the flag and its label end at the ruler's edge
+            Assert.Equal(0, bitmap.GetPixel(x, (int)ruler.RowBounds.Y + 12).Alpha);
+        }
+    }
+}

@@ -219,6 +219,27 @@ public class TimelineRuler : TimelineControl
         return point.X > start && point.X < end ? LoopBarPart.Body : LoopBarPart.Empty;
     }
 
+    /// <summary>
+    /// Gets the cursor that shows what dragging at <paramref name="point"/> does: resize arrows over a loop edge, the move
+    /// cursor over the loop, crosshairs over the rest of the loop bar (drawing a new loop), the hand over a flag, and
+    /// <see cref="CursorType.Default"/> elsewhere.
+    /// </summary>
+    public CursorType CursorAt(Point point) => LoopBarPartAt(point) switch
+    {
+        LoopBarPart.Start or LoopBarPart.End => CursorType.SizeWestEast,
+        LoopBarPart.Body => CursorType.SizeAll,
+        LoopBarPart.Empty => CursorType.Crosshair,
+        _ => MarkerAt(point) != null ? CursorType.Hand : CursorType.Default,
+    };
+
+    /// <inheritdoc/>
+    /// <remarks>Shows the cursor for what's under the pointer (see <see cref="CursorAt"/>); a drag keeps the cursor it started with.</remarks>
+    public override void OnPreviewPointerMoved(PointerEventArgs e)
+    {
+        base.OnPreviewPointerMoved(e);
+        if (!IsDragging) Cursor = CursorAt(e.Position);
+    }
+
     /// <summary>Moves the play start marker to the (snapped) time at <paramref name="x"/>, in <see cref="TimelineControl.PositionUnit"/>.</summary>
     public void SetPlayStartAt(float x, ModifierKeys modifiers = ModifierKeys.None)
     {
