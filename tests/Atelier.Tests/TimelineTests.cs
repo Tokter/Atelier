@@ -644,6 +644,16 @@ public class TimelineRulerFeedbackTests
         Assert.Equal(CursorType.SizeWestEast, ruler.Cursor);
         ruler.OnPreviewPointerMoved(new PointerEventArgs(new Point(200, loopY), new Point(200, loopY)));
         Assert.Equal(CursorType.SizeAll, ruler.Cursor);
+
+        // The part under the pointer is highlighted too, until the pointer leaves.
+        Assert.Equal(LoopBarPart.Body, ruler.HighlightedLoopPart);
+        ruler.OnPreviewPointerMoved(new PointerEventArgs(new Point(299, loopY), new Point(299, loopY)));
+        Assert.Equal(LoopBarPart.End, ruler.HighlightedLoopPart);
+        ruler.OnPreviewPointerMoved(new PointerEventArgs(new Point(500, loopY), new Point(500, loopY)));
+        Assert.Equal(LoopBarPart.None, ruler.HighlightedLoopPart); // outside the loop
+        ruler.OnPreviewPointerMoved(new PointerEventArgs(new Point(101, loopY), new Point(101, loopY)));
+        ruler.OnPointerExited(new PointerEventArgs(new Point(101, loopY), new Point(101, loopY)));
+        Assert.Equal(LoopBarPart.None, ruler.HighlightedLoopPart);
     }
 
     [Fact]

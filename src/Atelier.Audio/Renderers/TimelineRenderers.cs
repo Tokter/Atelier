@@ -62,8 +62,9 @@ internal static class TimelineDrawing
 /// Draws a <see cref="TimelineRuler"/>: its background; the marker lane with a colored flag per marker (the label on a
 /// flag in the marker's color, the selected one outlined, and a line down through the main row); the main row's ticks
 /// from its bottom (labeled ticks across the whole row with the label to their right, medium ticks 40% and minor ticks
-/// 22% of it) and the play start marker, a triangle at its top; the second row's labels; the loop bar with the loop
-/// (in full color while it's on, faded while it's off); and the playhead through everything.
+/// 22% of it) and the play start marker, a triangle at its top; the second row's labels; the loop bar with the loop, a
+/// square-ended region with [ and ] handles at its ends (tinted while it's on, faint while it's off, the edge or body
+/// under the pointer brighter, see <see cref="TimelineRuler.HighlightedLoopPart"/>); and the playhead through everything.
 /// </summary>
 /// <remarks>
 /// Labeled and emphasized ticks use <see cref="TimelineControl.MajorLineColor"/>, other ticks
@@ -155,11 +156,36 @@ public sealed class TimelineRulerRenderer : ControlRenderer<TimelineRuler>
         context.DrawLine(new Point(0, bar.Y + 0.5f), new Point(width, bar.Y + 0.5f), ruler.LineColor, 1f);
         var timeline = ruler.CurrentTimeline;
         if (timeline.Loop.IsEmpty(timeline.TempoMap)) return;
-        float start = ruler.TimeToX(timeline.Loop.GetStartSeconds(timeline.TempoMap));
-        float end = ruler.TimeToX(timeline.Loop.GetEndSeconds(timeline.TempoMap));
+        float start = MathF.Round(ruler.TimeToX(timeline.Loop.GetStartSeconds(timeline.TempoMap)));
+        float end = MathF.Round(ruler.TimeToX(timeline.Loop.GetEndSeconds(timeline.TempoMap)));
         if (end < 0 || start > width) return;
-        var color = timeline.IsLoopEnabled ? ruler.LoopColor : ruler.LoopColor.WithAlpha(0.35f);
-        context.DrawRoundedRect(new Rect(start, bar.Y + 3, Math.Max(2, end - start), bar.Height - 5), new CornerRadius(3), color);
+        end = Math.Max(end, start + 2);
+
+        // A square-ended region with [ and ] handles at its ends, like Bitwig's loop: tinted while the loop is on, faint
+        // while it's off; the part under the pointer (or being dragged) brighter.
+        bool on = timeline.IsLoopEnabled;
+        var part = ruler.HighlightedLoopPart;
+        var loop = ruler.LoopColor;
+        float top = bar.Y + 2;
+        float height = bar.Height - 3;
+        float fill = (on ? 0.32f : 0.12f) + (part == LoopBarPart.Body ? 0.18f : 0);
+        context.DrawRect(new Rect(start, top, end - start, height), loop.WithAlpha(fill));
+
+        float handleOpacity = on ? 1f : 0.55f;
+        DrawBracket(ref context, start, top, height, 1, loop.WithAlpha(part == LoopBarPart.Start ? 1f : handleOpacity), part == LoopBarPart.Start);
+        DrawBracket(ref context, end, top, height, -1, loop.WithAlpha(part == LoopBarPart.End ? 1f : handleOpacity), part == LoopBarPart.End);
+    }
+
+    // A bracket at x opening towards `direction` (1: [, -1: ]): a bar along the edge with short arms at the top and bottom.
+    private static void DrawBracket(ref DrawingContext context, float x, float top, float height, int direction, Color color, bool highlighted)
+    {
+        float thickness = highlighted ? 3f : 2f;
+        float arm = Math.Min(6f, height);
+        float left = direction > 0 ? x : x - thickness;
+        context.DrawRect(new Rect(left, top, thickness, height), color);
+        float armLeft = direction > 0 ? x : x - arm;
+        context.DrawRect(new Rect(armLeft, top, arm, 2), color);
+        context.DrawRect(new Rect(armLeft, top + height - 2, arm, 2), color);
     }
 
     private static void DrawMarkers(TimelineRuler ruler, ref DrawingContext context, float lineBottom, float width)

@@ -115,6 +115,7 @@ public class TimelineRuler : TimelineControl
 
     private readonly TimelineGrid _secondaryGrid = new();
     private TimelineMarker? _selectedMarker;
+    private LoopBarPart _highlightedLoopPart;
     private Popup? _renamePopup;
 
     /// <summary>Initializes a ruler, running the <see cref="TimelineCommands.RulerGroup"/> commands on itself as well.</summary>
@@ -237,8 +238,43 @@ public class TimelineRuler : TimelineControl
     public override void OnPreviewPointerMoved(PointerEventArgs e)
     {
         base.OnPreviewPointerMoved(e);
-        if (!IsDragging) Cursor = CursorAt(e.Position);
+        if (IsDragging) return;
+        Cursor = CursorAt(e.Position);
+        HighlightedLoopPart = LoopHighlightAt(e.Position);
     }
+
+    /// <inheritdoc/>
+    public override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        if (!IsDragging) HighlightedLoopPart = LoopBarPart.None;
+    }
+
+    /// <inheritdoc/>
+    /// <remarks>Clears the loop's highlight once a drag ends outside it.</remarks>
+    public override void OnPointerReleased(PointerEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (!IsDragging) HighlightedLoopPart = LoopHighlightAt(e.Position);
+    }
+
+    /// <summary>
+    /// Gets the part of the loop drawn highlighted: the edge or body under the pointer, which a drag keeps while it
+    /// lasts; <see cref="LoopBarPart.None"/> otherwise.
+    /// </summary>
+    public LoopBarPart HighlightedLoopPart
+    {
+        get => _highlightedLoopPart;
+        private set
+        {
+            if (_highlightedLoopPart == value) return;
+            _highlightedLoopPart = value;
+            InvalidateVisual();
+        }
+    }
+
+    // The loop's edges and body highlight under the pointer; the rest of the loop bar doesn't.
+    private LoopBarPart LoopHighlightAt(Point point) => LoopBarPartAt(point) is var part && part != LoopBarPart.Empty ? part : LoopBarPart.None;
 
     /// <summary>Moves the play start marker to the (snapped) time at <paramref name="x"/>, in <see cref="TimelineControl.PositionUnit"/>.</summary>
     public void SetPlayStartAt(float x, ModifierKeys modifiers = ModifierKeys.None)
