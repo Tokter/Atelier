@@ -93,8 +93,9 @@ public sealed class WaveformData
     /// <paramref name="end"/>, clipped to the sound; (0, 0) when nothing of it is in the sound.
     /// </summary>
     /// <remarks>
-    /// It reads the coarsest pyramid level whose blocks fit into the range four times, so it takes a few steps whatever
-    /// the range's length. The range is widened to whole blocks at its ends, by at most half its length.
+    /// The result is exact. The middle of the range is covered by the largest aligned pyramid blocks that fit, like a
+    /// segment tree, and the ends (up to <see cref="FirstBlockSize"/> − 1 samples each) are read sample by sample, so it
+    /// takes a few dozen steps whatever the range's length.
     /// </remarks>
     public WaveformPeak GetPeak(int channel, long start, long end)
     {
@@ -102,36 +103,38 @@ public sealed class WaveformData
         end = Math.Min(SampleCount, end);
         if (end <= start) return default;
 
-        long length = end - start;
-        if (length < FirstBlockSize * 4)
-        {
-            var samples = _channels[channel];
-            float min = float.MaxValue, max = float.MinValue;
-            for (long i = start; i < end; i++)
-            {
-                float value = samples[i];
-                if (value < min) min = value;
-                if (value > max) max = value;
-            }
-            return new WaveformPeak(min, max);
-        }
-
+        var samples = _channels[channel];
         var levels = _levels[channel];
-        int level = 0;
-        // Blocks of at most a quarter of the range: a few of them, widening the range by at most half its length.
-        while (level + 1 < levels.Length && ((long)FirstBlockSize << (level + 1)) * 4 <= length) level++;
-        var peaks = levels[level];
-        int shift = level + 4; // log2(FirstBlockSize) = 4
-        long first = start >> shift;
-        long last = Math.Min(peaks.Length - 1, (end - 1) >> shift);
-        float low = float.MaxValue, high = float.MinValue;
-        for (long b = first; b <= last; b++)
+        float min = float.MaxValue, max = float.MinValue;
+        long i = start;
+        // Samples up to the first block boundary.
+        for (; i < end && (i & (FirstBlockSize - 1)) != 0; i++) Include(samples[i], ref min, ref max);
+        // The largest aligned blocks that fit.
+        while (i + FirstBlockSize <= end)
         {
-            var peak = peaks[b];
-            if (peak.Min < low) low = peak.Min;
-            if (peak.Max > high) high = peak.Max;
+            int level = 0;
+            while (level + 1 < levels.Length)
+            {
+                long size = (long)FirstBlockSize << (level + 1);
+                if ((i & (size - 1)) != 0 || i + size > end) break;
+                level++;
+            }
+            var peak = levels[level][i >> (level + BlockShift)];
+            if (peak.Min < min) min = peak.Min;
+            if (peak.Max > max) max = peak.Max;
+            i += (long)FirstBlockSize << level;
         }
-        return new WaveformPeak(low, high);
+        // The samples after the last whole block.
+        for (; i < end; i++) Include(samples[i], ref min, ref max);
+        return new WaveformPeak(min, max);
+    }
+
+    private const int BlockShift = 4; // log2(FirstBlockSize)
+
+    private static void Include(float value, ref float min, ref float max)
+    {
+        if (value < min) min = value;
+        if (value > max) max = value;
     }
 
     private static WaveformPeak[][] BuildLevels(float[] samples)

@@ -63,6 +63,12 @@ public class WaveformView : Control
     public static readonly BindableProperty<Color> CenterLineColorProperty =
         BindableProperty.Register<WaveformView, Color>(nameof(CenterLineColor), Color.Transparent, options: PropertyOptions.AffectsRender);
 
+    /// <summary>
+    /// The samples per pixel below which the view draws a line through the samples instead of a min/max bar per pixel
+    /// column: with only a few samples per column, the bars look jagged and broken up.
+    /// </summary>
+    public const double LineSamplesPerPixel = 4;
+
     /// <summary>The pixels per sample from which each sample gets a dot.</summary>
     public const float SampleDotSpacing = 6f;
 

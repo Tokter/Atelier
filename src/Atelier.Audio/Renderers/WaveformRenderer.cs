@@ -6,10 +6,16 @@ namespace Atelier.Audio.Renderers;
 
 /// <summary>
 /// Draws a <see cref="WaveformView"/>: its background, a zero line per channel, and the waveform in
-/// <see cref="Atelier.Controls.Control.Foreground"/>: a min/max bar per pixel column while there is at least one sample
-/// per pixel, else a line through the samples (with dots from <see cref="WaveformView.SampleDotSpacing"/> pixels per
-/// sample). Only columns that are both visible (inside the canvas clip) and inside the sound are drawn.
+/// <see cref="Atelier.Controls.Control.Foreground"/>: from <see cref="WaveformView.LineSamplesPerPixel"/> samples per
+/// pixel a min/max bar per pixel column, else an antialiased line through the samples (with dots from
+/// <see cref="WaveformView.SampleDotSpacing"/> pixels per sample). Only columns that are both visible (inside the canvas
+/// clip) and inside the sound are drawn.
 /// </summary>
+/// <remarks>
+/// To avoid aliasing, the bars show the exact peaks of their samples (see <see cref="WaveformData.GetPeak"/>), each bar
+/// also covers the next bar's first sample so neighbors always touch, and the bars sit on a pixel grid fixed to the
+/// sound, so scrolling doesn't change which samples a bar shows (the waveform moves in whole pixels instead).
+/// </remarks>
 public sealed class WaveformViewRenderer : ControlRenderer<WaveformView>
 {
     private const float Headroom = 0.92f;
@@ -53,12 +59,17 @@ public sealed class WaveformViewRenderer : ControlRenderer<WaveformView>
                 context.DrawLine(new Point((float)from, MathF.Round(center) + 0.5f), new Point((float)to, MathF.Round(center) + 0.5f), view.CenterLineColor, 1f);
             }
 
-            if (samplesPerPixel >= 1)
+            if (samplesPerPixel >= WaveformView.LineSamplesPerPixel)
             {
+                // The columns sit on a grid fixed to the sound, its first sample on a whole pixel: scrolling by a fraction
+                // of a pixel moves the waveform a whole pixel at times instead of changing which samples each column
+                // shows (which makes the waveform shimmer).
+                double origin = Math.Round(-timeAtZero * pixelsPerSecond);
                 for (int x = (int)Math.Floor(from); x < (int)Math.Ceiling(to); x++)
                 {
-                    long start = Math.Max(firstSample, (long)Math.Floor((timeAtZero + x / pixelsPerSecond) * sampleRate));
-                    long end = Math.Min(endSample, (long)Math.Ceiling((timeAtZero + (x + 1) / pixelsPerSecond) * sampleRate));
+                    long start = Math.Max(firstSample, (long)Math.Floor((x - origin) * samplesPerPixel));
+                    // Up to and including the next column's first sample, so neighboring columns always touch.
+                    long end = Math.Min(endSample, (long)Math.Floor((x + 1 - origin) * samplesPerPixel) + 1);
                     if (end <= start) continue;
                     var peak = combined ? CombinedPeak(source, start, end) : source.GetPeak(row, start, end);
                     float top = center - Math.Clamp(peak.Max, -1, 1) * scale;

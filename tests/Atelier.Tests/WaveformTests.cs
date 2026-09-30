@@ -30,25 +30,20 @@ public class WaveformDataTests
             min = Math.Min(min, samples[i]);
             max = Math.Max(max, samples[i]);
         }
-        return new WaveformPeak(min, max);
+        return end > start ? new WaveformPeak(min, max) : default;
     }
 
     [Fact]
-    public void Peaks_CoverTheRange_WidenedByAtMostHalfItsLength()
+    public void Peaks_AreExact_ForAnyRange()
     {
         var samples = Noise(100_000, 1);
         var data = new WaveformData([samples], 48000);
         var random = new Random(2);
-        for (int n = 0; n < 500; n++)
+        for (int n = 0; n < 2000; n++)
         {
-            long start = random.Next(0, samples.Length);
-            long length = random.Next(1, n % 2 == 0 ? 200 : 50_000);
-            long end = start + length;
-            var peak = data.GetPeak(0, start, end);
-            var exact = Brute(samples, start, end);
-            var widened = Brute(samples, start - length / 2 - 1, end + length / 2 + 1);
-            Assert.InRange(peak.Min, widened.Min, exact.Min);
-            Assert.InRange(peak.Max, exact.Max, widened.Max);
+            long start = random.Next(-100, samples.Length);
+            long length = random.Next(1, (n % 3) switch { 0 => 40, 1 => 2000, _ => 120_000 });
+            Assert.Equal(Brute(samples, start, start + length), data.GetPeak(0, start, start + length));
         }
         Assert.Equal(default, data.GetPeak(0, 200_000, 300_000));
     }
@@ -175,5 +170,91 @@ public class TimelinePanelTests
         var playhead = bitmap.GetPixel(150, 5);
         Assert.NotEqual(SkiaSharp.SKColors.White, playhead); // drawn over the clip
         Assert.NotEqual((byte)255, playhead.Blue);
+    }
+}
+
+public class WaveformRenderingTests
+{
+    private static WaveformData Noise()
+    {
+        var random = new Random(3);
+        var samples = new float[48000];
+        for (int i = 0; i < samples.Length; i++) samples[i] = (float)((random.NextDouble() * 2 - 1) * 0.5 + 0.4 * Math.Sin(i * 0.004));
+        return new WaveformData([samples], 48000);
+    }
+
+    // The waveform of `sound` drawn 300 × 60 at `samplesPerPixel`, scrolled to `start` seconds: which pixels are lit.
+    private static bool[,] Render(WaveformData sound, double samplesPerPixel, double start)
+    {
+        using var _ = ActiveTheme.Use(MaterialTheme.CreateDark());
+        var song = new TimelineContext { PixelsPerSecond = 48000 / samplesPerPixel };
+        song.Start = start;
+        var view = new WaveformView { Source = sound, Foreground = Color.White };
+        var panel = new TimelinePanel { Timeline = song }.Children(new Border { Child = view }.TimelineRange(TimelinePosition.Seconds(0), TimelinePosition.Seconds(1)));
+        panel.Measure(new Size(300, 60));
+        panel.Arrange(new Rect(0, 0, 300, 60));
+        using var bitmap = new SkiaSharp.SKBitmap(300, 60);
+        using var canvas = new SkiaSharp.SKCanvas(bitmap);
+        canvas.Clear(SkiaSharp.SKColors.Black);
+        using var paints = new PaintRegistry();
+        var context = new DrawingContext(canvas, paints);
+        VisualTreeRenderer.Render(panel, ref context, ThemeVisualPresenter.Instance);
+        var lit = new bool[300, 60];
+        for (int x = 0; x < 300; x++)
+        {
+            for (int y = 0; y < 60; y++) lit[x, y] = bitmap.GetPixel(x, y).Red > 128;
+        }
+        return lit;
+    }
+
+    private static bool SameColumn(bool[,] a, int xa, bool[,] b, int xb)
+    {
+        for (int y = 0; y < 60; y++)
+        {
+            if (a[xa, y] != b[xb, y]) return false;
+        }
+        return true;
+    }
+
+    [Fact]
+    public void ScrollingByAFractionOfAPixel_MovesThePeaks_WithoutChangingThem()
+    {
+        var sound = Noise();
+        double samplesPerPixel = 20;
+        var before = Render(sound, samplesPerPixel, 0.25);
+        var after = Render(sound, samplesPerPixel, 0.25 + 0.4 * samplesPerPixel / 48000); // 0.4 px later
+        bool Matches(int shift)
+        {
+            for (int x = 10; x < 290; x++)
+            {
+                if (!SameColumn(after, x, before, x + shift)) return false;
+            }
+            return true;
+        }
+        Assert.True(Matches(0) || Matches(1), "the columns should show the same samples, at most a pixel apart");
+    }
+
+    [Fact]
+    public void NeighboringPeakColumns_AlwaysTouch()
+    {
+        var lit = Render(Noise(), WaveformView.LineSamplesPerPixel, 0.25);
+        (int Top, int Bottom) Span(int x)
+        {
+            int top = -1, bottom = -1;
+            for (int y = 0; y < 60; y++)
+            {
+                if (!lit[x, y]) continue;
+                if (top < 0) top = y;
+                bottom = y;
+            }
+            return (top, bottom);
+        }
+        for (int x = 1; x < 299; x++)
+        {
+            var (top, bottom) = Span(x);
+            var (nextTop, nextBottom) = Span(x + 1);
+            Assert.True(top >= 0 && nextTop >= 0, $"column {x} or {x + 1} is empty");
+            Assert.True(top <= nextBottom + 1 && nextTop <= bottom + 1, $"columns {x} and {x + 1} don't touch");
+        }
     }
 }
