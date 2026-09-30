@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Atelier.Audio;
 using Atelier.Controls;
 using Atelier.Core.Keybinding;
+using Atelier.Core.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -46,11 +48,121 @@ public partial class TimelineViewModel : PageViewModel
         CommandGroup = Group;
         Keywords = "timeline ruler beat bar tempo bpm time signature audio daw track lane zoom samples";
         Song.ViewChanged += (_, _) => OnPropertyChanged(nameof(ViewText));
+        Song.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is nameof(TimelineContext.PlayStart) or nameof(TimelineContext.Loop) or nameof(TimelineContext.IsLoopEnabled))
+            {
+                OnPropertyChanged(nameof(TransportText));
+                OnPropertyChanged(nameof(LoopEnabled));
+            }
+        };
+        Song.Markers.Changed += (_, _) => OnPropertyChanged(nameof(MarkersText));
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(15), (_, _) => Advance());
         UpdateTempoMap();
+        AddMarkers();
+        LoopChorus();
+    }
+
+    private readonly DispatcherTimer _timer;
+    private readonly Stopwatch _clock = new();
+    private double _position;
+
+    /// <summary>Gets the marker only the Bass lane shows: pinned to 0:20, so it stays there when the tempo changes.</summary>
+    public TimelineMarker BassDrop { get; } = new(TimelinePosition.Seconds(20), "Drop", TimelineMarker.Palette[7].Color);
+
+    /// <summary>Gets whether the song is playing.</summary>
+    public bool IsPlaying => _timer.IsEnabled;
+
+    /// <summary>Gets or sets whether the loop is on.</summary>
+    public bool LoopEnabled { get => Song.IsLoopEnabled; set => Song.IsLoopEnabled = value; }
+
+    /// <summary>Gets the play start and loop as text.</summary>
+    public string TransportText
+    {
+        get
+        {
+            var map = Song.TempoMap;
+            string loop = Song.Loop.IsEmpty(map) ? "none" : $"{Describe(Song.Loop.Start)} to {Describe(Song.Loop.End)}{(Song.IsLoopEnabled ? "" : " (off)")}";
+            return $"Play start = {Describe(Song.PlayStart)}; loop = {loop}";
+        }
+    }
+
+    /// <summary>Gets the shared markers as text.</summary>
+    public string MarkersText => Song.Markers.Count == 0 ? "No markers" : string.Join(", ", Song.Markers.Select(m => $"{m.Label} at {Describe(m.Position)}"));
+
+    // "5.2 (beats)" or "0:12.500 (seconds)": where a position is, and what it's pinned to.
+    private string Describe(TimelinePosition position)
+    {
+        var map = Song.TempoMap;
+        if (position.Unit == TimelineUnit.Seconds) return $"{TimelineFormat.Time(position.Value)} (s)";
+        var bar = map.GetBarPosition(position.Value);
+        return $"{bar.Bar}.{bar.Beat}{(bar.Fraction > 0 ? $"+{bar.Fraction:0.##}" : "")} (beats)";
+    }
+
+    // Loops the chorus, bars 17 to 24.
+    private void LoopChorus()
+    {
+        var map = Song.TempoMap;
+        Song.Loop = new TimelineRange(TimelinePosition.Bar(map, 17), TimelinePosition.Bar(map, 25));
+        Song.IsLoopEnabled = true;
+    }
+
+    // The song's sections as shared markers, pinned to the music.
+    private void AddMarkers()
+    {
+        var map = Song.TempoMap;
+        Song.Markers.Clear();
+        Song.Markers.Add(new TimelineMarker(TimelinePosition.Beats(map.BarToBeats(1)), "Intro", TimelineMarker.Palette[5].Color));
+        Song.Markers.Add(new TimelineMarker(TimelinePosition.Beats(map.BarToBeats(9)), "Verse", TimelineMarker.Palette[3].Color));
+        Song.Markers.Add(new TimelineMarker(TimelinePosition.Beats(map.BarToBeats(17)), "Chorus", TimelineMarker.Palette[1].Color));
+        Song.Markers.Add(new TimelineMarker(TimelinePosition.Beats(map.BarToBeats(33)), "Bridge", TimelineMarker.Palette[6].Color));
+        Song.Markers.Add(new TimelineMarker(TimelinePosition.Beats(map.BarToBeats(49)), "Outro", TimelineMarker.Palette[0].Color));
+    }
+
+    [RelayCommand]
+    [property: Command("PlayStop", Group, Label = "Play / stop", Icon = MaterialIcons.PlayArrow, Description = "Play from the play start marker, or stop")]
+    private void PlayStop()
+    {
+        if (IsPlaying)
+        {
+            _timer.Stop();
+            _clock.Reset();
+            Song.Playhead = null;
+        }
+        else
+        {
+            _position = Song.PlayStart.ToSeconds(Song.TempoMap);
+            Song.Playhead = _position;
+            _clock.Restart();
+            _timer.Start();
+        }
+        OnPropertyChanged(nameof(IsPlaying));
+    }
+
+    // Moves the playhead by the time passed, jumping back at the loop's end while the loop is on.
+    private void Advance()
+    {
+        double elapsed = _clock.Elapsed.TotalSeconds;
+        _clock.Restart();
+        var map = Song.TempoMap;
+        double previous = _position;
+        _position += elapsed;
+        if (Song.IsLoopEnabled && !Song.Loop.IsEmpty(map))
+        {
+            double start = Song.Loop.GetStartSeconds(map);
+            double end = Song.Loop.GetEndSeconds(map);
+            if (previous < end && _position >= end) _position = start + (_position - end) % (end - start);
+        }
+        if (_position >= Song.Duration)
+        {
+            PlayStop();
+            return;
+        }
+        Song.Playhead = _position;
     }
 
     /// <summary>Gets the context the page's timeline controls share.</summary>
-    public TimelineContext Song { get; } = new() { PixelsPerSecond = 40 };
+    public TimelineContext Song { get; } = new() { PixelsPerSecond = 16 };
 
     /// <summary>Gets the view's start and zoom as text.</summary>
     public string ViewText => $"Start = {TimelineFormat.Time(Song.Start)}, {Song.PixelsPerSecond:0.##} px/s";
@@ -89,6 +201,8 @@ public partial class TimelineViewModel : PageViewModel
         Song.TempoMap = map;
         Song.Duration = map.BeatsToSeconds(map.BarToBeats(Bars + 1));
         OnPropertyChanged(nameof(TempoText));
+        OnPropertyChanged(nameof(TransportText));
+        OnPropertyChanged(nameof(MarkersText));
     }
 
     [RelayCommand]
@@ -100,7 +214,14 @@ public partial class TimelineViewModel : PageViewModel
         Bpm = 120;
         SignatureIndex = 0;
         TempoChanges = false;
-        Song.PixelsPerSecond = 40;
+        if (IsPlaying) PlayStop();
+        Song.PixelsPerSecond = 16;
         Song.Start = 0;
+        Song.PlayStart = TimelinePosition.Zero;
+
+
+        BassDrop.Position = TimelinePosition.Seconds(20);
+        AddMarkers();
+        LoopChorus();
     }
 }

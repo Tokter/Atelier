@@ -4,7 +4,9 @@ namespace Atelier.Audio;
 
 /// <summary>
 /// The state that connected timeline controls share: which part of the song is in view (<see cref="Start"/> and
-/// <see cref="PixelsPerSecond"/>), and the song's <see cref="TempoMap"/> and <see cref="SampleRate"/>.
+/// <see cref="PixelsPerSecond"/>); the song's <see cref="TempoMap"/> and <see cref="SampleRate"/>; and the transport
+/// and arrangement shown across the controls: <see cref="PlayStart"/>, <see cref="Playhead"/>, the <see cref="Loop"/>
+/// and the shared <see cref="Markers"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -35,7 +37,15 @@ public sealed class TimelineContext : INotifyPropertyChanged
     private static readonly PropertyChangedEventArgs s_durationArgs = new(nameof(Duration));
     private static readonly PropertyChangedEventArgs s_sampleRateArgs = new(nameof(SampleRate));
     private static readonly PropertyChangedEventArgs s_tempoMapArgs = new(nameof(TempoMap));
+    private static readonly PropertyChangedEventArgs s_playStartArgs = new(nameof(PlayStart));
+    private static readonly PropertyChangedEventArgs s_playheadArgs = new(nameof(Playhead));
+    private static readonly PropertyChangedEventArgs s_loopArgs = new(nameof(Loop));
+    private static readonly PropertyChangedEventArgs s_isLoopEnabledArgs = new(nameof(IsLoopEnabled));
 
+    private TimelinePosition _playStart;
+    private double? _playhead;
+    private TimelineRange _loop;
+    private bool _isLoopEnabled;
     private double _start;
     private double _pixelsPerSecond = 100;
     private double _minPixelsPerSecond = 0.05;
@@ -146,6 +156,76 @@ public sealed class TimelineContext : INotifyPropertyChanged
             PropertyChanged?.Invoke(this, s_tempoMapArgs);
         }
     }
+
+    /// <summary>
+    /// Gets or sets where playback starts (the play start marker): the ruler sets it when clicked. The default is the
+    /// start of the song.
+    /// </summary>
+    public TimelinePosition PlayStart
+    {
+        get => _playStart;
+        set
+        {
+            if (_playStart == value) return;
+            _playStart = value;
+            PropertyChanged?.Invoke(this, s_playStartArgs);
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the playback position in seconds, drawn as a line across the connected controls while the app plays;
+    /// <c>null</c> (the default) hides it.
+    /// </summary>
+    public double? Playhead
+    {
+        get => _playhead;
+        set
+        {
+            if (_playhead == value) return;
+            _playhead = value;
+            PropertyChanged?.Invoke(this, s_playheadArgs);
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the loop: the section of time the ruler's loop bar shows and edits. Its ends keep their unit when
+    /// edited. The default is empty, at the start.
+    /// </summary>
+    public TimelineRange Loop
+    {
+        get => _loop;
+        set
+        {
+            if (_loop == value) return;
+            _loop = value;
+            PropertyChanged?.Invoke(this, s_loopArgs);
+        }
+    }
+
+    /// <summary>Gets or sets whether the <see cref="Loop"/> is on: drawn in full color and shaded across the lanes. The default is <c>false</c>.</summary>
+    public bool IsLoopEnabled
+    {
+        get => _isLoopEnabled;
+        set
+        {
+            if (_isLoopEnabled == value) return;
+            _isLoopEnabled = value;
+            PropertyChanged?.Invoke(this, s_isLoopEnabledArgs);
+        }
+    }
+
+    /// <summary>
+    /// Gets the markers shared by the connected controls: the ruler shows them as flags and the other controls as lines.
+    /// Markers a single control shows go in its own <see cref="TimelineControl.Markers"/>.
+    /// </summary>
+    public TimelineMarkerCollection Markers { get; } = [];
+
+    /// <summary>Creates a position for a time in seconds, in <paramref name="unit"/> (for example beats for a beat ruler).</summary>
+    public TimelinePosition CreatePosition(double seconds, TimelineUnit unit) =>
+        unit == TimelineUnit.Beats ? TimelinePosition.Beats(_tempoMap.SecondsToBeats(seconds)) : TimelinePosition.Seconds(seconds);
+
+    /// <summary>Gets <paramref name="position"/> moved to <paramref name="seconds"/>, keeping its unit.</summary>
+    public TimelinePosition MovePosition(TimelinePosition position, double seconds) => CreatePosition(seconds, position.Unit);
 
     /// <summary>Gets the x of song time <paramref name="time"/> (seconds) in a control that scrolls with the view.</summary>
     public double TimeToX(double time) => (time - _start) * _pixelsPerSecond;

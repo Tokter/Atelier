@@ -38,7 +38,8 @@ public static class AudioTheme
 
     /// <summary>
     /// Creates the styles for a Material theme: a surface-container ruler with on-surface labels, on-surface-variant
-    /// ticks and second row, and surface-container-low lanes with outline-variant grid lines.
+    /// ticks and second row, and surface-container-low lanes with outline-variant grid lines; the loop in primary, the
+    /// playhead and play start in tertiary, and markers without a color of their own in secondary.
     /// </summary>
     public static List<Style> CreateMaterialStyles(MaterialColorScheme colors, bool isDark)
     {
@@ -51,7 +52,10 @@ public static class AudioTheme
             rulerLine: colors.OutlineVariant,
             rulerMajorLine: colors.OnSurfaceVariant,
             laneLine: colors.OutlineVariant.WithAlpha(isDark ? 0.45f : 0.6f),
-            laneMajorLine: colors.OutlineVariant.WithAlpha(isDark ? 0.9f : 1f));
+            laneMajorLine: colors.OutlineVariant.WithAlpha(isDark ? 0.9f : 1f),
+            marker: colors.Secondary,
+            loop: colors.Primary,
+            playhead: colors.Tertiary);
     }
 
     /// <summary>Creates the styles for other themes, in neutral grays.</summary>
@@ -67,11 +71,14 @@ public static class AudioTheme
             rulerLine: gray.WithAlpha(0.5f),
             rulerMajorLine: gray,
             laneLine: gray.WithAlpha(0.25f),
-            laneMajorLine: gray.WithAlpha(0.55f));
+            laneMajorLine: gray.WithAlpha(0.55f),
+            marker: Color.FromRgb(0xFB, 0x8C, 0x00),
+            loop: Color.FromRgb(0x42, 0x85, 0xF4),
+            playhead: Color.FromRgb(0xE5, 0x39, 0x35));
     }
 
     private static List<Style> CreateStyles(Color rulerBackground, Color laneBackground, Color label, Color secondaryLabel,
-        Color rulerLine, Color rulerMajorLine, Color laneLine, Color laneMajorLine) =>
+        Color rulerLine, Color rulerMajorLine, Color laneLine, Color laneMajorLine, Color marker, Color loop, Color playhead) =>
     [
         new Style(typeof(TimelineRuler))
             .Set(Control.BackgroundProperty, rulerBackground)
@@ -79,11 +86,17 @@ public static class AudioTheme
             .Set(Control.FontSizeProperty, TimelineFontSize)
             .Set(TimelineRuler.SecondaryForegroundProperty, secondaryLabel)
             .Set(TimelineControl.LineColorProperty, rulerLine)
-            .Set(TimelineControl.MajorLineColorProperty, rulerMajorLine),
+            .Set(TimelineControl.MajorLineColorProperty, rulerMajorLine)
+            .Set(TimelineControl.MarkerColorProperty, marker)
+            .Set(TimelineControl.LoopColorProperty, loop)
+            .Set(TimelineControl.PlayheadColorProperty, playhead),
         new Style(typeof(TimelineLane))
             .Set(Control.BackgroundProperty, laneBackground)
             .Set(Control.FontSizeProperty, TimelineFontSize)
             .Set(TimelineControl.LineColorProperty, laneLine)
-            .Set(TimelineControl.MajorLineColorProperty, laneMajorLine),
+            .Set(TimelineControl.MajorLineColorProperty, laneMajorLine)
+            .Set(TimelineControl.MarkerColorProperty, marker)
+            .Set(TimelineControl.LoopColorProperty, loop)
+            .Set(TimelineControl.PlayheadColorProperty, playhead),
     ];
 }

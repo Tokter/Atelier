@@ -31,7 +31,7 @@ public class TimelineView : GalleryPage
             .BindSecondaryMode(_vm, v => v.SecondaryMode, (v, m) => v.SecondaryMode = m);
 
         Settings(new Button().Variant(ButtonVariant.Tonal).Command(_vm.ResetCommand));
-        Sections(TracksSection(), SettingsSection(), AnywhereSection());
+        Sections(TracksSection(), TransportSection(), SettingsSection(), AnywhereSection());
     }
 
     private UIElement TracksSection()
@@ -44,7 +44,9 @@ public class TimelineView : GalleryPage
                 .Row(i + 1).Padding(12, 0).Margin(0, 1, 0, 0)
                 .Themed(Border.BackgroundProperty, c => c.SurfaceContainerHigh)
                 .Child(new TextBlock(Tracks[i]).LabelLarge().VerticalAlignment(VerticalAlignment.Center)));
-            tracks.Children(new TimelineLane().Timeline(_vm.Song).Row(i + 1).Column(1).Margin(0, 1, 0, 0).BindMode(_vm, v => v.Mode));
+            var lane = new TimelineLane().Timeline(_vm.Song).Row(i + 1).Column(1).Margin(0, 1, 0, 0).BindMode(_vm, v => v.Mode);
+            if (Tracks[i] == "Bass") lane.Markers(_vm.BassDrop);
+            tracks.Children(lane);
         }
 
         return Ui.Section("Ruler and lanes",
@@ -60,6 +62,24 @@ public class TimelineView : GalleryPage
                     "new TimelineRuler().Timeline(song).SecondaryMode(TimelineRulerMode.Time);\n" +
                     "new TimelineLane().Timeline(song).Height(56);   // zooms and scrolls with the ruler"));
     }
+
+    private UIElement TransportSection() => Ui.Section("Markers, loop and playback",
+        "Click the ruler to move the play start marker (the triangle); clicks and drags snap to the finest ticks in view, " +
+        "and Shift turns snapping off for the moment (/ turns it off for good). Markers shared by the whole song show as " +
+        "flags and as lines across the lanes: drag a flag to move it, click it to start there, double-click the marker " +
+        "lane to add one or a flag to rename it, and right-click a flag to recolor or delete it. The Bass lane has a " +
+        "marker of its own, pinned to 0:20 in seconds, so it stays put when the tempo changes while the others move " +
+        "with the bars. Drag on the loop bar below the labels to draw a loop, drag its edges or middle to change it, and " +
+        "double-click it (or press L) to turn it on or off.",
+        Ui.Row(
+            new Button().Variant(ButtonVariant.Filled).Command(_vm.PlayStopCommand),
+            new Switch("Loop").BindIsChecked(_vm, v => v.LoopEnabled, (v, on) => v.LoopEnabled = on)),
+        Ui.Readout(_vm, v => v.TransportText),
+        Ui.Readout(_vm, v => v.MarkersText),
+        Ui.Code("song.Markers.Add(new TimelineMarker(TimelinePosition.Bar(song.TempoMap, 9), \"Verse\", color));   // on every control\n" +
+                "bassLane.Markers.Add(new TimelineMarker(TimelinePosition.Seconds(20), \"Drop\"));                  // on this lane only\n" +
+                "song.Loop = new TimelineRange(TimelinePosition.Bar(song.TempoMap, 17), TimelinePosition.Bar(song.TempoMap, 25));\n" +
+                "song.Playhead = position;   // while your app plays"));
 
     private UIElement SettingsSection()
     {

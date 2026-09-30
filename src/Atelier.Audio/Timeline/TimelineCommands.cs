@@ -13,11 +13,14 @@ namespace Atelier.Audio;
 /// <remarks>
 /// <para>
 /// Everywhere: Ctrl+Alt+wheel zooms around the pointer, Shift+wheel and middle drag scroll, <c>=</c> and <c>-</c> zoom
-/// in and out, and Home shows the whole song.
+/// in and out, Home shows the whole song, L turns the loop on or off and <c>/</c> turns snapping on or off.
 /// </para>
 /// <para>
-/// On the ruler: dragging zooms (up to zoom in, down to zoom out) around the point where the drag started and scrolls
-/// with the pointer, the wheel zooms, double-clicking shows the whole song, and right-clicking opens the ruler's menu.
+/// On the ruler: clicking sets the play start (or, on a flag, selects the marker and moves the play start to it);
+/// dragging a flag moves its marker; dragging on the loop bar draws, resizes or moves the loop; dragging elsewhere zooms
+/// (up to zoom in, down to zoom out) around the point where the drag started and scrolls with the pointer; the wheel
+/// zooms; double-clicking adds a marker (marker lane), renames one (flag), turns the loop on or off (loop bar) or shows
+/// the whole song (elsewhere); right-clicking opens a menu; Delete removes the selected marker and F2 renames it.
 /// </para>
 /// </remarks>
 public static class TimelineCommands
@@ -49,8 +52,14 @@ public static class TimelineCommands
     /// <summary>Gets the command that scrolls to later times (Shift+wheel down).</summary>
     public static TimelineCommand ScrollForward { get; } = new(_ => true, c => c.CurrentTimeline.ScrollBy(WheelScrollPixels));
 
-    /// <summary>Gets the command that shows the whole song (Home; double-click on the ruler).</summary>
+    /// <summary>Gets the command that shows the whole song (Home).</summary>
     public static TimelineCommand ZoomToFit { get; } = new(c => double.IsFinite(c.CurrentTimeline.Duration), c => c.ZoomToFit());
+
+    /// <summary>Gets the command that turns the loop on or off (L); turning on an empty loop loops four bars from the play start.</summary>
+    public static TimelineCommand ToggleLoop { get; } = new(_ => true, ToggleLoopOf);
+
+    /// <summary>Gets the command that turns snapping to the grid on or off (/).</summary>
+    public static TimelineCommand ToggleSnap { get; } = new(_ => true, c => c.SnapToGrid = !c.SnapToGrid);
 
     /// <summary>Gets the command that scrolls by dragging: the timeline follows the pointer; Escape moves it back (middle drag).</summary>
     public static TimelineScrollDragCommand ScrollDrag { get; } = new(zoom: false);
@@ -61,8 +70,34 @@ public static class TimelineCommands
     /// </summary>
     public static TimelineScrollDragCommand ZoomDrag { get; } = new(zoom: true);
 
-    /// <summary>Gets the command that opens the ruler's menu at the pointer (right-click on the ruler).</summary>
-    public static TimelineCommand RulerMenu { get; } = new(c => c is TimelineRuler, c => ((TimelineRuler)c).ShowContextMenu());
+    /// <summary>Gets the command that moves a marker by dragging its flag, keeping its unit and snapping (drag a flag).</summary>
+    public static TimelineMarkerDragCommand MoveMarker { get; } = new();
+
+    /// <summary>Gets the command that draws a new loop, moves an edge of the loop or the whole loop by dragging (drag on the loop bar).</summary>
+    public static TimelineLoopDragCommand EditLoop { get; } = new();
+
+    /// <summary>
+    /// Gets the command for a click on the ruler: on a flag it selects the marker and moves the play start to it, on the
+    /// loop bar it does nothing, and elsewhere it moves the play start to the pointer (click).
+    /// </summary>
+    public static TimelineCommand RulerClick { get; } = new(c => c is TimelineRuler, c => ClickAt((TimelineRuler)c));
+
+    /// <summary>
+    /// Gets the command for a double click on the ruler: it renames the marker of a flag, adds a marker on the rest of
+    /// the marker lane, turns the loop on or off on the loop bar, and shows the whole song elsewhere (double-click).
+    /// </summary>
+    public static TimelineCommand RulerDoubleClick { get; } = new(c => c is TimelineRuler, c => DoubleClickAt((TimelineRuler)c));
+
+    /// <summary>Gets the command that opens the menu of the flag under the pointer, or the ruler's menu (right-click on the ruler).</summary>
+    public static TimelineCommand RulerMenu { get; } = new(c => c is TimelineRuler, c => ((TimelineRuler)c).ShowContextMenu(c.PointerPosition));
+
+    /// <summary>Gets the command that deletes the ruler's selected marker (Delete).</summary>
+    public static TimelineCommand DeleteMarker { get; } = new(c => c is TimelineRuler { SelectedMarker: not null },
+        c => ((TimelineRuler)c).DeleteMarker(((TimelineRuler)c).SelectedMarker!));
+
+    /// <summary>Gets the command that renames the ruler's selected marker (F2).</summary>
+    public static TimelineCommand RenameMarker { get; } = new(c => c is TimelineRuler { SelectedMarker: not null },
+        c => ((TimelineRuler)c).BeginRename(((TimelineRuler)c).SelectedMarker!));
 
     /// <summary>
     /// Registers the commands that aren't registered yet (with the users' changes applied). Timeline controls call it
@@ -78,12 +113,20 @@ public static class TimelineCommands
         Add(Group, "ScrollForward", "Shift+WheelDown", ScrollForward, "Scroll forward", "Scroll to later times", MaterialIcons.ChevronRight);
         Add(Group, "ScrollDrag", "MiddleDrag", ScrollDrag, "Scroll", "Move the timeline by dragging", MaterialIcons.PanTool);
         Add(Group, "ZoomToFit", "Home", ZoomToFit, "Zoom to fit", "Show the whole song", MaterialIcons.FitScreen);
+        Add(Group, "ToggleLoop", "L", ToggleLoop, "Loop", "Turn the loop on or off", MaterialIcons.Repeat);
+        Add(Group, "ToggleSnap", "Slash", ToggleSnap, "Snap to grid", "Turn snapping to the grid in view on or off (Shift inverts it while dragging)", MaterialIcons.Grid4x4);
 
+        // Drag commands sharing a gesture start where they apply: flags, then the loop bar, then anywhere.
+        Add(RulerGroup, "MoveMarker", "LeftDrag", MoveMarker, "Move marker", "Drag a flag to move its marker", MaterialIcons.Flag);
+        Add(RulerGroup, "EditLoop", "LeftDrag", EditLoop, "Edit loop", "Drag on the loop bar to draw, resize or move the loop", MaterialIcons.Repeat);
         Add(RulerGroup, "ZoomDrag", "LeftDrag", ZoomDrag, "Zoom and scroll", "Drag up or down to zoom, sideways to scroll", MaterialIcons.ZoomIn);
+        Add(RulerGroup, "RulerClick", "LeftClick", RulerClick, "Set play start", "Move the play start to the pointer, or to the marker clicked", MaterialIcons.PlayArrow);
+        Add(RulerGroup, "RulerDoubleClick", "DoubleClick", RulerDoubleClick, "Add marker, loop or fit", "Add or rename a marker, turn the loop on or off, or show the whole song", MaterialIcons.Flag);
         Add(RulerGroup, "WheelZoomIn", "WheelUp", ZoomIn, "Zoom in (ruler)", "Zoom in around the pointer", MaterialIcons.ZoomIn);
         Add(RulerGroup, "WheelZoomOut", "WheelDown", ZoomOut, "Zoom out (ruler)", "Zoom out around the pointer", MaterialIcons.ZoomOut);
-        Add(RulerGroup, "FitOnDoubleClick", "DoubleClick", ZoomToFit, "Zoom to fit (ruler)", "Show the whole song", MaterialIcons.FitScreen);
-        Add(RulerGroup, "RulerMenu", "RightClick", RulerMenu, "Ruler menu", "Choose what the ruler shows", MaterialIcons.Menu);
+        Add(RulerGroup, "RulerMenu", "RightClick", RulerMenu, "Ruler menu", "Open the menu of the flag under the pointer, or the ruler's menu", MaterialIcons.Menu);
+        Add(RulerGroup, "DeleteMarker", "Delete", DeleteMarker, "Delete marker", "Delete the selected marker", MaterialIcons.Delete);
+        Add(RulerGroup, "RenameMarker", "F2", RenameMarker, "Rename marker", "Rename the selected marker", MaterialIcons.Edit);
     }
 
     private static void Add(string group, string name, string keybinding, AtelierCommand command, string label, string description, string icon)
@@ -94,6 +137,40 @@ public static class TimelineCommands
         }
         KeybindingManager.RegisterKeybinding(new KeybindingDescriptor(name, group, keybinding, command,
             label: label, description: description, icon: icon));
+    }
+
+    private static void ToggleLoopOf(TimelineControl control)
+    {
+        if (control is TimelineRuler ruler)
+        {
+            ruler.ToggleLoop();
+            return;
+        }
+        var timeline = control.CurrentTimeline;
+        if (timeline.IsLoopEnabled || !timeline.Loop.IsEmpty(timeline.TempoMap)) timeline.IsLoopEnabled = !timeline.IsLoopEnabled;
+    }
+
+    private static void ClickAt(TimelineRuler ruler)
+    {
+        if (ruler.PointerPosition is not { } point) return;
+        if (ruler.MarkerAt(point) is { } marker)
+        {
+            ruler.SelectedMarker = marker;
+            ruler.CurrentTimeline.PlayStart = marker.Position;
+            return;
+        }
+        if (ruler.LoopBarPartAt(point) != LoopBarPart.None) return;
+        ruler.SelectedMarker = null;
+        ruler.SetPlayStartAt(point.X);
+    }
+
+    private static void DoubleClickAt(TimelineRuler ruler)
+    {
+        if (ruler.PointerPosition is not { } point) return;
+        if (ruler.MarkerAt(point) is { } marker) ruler.BeginRename(marker);
+        else if (ruler.MarkerLaneBounds.Contains(point)) ruler.AddMarkerAt(point.X);
+        else if (ruler.LoopBarPartAt(point) != LoopBarPart.None) ruler.ToggleLoop();
+        else ruler.ZoomToFit();
     }
 }
 
@@ -145,7 +222,6 @@ public sealed class TimelineScrollDragCommand(bool zoom) : DragCommand
             _timeline = control.CurrentTimeline;
             _zoom = zoom;
             _startScreen = start.ScreenPosition;
-
             _anchorTime = _timeline.XToTime(control.PointToClient(start.ScreenPosition).X);
             _startZoom = _timeline.PixelsPerSecond;
             _startTime = _timeline.Start;
@@ -167,6 +243,131 @@ public sealed class TimelineScrollDragCommand(bool zoom) : DragCommand
         {
             _timeline.PixelsPerSecond = _startZoom;
             _timeline.Start = _startTime;
+        }
+    }
+}
+
+/// <summary>
+/// Moves a marker by dragging its flag on a <see cref="TimelineRuler"/>: the marker keeps its unit and snaps to the grid
+/// (Shift inverts snapping); it becomes the selected marker. Escape puts it back.
+/// </summary>
+public sealed class TimelineMarkerDragCommand : DragCommand
+{
+    /// <inheritdoc/>
+    /// <remarks>It applies only over a flag.</remarks>
+    public override bool IsContextual => true;
+
+    /// <inheritdoc/>
+    public override bool CanExecute(object? parameter) => parameter is TimelineRuler;
+
+    /// <inheritdoc/>
+    public override IDragOperation? BeginDrag(DragStart start)
+    {
+        if (start.Target is not TimelineRuler ruler) return null;
+        var marker = ruler.MarkerAt(ruler.PointToClient(start.ScreenPosition));
+        if (marker == null) return null;
+        ruler.SelectedMarker = marker;
+        return new Operation(ruler, marker, start.ScreenPosition);
+    }
+
+    private sealed class Operation(TimelineRuler ruler, TimelineMarker marker, Point start) : IDragOperation
+    {
+        private readonly TimelinePosition _original = marker.Position;
+        private readonly double _originalTime = marker.Position.ToSeconds(ruler.CurrentTimeline.TempoMap);
+
+        public void Update(Point screenPosition, ModifierKeys modifiers)
+        {
+            var timeline = ruler.CurrentTimeline;
+            double time = _originalTime + (screenPosition.X - start.X) / timeline.PixelsPerSecond;
+            marker.Position = timeline.MovePosition(_original, ruler.Snap(Math.Max(0, time), modifiers));
+        }
+
+        public void Complete(Point screenPosition, ModifierKeys modifiers) => Update(screenPosition, modifiers);
+
+        public void Cancel() => marker.Position = _original;
+    }
+}
+
+/// <summary>
+/// Edits the loop by dragging on a <see cref="TimelineRuler"/>'s loop bar: outside the loop it draws a new loop (and
+/// turns the loop on), on an edge it moves that edge (not past the other), and between the edges it moves the whole loop.
+/// Ends keep their unit and snap to the grid (Shift inverts snapping). Escape puts the loop back.
+/// </summary>
+public sealed class TimelineLoopDragCommand : DragCommand
+{
+    /// <inheritdoc/>
+    /// <remarks>It applies only over the loop bar.</remarks>
+    public override bool IsContextual => true;
+
+    /// <inheritdoc/>
+    public override bool CanExecute(object? parameter) => parameter is TimelineRuler;
+
+    /// <inheritdoc/>
+    public override IDragOperation? BeginDrag(DragStart start)
+    {
+        if (start.Target is not TimelineRuler ruler) return null;
+        var part = ruler.LoopBarPartAt(ruler.PointToClient(start.ScreenPosition));
+        return part == LoopBarPart.None ? null : new Operation(ruler, part, start.ScreenPosition);
+    }
+
+    private sealed class Operation : IDragOperation
+    {
+        private readonly TimelineRuler _ruler;
+        private readonly TimelineContext _timeline;
+        private readonly LoopBarPart _part;
+        private readonly Point _start;
+        private readonly TimelineRange _original;
+        private readonly bool _wasEnabled;
+        private readonly double _startTime;
+        private readonly double _endTime;
+        private readonly double _anchorTime;
+
+        public Operation(TimelineRuler ruler, LoopBarPart part, Point start)
+        {
+            _ruler = ruler;
+            _timeline = ruler.CurrentTimeline;
+            _part = part;
+            _start = start;
+            _original = _timeline.Loop;
+            _wasEnabled = _timeline.IsLoopEnabled;
+            _startTime = _original.GetStartSeconds(_timeline.TempoMap);
+            _endTime = _original.GetEndSeconds(_timeline.TempoMap);
+            _anchorTime = ruler.XToTime(ruler.PointToClient(start).X);
+        }
+
+        public void Update(Point screenPosition, ModifierKeys modifiers)
+        {
+            var timeline = _timeline;
+            double delta = (screenPosition.X - _start.X) / timeline.PixelsPerSecond;
+            switch (_part)
+            {
+                case LoopBarPart.Start:
+                    timeline.Loop = _original with { Start = timeline.MovePosition(_original.Start, Math.Min(_endTime, _ruler.Snap(Math.Max(0, _startTime + delta), modifiers))) };
+                    break;
+                case LoopBarPart.End:
+                    timeline.Loop = _original with { End = timeline.MovePosition(_original.End, Math.Max(_startTime, _ruler.Snap(_endTime + delta, modifiers))) };
+                    break;
+                case LoopBarPart.Body:
+                    double start = _ruler.Snap(Math.Max(0, _startTime + delta), modifiers);
+                    double shift = start - _startTime;
+                    timeline.Loop = new TimelineRange(timeline.MovePosition(_original.Start, start), timeline.MovePosition(_original.End, _endTime + shift));
+                    break;
+                default:
+                    double from = _ruler.Snap(Math.Max(0, _anchorTime), modifiers);
+                    double to = _ruler.Snap(Math.Max(0, _anchorTime + delta), modifiers);
+                    var unit = _ruler.PositionUnit;
+                    timeline.Loop = new TimelineRange(timeline.CreatePosition(Math.Min(from, to), unit), timeline.CreatePosition(Math.Max(from, to), unit));
+                    if (to != from) timeline.IsLoopEnabled = true;
+                    break;
+            }
+        }
+
+        public void Complete(Point screenPosition, ModifierKeys modifiers) => Update(screenPosition, modifiers);
+
+        public void Cancel()
+        {
+            _timeline.Loop = _original;
+            _timeline.IsLoopEnabled = _wasEnabled;
         }
     }
 }

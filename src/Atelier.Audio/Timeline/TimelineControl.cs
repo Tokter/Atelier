@@ -43,9 +43,32 @@ public abstract class TimelineControl : KeybindingHandler
     public static readonly BindableProperty<Color> MajorLineColorProperty =
         BindableProperty.Register<TimelineControl, Color>(nameof(MajorLineColor), Color.FromRgb(0x80, 0x80, 0x80), options: PropertyOptions.AffectsRender);
 
+    /// <summary>Identifies the <see cref="ShowSharedMarkers"/> property.</summary>
+    public static readonly BindableProperty<bool> ShowSharedMarkersProperty =
+        BindableProperty.Register<TimelineControl, bool>(nameof(ShowSharedMarkers), true, options: PropertyOptions.AffectsRender);
+
+    /// <summary>Identifies the <see cref="SnapToGrid"/> property.</summary>
+    public static readonly BindableProperty<bool> SnapToGridProperty =
+        BindableProperty.Register<TimelineControl, bool>(nameof(SnapToGrid), true);
+
+    /// <summary>Identifies the <see cref="MarkerColor"/> property.</summary>
+    public static readonly BindableProperty<Color> MarkerColorProperty =
+        BindableProperty.Register<TimelineControl, Color>(nameof(MarkerColor), Color.FromRgb(0xFB, 0x8C, 0x00), options: PropertyOptions.AffectsRender);
+
+    /// <summary>Identifies the <see cref="LoopColor"/> property.</summary>
+    public static readonly BindableProperty<Color> LoopColorProperty =
+        BindableProperty.Register<TimelineControl, Color>(nameof(LoopColor), Color.FromRgb(0x42, 0x85, 0xF4), options: PropertyOptions.AffectsRender);
+
+    /// <summary>Identifies the <see cref="PlayheadColor"/> property.</summary>
+    public static readonly BindableProperty<Color> PlayheadColorProperty =
+        BindableProperty.Register<TimelineControl, Color>(nameof(PlayheadColor), Color.FromRgb(0xE5, 0x39, 0x35), options: PropertyOptions.AffectsRender);
+
+    private const float DefaultCharWidth = 6.5f;
+
     private TimelineContext? _ownTimeline;
     private TimelineContext? _subscribed;
     private readonly TimelineGrid _grid = new();
+    private float _charWidth = DefaultCharWidth;
 
     static TimelineControl()
     {
@@ -59,6 +82,7 @@ public abstract class TimelineControl : KeybindingHandler
     {
         TimelineCommands.Register();
         AdditionalScopes.Add(new KeybindingScope(TimelineCommands.Group, this));
+        Markers.Changed += (_, _) => InvalidateVisual();
     }
 
     /// <summary>
@@ -79,8 +103,55 @@ public abstract class TimelineControl : KeybindingHandler
     /// <summary>Gets or sets the color of the labeled and emphasized ticks or grid lines (such as bar lines).</summary>
     public Color MajorLineColor { get => GetValue(MajorLineColorProperty); set => SetValue(MajorLineColorProperty, value); }
 
+    /// <summary>
+    /// Gets or sets whether the control shows the shared markers of its context (<see cref="TimelineContext.Markers"/>)
+    /// besides its own <see cref="Markers"/>. The default is <c>true</c>.
+    /// </summary>
+    public bool ShowSharedMarkers { get => GetValue(ShowSharedMarkersProperty); set => SetValue(ShowSharedMarkersProperty, value); }
+
+    /// <summary>
+    /// Gets or sets whether dragging and clicking snap to the finest ticks in view (the adaptive grid); holding Shift
+    /// does the opposite, like in Bitwig. The default is <c>true</c>.
+    /// </summary>
+    public bool SnapToGrid { get => GetValue(SnapToGridProperty); set => SetValue(SnapToGridProperty, value); }
+
+    /// <summary>Gets or sets the color of markers without a color of their own.</summary>
+    public Color MarkerColor { get => GetValue(MarkerColorProperty); set => SetValue(MarkerColorProperty, value); }
+
+    /// <summary>Gets or sets the color of the loop.</summary>
+    public Color LoopColor { get => GetValue(LoopColorProperty); set => SetValue(LoopColorProperty, value); }
+
+    /// <summary>Gets or sets the color of the playhead and the play start marker.</summary>
+    public Color PlayheadColor { get => GetValue(PlayheadColorProperty); set => SetValue(PlayheadColorProperty, value); }
+
+    /// <summary>Gets the markers only this control shows, besides the shared ones (see <see cref="ShowSharedMarkers"/>).</summary>
+    public TimelineMarkerCollection Markers { get; } = [];
+
+    /// <summary>
+    /// Gets the unit new positions get (markers, the play start, a new loop): beats when the control counts in
+    /// <see cref="TimelineRulerMode.Beats"/>, seconds otherwise. Moving a position keeps its unit.
+    /// </summary>
+    public TimelineUnit PositionUnit => Mode == TimelineRulerMode.Beats ? TimelineUnit.Beats : TimelineUnit.Seconds;
+
     /// <summary>Gets the grid of <see cref="Mode"/> as last computed by <see cref="UpdateGrid"/> (when the control was drawn).</summary>
     public TimelineGrid Grid => _grid;
+
+    /// <summary>
+    /// Snaps a song time (seconds) to the finest ticks in view when <see cref="SnapToGrid"/> is on, or off while Shift is
+    /// held (Shift inverts snapping).
+    /// </summary>
+    public double Snap(double time, ModifierKeys modifiers = ModifierKeys.None)
+    {
+        bool snap = SnapToGrid != ((modifiers & ModifierKeys.Shift) != 0);
+        if (!snap) return time;
+        _grid.Mode = Mode;
+        _grid.CharWidth = _charWidth;
+        _grid.Update(CurrentTimeline, Bounds.Width);
+        return Math.Max(0, _grid.Snap(time));
+    }
+
+    /// <summary>Removes a marker from the control's own markers or, failing that, the shared ones; returns whether it was found.</summary>
+    public bool RemoveMarker(TimelineMarker marker) => Markers.Remove(marker) || CurrentTimeline.Markers.Remove(marker);
 
     /// <summary>Gets where the pointer is over the control, in its coordinates, or <c>null</c> when it isn't over it. Zoom commands zoom around it.</summary>
     public Point? PointerPosition { get; private set; }
@@ -91,6 +162,7 @@ public abstract class TimelineControl : KeybindingHandler
     /// </summary>
     public TimelineGrid UpdateGrid(float charWidth)
     {
+        _charWidth = charWidth;
         _grid.Mode = Mode;
         _grid.CharWidth = charWidth;
         _grid.Update(CurrentTimeline, Bounds.Width);
@@ -176,21 +248,17 @@ public abstract class TimelineControl : KeybindingHandler
         if (ReferenceEquals(_subscribed, context)) return;
         if (_subscribed != null)
         {
-            _subscribed.ViewChanged -= OnViewChanged;
-            _subscribed.PropertyChanged -= OnContextPropertyChanged;
+            _subscribed.PropertyChanged -= OnContextChanged;
+            _subscribed.Markers.Changed -= OnContextChanged;
         }
         _subscribed = context;
         if (context != null)
         {
-            context.ViewChanged += OnViewChanged;
-            context.PropertyChanged += OnContextPropertyChanged;
+            context.PropertyChanged += OnContextChanged;
+            context.Markers.Changed += OnContextChanged;
         }
     }
 
-    private void OnViewChanged(object? sender, EventArgs e) => InvalidateVisual();
-
-    private void OnContextPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(TimelineContext.TempoMap) or nameof(TimelineContext.SampleRate)) InvalidateVisual();
-    }
+    // The view, the song and the shared markers are all drawn.
+    private void OnContextChanged(object? sender, EventArgs e) => InvalidateVisual();
 }

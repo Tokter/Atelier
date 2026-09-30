@@ -373,14 +373,19 @@ public class TimelineControlTests
     }
 
     [Fact]
-    public void TheRuler_IsARowHigh_PlusOneForASecondRow_AndItsMenuChoosesTheUnits()
+    public void TheRuler_IsAsHighAsItsParts_AndItsMenuChoosesTheUnits()
     {
         var ruler = new TimelineRuler();
         ruler.Measure(new Size(500, 100));
-        Assert.Equal(TimelineRuler.RowHeight, ruler.DesiredSize.Height);
+        Assert.Equal(TimelineRuler.MarkerLaneHeight + TimelineRuler.RowHeight + TimelineRuler.LoopBarHeight, ruler.DesiredSize.Height);
+        ruler.ShowMarkers = false;
+        ruler.ShowLoopBar = false;
         ruler.SecondaryMode = TimelineRulerMode.Time;
         ruler.Measure(new Size(500, 100));
         Assert.Equal(TimelineRuler.RowHeight + TimelineRuler.SecondaryRowHeight, ruler.DesiredSize.Height);
+        ruler.Arrange(new Rect(0, 0, 500, ruler.DesiredSize.Height));
+        Assert.Equal(new Rect(0, 0, 500, TimelineRuler.RowHeight), ruler.RowBounds);
+        Assert.Equal(0, ruler.LoopBarBounds.Height);
 
         ruler.Mode = TimelineRulerMode.Samples;
         var items = ruler.CreateContextMenu().Items.OfType<MenuItem>().ToList();
@@ -410,5 +415,207 @@ public class TimelineControlTests
         VisualTreeRenderer.Render(ruler, ref context, ThemeVisualPresenter.Instance);
         Assert.Contains(ruler.Grid.Ticks, t => t.Label == "2" && t.X == 200);
         Assert.Equal(ruler.Grid.Ticks.Select(t => t.X), lane.Grid.Ticks.Select(t => t.X));
+    }
+}
+
+public class TimelineMarkerAndLoopTests
+{
+    // A ruler 800 px wide at 100 px/s (a beat is 50 px at 120 BPM): marker lane 0-18, row 18-44, loop bar 44-56.
+    private static (TimelineRuler Ruler, TimelineContext Song) Ruler()
+    {
+        var song = new TimelineContext { PixelsPerSecond = 100 };
+        var ruler = new TimelineRuler { Timeline = song };
+        ruler.Measure(new Size(800, 100));
+        ruler.Arrange(new Rect(0, 0, 800, ruler.DesiredSize.Height));
+        return (ruler, song);
+    }
+
+    private static float RowY(TimelineRuler ruler) => ruler.RowBounds.Y + 10;
+
+    private static float LoopY(TimelineRuler ruler) => ruler.LoopBarBounds.Y + 6;
+
+    private static void Press(TimelineRuler ruler, float x, float y, int clicks = 1) =>
+        ruler.OnPreviewPointerPressed(new PointerEventArgs(new Point(x, y), new Point(x, y), PointerButtons.Left, clickCount: clicks));
+
+    private static IDragOperation Drag(DragCommand command, TimelineRuler ruler, float x, float y) =>
+        command.BeginDrag(new DragStart(ruler, ruler, ruler, new Point(x, y), PointerButtons.Left, ModifierKeys.None))!;
+
+    [Fact]
+    public void Markers_ReportChangesToTheirProperties()
+    {
+        var markers = new TimelineMarkerCollection();
+        int changes = 0;
+        markers.Changed += (_, _) => changes++;
+        var marker = new TimelineMarker(TimelinePosition.Seconds(1), "Intro");
+        markers.Add(marker);
+        marker.Label = "Verse";
+        markers.Remove(marker);
+        marker.Label = "Chorus"; // no longer in the collection
+        Assert.Equal(3, changes);
+        Assert.Null(markers.FindAt(1, TempoMap.Default));
+    }
+
+    [Fact]
+    public void ClickingTheRuler_SetsThePlayStart_SnappedAndInBeats()
+    {
+        var (ruler, song) = Ruler();
+        Press(ruler, 104, RowY(ruler));
+        TimelineCommands.RulerClick.Execute(ruler);
+        Assert.Equal(TimelinePosition.Beats(2.125), song.PlayStart); // the eighth of a beat nearest 1.04 s
+
+        ruler.Mode = TimelineRulerMode.Time;
+        ruler.SnapToGrid = false;
+        Press(ruler, 104, RowY(ruler));
+        TimelineCommands.RulerClick.Execute(ruler);
+        Assert.Equal(TimelineUnit.Seconds, song.PlayStart.Unit);
+        Assert.Equal(1.04, song.PlayStart.Value, 5);
+    }
+
+    [Fact]
+    public void Flags_AreHitInTheMarkerLane_AndClickingOneMovesThePlayStartThere()
+    {
+        var (ruler, song) = Ruler();
+        var shared = new TimelineMarker(TimelinePosition.Beats(4), "Verse");
+        var own = new TimelineMarker(TimelinePosition.Seconds(5), "Mine");
+        song.Markers.Add(shared);
+        ruler.Markers.Add(own);
+
+        Assert.Same(shared, ruler.MarkerAt(new Point(205, 9)));
+        Assert.Same(own, ruler.MarkerAt(new Point(505, 9)));
+        Assert.Null(ruler.MarkerAt(new Point(205, RowY(ruler)))); // the row below
+        Assert.Null(ruler.MarkerAt(new Point(150, 9)));
+        ruler.ShowSharedMarkers = false;
+        Assert.Null(ruler.MarkerAt(new Point(205, 9)));
+        ruler.ShowSharedMarkers = true;
+
+        Press(ruler, 205, 9);
+        TimelineCommands.RulerClick.Execute(ruler);
+        Assert.Same(shared, ruler.SelectedMarker);
+        Assert.Equal(TimelinePosition.Beats(4), song.PlayStart);
+
+        TimelineCommands.DeleteMarker.Execute(ruler);
+        Assert.Empty(song.Markers);
+        Assert.Null(ruler.SelectedMarker);
+    }
+
+    [Fact]
+    public void DraggingAFlag_MovesItsMarker_KeepingItsUnit_AndShiftInvertsSnapping()
+    {
+        var (ruler, song) = Ruler();
+        var marker = new TimelineMarker(TimelinePosition.Beats(4), "Verse");
+        song.Markers.Add(marker);
+
+        var drag = Drag(TimelineCommands.MoveMarker, ruler, 205, 9);
+        drag.Update(new Point(305, 9), ModifierKeys.None);
+        Assert.Equal(TimelinePosition.Beats(6), marker.Position);
+        drag.Update(new Point(308, 9), ModifierKeys.Shift);
+        Assert.Equal(6.06, marker.Position.Value, 6); // 3 px unsnapped
+        drag.Cancel();
+        Assert.Equal(TimelinePosition.Beats(4), marker.Position);
+
+        Assert.Null(TimelineCommands.MoveMarker.BeginDrag(new DragStart(ruler, ruler, ruler, new Point(150, 9), PointerButtons.Left, ModifierKeys.None)));
+    }
+
+    [Fact]
+    public void DraggingOnTheLoopBar_DrawsResizesAndMovesTheLoop()
+    {
+        var (ruler, song) = Ruler();
+        var drag = Drag(TimelineCommands.EditLoop, ruler, 100, LoopY(ruler));
+        drag.Update(new Point(300, LoopY(ruler)), ModifierKeys.None);
+        drag.Complete(new Point(300, LoopY(ruler)), ModifierKeys.None);
+        Assert.Equal(new TimelineRange(TimelinePosition.Beats(2), TimelinePosition.Beats(6)), song.Loop);
+        Assert.True(song.IsLoopEnabled);
+
+        Assert.Equal(LoopBarPart.Start, ruler.LoopBarPartAt(new Point(102, LoopY(ruler))));
+        Assert.Equal(LoopBarPart.End, ruler.LoopBarPartAt(new Point(298, LoopY(ruler))));
+        Assert.Equal(LoopBarPart.Body, ruler.LoopBarPartAt(new Point(200, LoopY(ruler))));
+        Assert.Equal(LoopBarPart.Empty, ruler.LoopBarPartAt(new Point(500, LoopY(ruler))));
+        Assert.Equal(LoopBarPart.None, ruler.LoopBarPartAt(new Point(200, RowY(ruler))));
+
+        drag = Drag(TimelineCommands.EditLoop, ruler, 298, LoopY(ruler)); // the end
+        drag.Update(new Point(398, LoopY(ruler)), ModifierKeys.None);
+        Assert.Equal(TimelinePosition.Beats(8), song.Loop.End);
+        drag.Update(new Point(0, LoopY(ruler)), ModifierKeys.None); // not before the start
+        Assert.Equal(TimelinePosition.Beats(2), song.Loop.End);
+        drag.Cancel();
+        Assert.Equal(TimelinePosition.Beats(6), song.Loop.End);
+
+        drag = Drag(TimelineCommands.EditLoop, ruler, 200, LoopY(ruler)); // the body
+        drag.Update(new Point(250, LoopY(ruler)), ModifierKeys.None);
+        Assert.Equal(new TimelineRange(TimelinePosition.Beats(3), TimelinePosition.Beats(7)), song.Loop);
+    }
+
+    [Fact]
+    public void DoubleClicks_AddAMarker_ToggleTheLoop_OrFitTheSong()
+    {
+        var (ruler, song) = Ruler();
+        song.Duration = 16;
+        ruler.MarkerAdding += (_, e) => e.Marker.Label = "Added";
+        Press(ruler, 400, 9, clicks: 2);
+        TimelineCommands.RulerDoubleClick.Execute(ruler);
+        var marker = Assert.Single(song.Markers);
+        Assert.Equal(("Added", TimelinePosition.Beats(8)), (marker.Label, marker.Position));
+        Assert.Equal(TimelineMarker.Palette[0].Color, marker.Color);
+        Assert.Same(marker, ruler.SelectedMarker);
+
+        ruler.MarkerAdding += (_, e) => e.Cancel = true;
+        Assert.Null(ruler.AddMarkerAt(100));
+        Assert.Single(song.Markers);
+
+        Press(ruler, 400, LoopY(ruler), clicks: 2); // an empty loop: loops four bars from the play start
+        TimelineCommands.RulerDoubleClick.Execute(ruler);
+        Assert.True(song.IsLoopEnabled);
+        Assert.Equal(new TimelineRange(TimelinePosition.Beats(0), TimelinePosition.Beats(16)), song.Loop);
+        TimelineCommands.RulerDoubleClick.Execute(ruler);
+        Assert.False(song.IsLoopEnabled);
+
+        Press(ruler, 400, RowY(ruler), clicks: 2);
+        TimelineCommands.RulerDoubleClick.Execute(ruler);
+        Assert.Equal(50, song.PixelsPerSecond); // 16 s in 800 px
+    }
+
+    [Fact]
+    public void AMarkersMenu_RenamesRecolorsAndDeletesIt()
+    {
+        var (ruler, song) = Ruler();
+        var marker = new TimelineMarker(TimelinePosition.Beats(4), "Verse");
+        song.Markers.Add(marker);
+        var items = ruler.CreateMarkerMenu(marker).Items.OfType<MenuItem>().ToList();
+        Assert.Equal(3, items.Count);
+        Assert.Equal("Color", items[1].Header as string);
+        Assert.Equal(TimelineMarker.Palette.Count, items[1].Items.Count);
+
+        var menu = ruler.CreateContextMenu(400).Items.OfType<MenuItem>().ToList();
+        Assert.Contains(menu, i => i.Header as string == "Insert marker");
+        Assert.Contains(menu, i => i.Command == TimelineCommands.ToggleLoop);
+    }
+
+    [Fact]
+    public void RenderingTheSong_DrawsFlagsTheLoopAndThePlayhead()
+    {
+        using var _ = ActiveTheme.Use(MaterialTheme.CreateLight());
+        var (ruler, song) = Ruler();
+        song.Markers.Add(new TimelineMarker(TimelinePosition.Beats(4), "Verse", TimelineMarker.Palette[5].Color));
+        song.Loop = new TimelineRange(TimelinePosition.Beats(2), TimelinePosition.Beats(6));
+        song.IsLoopEnabled = true;
+        song.Playhead = 3.5;
+        var lane = new TimelineLane { Timeline = song };
+        lane.Measure(new Size(800, 40));
+        lane.Arrange(new Rect(0, 0, 800, 40));
+
+        using var bitmap = new SkiaSharp.SKBitmap(800, 60);
+        using var canvas = new SkiaSharp.SKCanvas(bitmap);
+        using var paints = new PaintRegistry();
+        var context = new DrawingContext(canvas, paints);
+        VisualTreeRenderer.Render(ruler, ref context, ThemeVisualPresenter.Instance);
+        var blue = TimelineMarker.Palette[5].Color;
+        var flag = bitmap.GetPixel(202, 4);
+        Assert.Equal((blue.R, blue.G, blue.B), (flag.Red, flag.Green, flag.Blue));
+        Assert.NotEqual(bitmap.GetPixel(600, (int)LoopY(ruler)), bitmap.GetPixel(200, (int)LoopY(ruler))); // the loop
+
+        canvas.Clear();
+        VisualTreeRenderer.Render(lane, ref context, ThemeVisualPresenter.Instance);
+        Assert.NotEqual(bitmap.GetPixel(253, 20), bitmap.GetPixel(253 + 400, 20)); // shaded inside the loop (1 to 3 s) only
+        Assert.NotEqual(bitmap.GetPixel(350, 20), bitmap.GetPixel(450, 20)); // the playhead at 3.5 s, not a beat line
     }
 }
