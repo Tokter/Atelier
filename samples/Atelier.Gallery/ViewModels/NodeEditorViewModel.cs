@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using Atelier.Audio;
 using Atelier.Controls;
 using Atelier.Core.Keybinding;
 using Atelier.Core.Primitives;
@@ -43,9 +44,29 @@ public partial class NodeEditorViewModel : PageViewModel
         PageTitle = "Node Editor";
         CommandGroup = Group;
         Keywords = "node editor graph blender socket link reroute knob dataflow evaluation group subgraph";
+        InputEditors.Register(InputEditor.Knob, CreateKnob);
         DemoSockets.RegisterNodes(Graph.Catalog);
         BuildDemo();
         _evaluator = new GraphEvaluator(Graph);
+    }
+
+    // The node editor has no knob of its own; Atelier.Audio's is 28 px and resets to the value it started with.
+    private static Knob CreateKnob(InputSocketViewModel input)
+    {
+        var range = InputEditors.GetNumberRange(input);
+        var knob = new Knob
+        {
+            Minimum = range.Minimum,
+            Maximum = range.Maximum,
+            Width = 28,
+            Height = 28,
+            ValueFormat = range.ValueFormat,
+        };
+        knob.SmallChange = range.SmallChange;
+        knob.LargeChange = range.LargeChange;
+        knob.DefaultValue = (float)InputEditors.ToDouble(input.Value);
+        InputEditors.BindNumber(knob, input, v => knob.Value = v, h => knob.ValueChanged += h);
+        return knob;
     }
 
     /// <summary>Gets the graph the page edits.</summary>

@@ -30,8 +30,9 @@ Headless gallery screenshots (used for `docs/screenshots/`): set `ATELIER_GALLER
 
 Project layering (lower depends on nothing above it):
 `Core` → `Layout` → `Rendering` → `Theming` → `Controls` → `Theming.Material` → `Markup` / `NodeEditor` / `DevTools` →
-`Platform.Silk`. `Generators` is a Roslyn source-generator project referenced as an analyzer
-(`OutputItemType="Analyzer" ReferenceOutputAssembly="false"`).
+`Platform.Silk`. `Audio` (audio-tool controls: `Knob`, timeline, waveforms) sits on `Markup` and brings its own
+renderers (`AudioTheme`) and markup; `NodeEditor` must not depend on it. `Generators` is a Roslyn source-generator
+project referenced as an analyzer (`OutputItemType="Analyzer" ReferenceOutputAssembly="false"`).
 
 - **Property system** (`Atelier.Core/Properties`): elements are `BindableObject`s with static
   `BindableProperty<T>` fields registered via `BindableProperty.Register<TOwner, T>(name, default, changedCallback,

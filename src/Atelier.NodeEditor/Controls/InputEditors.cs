@@ -10,24 +10,67 @@ namespace Atelier.Nodes;
 /// <see cref="NodeEditor.InputEditorFactory"/>), kept in sync with <see cref="InputSocketViewModel.Value"/> both ways.
 /// </summary>
 /// <remarks>
+/// <para>
 /// <see cref="InputEditor.Auto"/> picks a check box for <see cref="bool"/> values, a slider for numbers with a
 /// <see cref="InputSocketViewModel.Minimum"/> and <see cref="InputSocketViewModel.Maximum"/>, and a text box for other
 /// numbers and strings; other types get no control. Values keep the socket type's <see cref="SocketType.ValueType"/>.
+/// </para>
+/// <para>
+/// The node editor has no knob of its own: <see cref="InputEditor.Knob"/> gets a slider until an app registers a knob
+/// factory with <see cref="Register"/>, for example one making an <c>Atelier.Audio.Knob</c> set up with
+/// <see cref="GetNumberRange"/> and <see cref="BindNumber"/>. Registering replaces the built-in control of any editor.
+/// </para>
 /// </remarks>
+/// <example>
+/// <code>
+/// InputEditors.Register(InputEditor.Knob, input =>
+/// {
+///     var range = InputEditors.GetNumberRange(input);
+///     var knob = new Knob { Minimum = range.Minimum, Maximum = range.Maximum, SmallChange = range.SmallChange,
+///         LargeChange = range.LargeChange, ValueFormat = range.ValueFormat, Width = 28, Height = 28 };
+///     InputEditors.BindNumber(knob, input, v => knob.Value = v, h => knob.ValueChanged += h);
+///     return knob;
+/// });
+/// </code>
+/// </example>
 public static class InputEditors
 {
+    private static readonly Dictionary<InputEditor, Func<InputSocketViewModel, UIElement?>> s_factories = [];
+
     /// <summary>Creates the control for <paramref name="input"/> as its <see cref="InputSocketViewModel.Editor"/> says, or <c>null</c> for none.</summary>
     public static UIElement? Create(InputSocketViewModel input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        return Resolve(input) switch
+        var editor = Resolve(input);
+        Func<InputSocketViewModel, UIElement?>? factory;
+        lock (s_factories)
+        {
+            s_factories.TryGetValue(editor, out factory);
+        }
+        if (factory != null) return factory(input);
+        return editor switch
         {
             InputEditor.TextBox => CreateTextBox(input),
-            InputEditor.Slider => CreateSlider(input),
-            InputEditor.Knob => CreateKnob(input),
+            InputEditor.Slider or InputEditor.Knob => CreateSlider(input),
             InputEditor.CheckBox => CreateCheckBox(input),
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Makes <see cref="Create"/> use <paramref name="factory"/> for inputs whose editor is <paramref name="editor"/>,
+    /// replacing the built-in control; <c>null</c> restores the built-in one.
+    /// </summary>
+    /// <param name="editor">The editor kind; not <see cref="InputEditor.Auto"/>, which resolves to another kind.</param>
+    /// <param name="factory">Creates the control for an input, or returns <c>null</c> for none.</param>
+    public static void Register(InputEditor editor, Func<InputSocketViewModel, UIElement?>? factory)
+    {
+        if (editor == InputEditor.Auto) throw new ArgumentException("Auto resolves to another editor and can't be registered.", nameof(editor));
+        lock (s_factories)
+        {
+            if (factory == null) s_factories.Remove(editor);
+            else s_factories[editor] = factory;
+        }
     }
 
     /// <summary>Gets the editor <paramref name="input"/> gets: its <see cref="InputSocketViewModel.Editor"/>, with <see cref="InputEditor.Auto"/> resolved.</summary>
@@ -79,46 +122,74 @@ public static class InputEditors
         return textBox;
     }
 
-    /// <summary>Creates a slider over the input's range (0..1 without one); whole-number types move in steps of 1.</summary>
+    /// <summary>Creates a slider over the input's range (see <see cref="GetNumberRange"/>); whole-number types snap to steps of 1.</summary>
     public static Slider CreateSlider(InputSocketViewModel input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        var type = input.Type.ValueType ?? typeof(double);
-        bool whole = IsWholeNumber(type);
+        var range = GetNumberRange(input);
         var slider = new Slider
         {
-            Minimum = (float)(input.Minimum ?? 0),
-            Maximum = (float)(input.Maximum ?? 1),
-            IsSnapToTickEnabled = whole,
-            TickFrequency = whole ? 1 : 0,
-            ValueFormat = whole ? "{0:0}" : "{0:0.00}",
+            Minimum = range.Minimum,
+            Maximum = range.Maximum,
+            IsSnapToTickEnabled = range.IsWholeNumber,
+            TickFrequency = range.IsWholeNumber ? 1 : 0,
+            ValueFormat = range.ValueFormat,
             MinWidth = 0,
         };
-        slider.SmallChange = whole ? 1 : (slider.Maximum - slider.Minimum) / 100;
-        slider.LargeChange = whole ? Math.Max(1, MathF.Round((slider.Maximum - slider.Minimum) / 10)) : (slider.Maximum - slider.Minimum) / 10;
-        BindNumber(slider, input, type, () => slider.Value, v => slider.Value = v, h => slider.ValueChanged += h);
+        slider.SmallChange = range.SmallChange;
+        slider.LargeChange = range.LargeChange;
+        BindNumber(slider, input, v => slider.Value = v, h => slider.ValueChanged += h);
         return slider;
     }
 
-    /// <summary>Creates a 28 px knob over the input's range (0..1 without one), reset by a double click to the value it started with.</summary>
-    public static Knob CreateKnob(InputSocketViewModel input)
+    /// <summary>
+    /// Gets the range a number control for <paramref name="input"/> covers: its <see cref="InputSocketViewModel.Minimum"/>
+    /// and <see cref="InputSocketViewModel.Maximum"/> (0..1 without them); steps of 1 and a tenth of the range for
+    /// whole-number types, a hundredth and a tenth of the range otherwise; and a value format with two decimals for
+    /// fractional types.
+    /// </summary>
+    public static NumberRange GetNumberRange(InputSocketViewModel input)
     {
         ArgumentNullException.ThrowIfNull(input);
+        bool whole = IsWholeNumber(input.Type.ValueType ?? typeof(double));
+        float minimum = (float)(input.Minimum ?? 0);
+        float maximum = (float)(input.Maximum ?? 1);
+        float span = maximum - minimum;
+        return whole
+            ? new NumberRange(minimum, maximum, 1, Math.Max(1, MathF.Round(span / 10)), true, "{0:0}")
+            : new NumberRange(minimum, maximum, span / 100, span / 10, false, "{0:0.00}");
+    }
+
+    /// <summary>
+    /// Keeps a number control and <paramref name="input"/> in sync both ways: the input keeps its type (rounded for
+    /// whole-number types), and while the control is in a window it shows the input's value as that changes.
+    /// </summary>
+    /// <param name="control">The control.</param>
+    /// <param name="input">The input it edits.</param>
+    /// <param name="set">Shows a value in the control.</param>
+    /// <param name="subscribe">Subscribes a handler to the control's value-changed event.</param>
+    public static void BindNumber(UIElement control, InputSocketViewModel input, Action<float> set, Action<EventHandler<float>> subscribe)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(set);
+        ArgumentNullException.ThrowIfNull(subscribe);
         var type = input.Type.ValueType ?? typeof(double);
-        bool whole = IsWholeNumber(type);
-        var knob = new Knob
+        bool updating = false;
+        void Show()
         {
-            Minimum = (float)(input.Minimum ?? 0),
-            Maximum = (float)(input.Maximum ?? 1),
-            Width = 28,
-            Height = 28,
-            ValueFormat = whole ? "{0:0}" : "{0:0.00}",
-        };
-        knob.SmallChange = whole ? 1 : (knob.Maximum - knob.Minimum) / 100;
-        knob.LargeChange = whole ? Math.Max(1, MathF.Round((knob.Maximum - knob.Minimum) / 10)) : (knob.Maximum - knob.Minimum) / 10;
-        knob.DefaultValue = (float)ToDouble(input.Value);
-        BindNumber(knob, input, type, () => knob.Value, v => knob.Value = v, h => knob.ValueChanged += h);
-        return knob;
+            updating = true;
+            set((float)ToDouble(input.Value));
+            updating = false;
+        }
+        subscribe((_, value) =>
+        {
+            if (updating) return;
+            var converted = FromDouble(value, type);
+            if (!Equals(converted, input.Value)) input.Value = converted;
+        });
+        Show();
+        Sync(control, input, Show);
     }
 
     /// <summary>Creates a check box labeled with the input's name.</summary>
@@ -202,26 +273,6 @@ public static class InputEditors
         }
     }
 
-    // Keeps a float control and a numeric input in sync; the input keeps its type.
-    private static void BindNumber(UIElement control, InputSocketViewModel input, Type type, Func<float> get, Action<float> set, Action<EventHandler<float>> subscribe)
-    {
-        bool updating = false;
-        void Show()
-        {
-            updating = true;
-            set((float)ToDouble(input.Value));
-            updating = false;
-        }
-        subscribe((_, value) =>
-        {
-            if (updating) return;
-            var converted = FromDouble(value, type);
-            if (!Equals(converted, input.Value)) input.Value = converted;
-        });
-        Show();
-        Sync(control, input, Show);
-    }
-
     // Updates the control when the input's value changes, while the control is in a window.
     private static void Sync(UIElement control, InputSocketViewModel input, Action show)
     {
@@ -237,3 +288,12 @@ public static class InputEditors
         control.DetachedFromVisualTree += (_, _) => input.PropertyChanged -= OnChanged;
     }
 }
+
+/// <summary>The range and steps of a number control that edits an input (see <see cref="InputEditors.GetNumberRange"/>).</summary>
+/// <param name="Minimum">The smallest value.</param>
+/// <param name="Maximum">The largest value.</param>
+/// <param name="SmallChange">The step of the arrow keys.</param>
+/// <param name="LargeChange">The step of Page Up and Page Down.</param>
+/// <param name="IsWholeNumber">Whether the input holds whole numbers.</param>
+/// <param name="ValueFormat">The composite format of the value text, with the value as argument 0.</param>
+public readonly record struct NumberRange(float Minimum, float Maximum, float SmallChange, float LargeChange, bool IsWholeNumber, string ValueFormat);

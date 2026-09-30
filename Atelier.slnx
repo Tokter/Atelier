@@ -3,6 +3,7 @@
     <Project Path="samples/Atelier.Gallery/Atelier.Gallery.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Atelier.Audio/Atelier.Audio.csproj" />
     <Project Path="src/Atelier.Controls/Atelier.Controls.csproj" />
     <Project Path="src/Atelier.Core/Atelier.Core.csproj" />
     <Project Path="src/Atelier.DevTools/Atelier.DevTools.csproj" />

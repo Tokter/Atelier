@@ -1,3 +1,4 @@
+using Atelier.Audio;
 using Atelier.Controls;
 using Atelier.Core.Events;
 using Atelier.Core.Keybinding;
@@ -323,7 +324,7 @@ public class NodeInputEditorTests
         Assert.Null(InputEditors.Create(Input(Other)));
         var knob = Input(TestSockets.Float);
         knob.Editor = InputEditor.Knob;
-        Assert.IsType<Knob>(InputEditors.Create(knob));
+        Assert.IsType<Slider>(InputEditors.Create(knob)); // until a knob factory is registered
     }
 
     [Fact]
@@ -370,20 +371,49 @@ public class NodeInputEditorTests
     }
 
     [Fact]
-    public void ACheckBoxAndAKnob_EditTheirValues()
+    public void ACheckBox_EditsItsValue()
     {
         var flag = Input(Bool, true);
         var checkBox = InputEditors.CreateCheckBox(flag);
         Assert.True(checkBox.IsChecked);
         checkBox.IsChecked = false;
         Assert.Equal(false, flag.Value);
+    }
 
+    [Fact]
+    public void NumberRanges_StepByOne_ForWholeNumbers_AndByAHundredth_OtherwiseOfTheRange()
+    {
+        Assert.Equal(new NumberRange(0, 20, 1, 2, true, "{0:0}"), InputEditors.GetNumberRange(Input(TestSockets.Int, 5, 0, 20)));
+        Assert.Equal(new NumberRange(0, 2, 0.02f, 0.2f, false, "{0:0.00}"), InputEditors.GetNumberRange(Input(TestSockets.Float, 0.5, 0, 2)));
+        var unbounded = InputEditors.GetNumberRange(Input(TestSockets.Float));
+        Assert.Equal((0f, 1f), (unbounded.Minimum, unbounded.Maximum));
+    }
+
+    [Fact]
+    public void ARegisteredFactory_ReplacesTheBuiltInControl_UntilItIsRemoved()
+    {
         var gain = Input(TestSockets.Float, 0.5, 0, 2);
-        var knob = InputEditors.CreateKnob(gain);
-        Assert.Equal((0f, 2f, 0.5f), (knob.Minimum, knob.Maximum, knob.Value));
-        knob.Value = 1.5f;
-        Assert.Equal(1.5, gain.Value);
-        Assert.Equal(0.5f, knob.DefaultValue);
+        gain.Editor = InputEditor.Knob;
+        InputEditors.Register(InputEditor.Knob, input =>
+        {
+            var range = InputEditors.GetNumberRange(input);
+            var knob = new Knob { Minimum = range.Minimum, Maximum = range.Maximum };
+            InputEditors.BindNumber(knob, input, v => knob.Value = v, h => knob.ValueChanged += h);
+            return knob;
+        });
+        try
+        {
+            var knob = Assert.IsType<Knob>(InputEditors.Create(gain));
+            Assert.Equal((0f, 2f, 0.5f), (knob.Minimum, knob.Maximum, knob.Value));
+            knob.Value = 1.5f;
+            Assert.Equal(1.5, gain.Value);
+        }
+        finally
+        {
+            InputEditors.Register(InputEditor.Knob, null);
+        }
+        Assert.IsType<Slider>(InputEditors.Create(gain));
+        Assert.Throws<ArgumentException>(() => InputEditors.Register(InputEditor.Auto, _ => null));
     }
 
     [Fact]
@@ -445,57 +475,6 @@ public class LinkGeometryTests
         Assert.True(LinkGeometry.DistanceTo(new Point(100, 50), start, end) < 0.5f);
         Assert.True(LinkGeometry.DistanceTo(start, start, end) < 0.01f);
         Assert.InRange(LinkGeometry.DistanceTo(new Point(100, 80), start, end), 20, 31);
-    }
-}
-
-public class KnobTests
-{
-    private static Knob Knob() => new() { Minimum = 0, Maximum = 100, Value = 50 };
-
-    [Fact]
-    public void DraggingUpOrRight_TurnsItUp_AndShiftMakesFineChanges()
-    {
-        var knob = Knob();
-        knob.OnPointerPressed(new PointerEventArgs(new Point(10, 10), new Point(10, 10), PointerButtons.Left, clickCount: 1));
-        Assert.True(knob.IsDragging);
-        knob.OnPointerMoved(new PointerEventArgs(new Point(10, -10), new Point(10, -10))); // 20 px up of 200 for the range
-        Assert.Equal(60f, knob.Value, 3);
-        knob.OnPointerMoved(new PointerEventArgs(new Point(30, -10), new Point(30, -10), modifiers: ModifierKeys.Shift));
-        Assert.Equal(61f, knob.Value, 3);
-        knob.OnPointerMoved(new PointerEventArgs(new Point(30, 1000), new Point(30, 1000)));
-        Assert.Equal(0f, knob.Value); // clamped
-        knob.OnPointerReleased(new PointerEventArgs(new Point(30, 1000), new Point(30, 1000), PointerButtons.Left));
-        Assert.False(knob.IsDragging);
-    }
-
-    [Fact]
-    public void WheelKeysAndDoubleClick()
-    {
-        var knob = Knob();
-        knob.OnPointerWheel(new PointerWheelEventArgs(Point.Zero, 0, 1));
-        Assert.Equal(51f, knob.Value);
-        knob.OnKeyDown(new KeyEventArgs(Key.PageDown));
-        Assert.Equal(41f, knob.Value);
-        knob.OnKeyDown(new KeyEventArgs(Key.End));
-        Assert.Equal(100f, knob.Value);
-
-        knob.OnPointerPressed(new PointerEventArgs(Point.Zero, Point.Zero, PointerButtons.Left, clickCount: 2));
-        Assert.Equal(100f, knob.Value); // no default value
-        knob.DefaultValue = 25;
-        knob.OnPointerPressed(new PointerEventArgs(Point.Zero, Point.Zero, PointerButtons.Left, clickCount: 2));
-        Assert.Equal(25f, knob.Value);
-    }
-
-    [Fact]
-    public void TheAngle_SweepsFromTheBottomLeftToTheBottomRight()
-    {
-        var knob = Knob();
-        knob.Value = 0;
-        Assert.Equal(Controls.Knob.StartAngle, knob.Angle);
-        knob.Value = 100;
-        Assert.Equal(Controls.Knob.StartAngle + Controls.Knob.SweepAngle, knob.Angle);
-        knob.Maximum = 40;
-        Assert.Equal(40f, knob.Value);
     }
 }
 

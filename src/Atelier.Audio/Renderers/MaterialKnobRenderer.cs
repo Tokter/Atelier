@@ -1,9 +1,11 @@
 using System;
-using Atelier.Controls;
 using Atelier.Core.Primitives;
 using Atelier.Rendering;
+using Atelier.Theming;
+using Atelier.Theming.Material;
+using Atelier.Theming.Material.Renderers;
 
-namespace Atelier.Theming.Material.Renderers;
+namespace Atelier.Audio.Renderers;
 
 /// <summary>
 /// Draws a <see cref="Knob"/> in the style of the Material slider: a round-ended track arc (primary up to the value,

@@ -1,9 +1,10 @@
 using System;
+using Atelier.Controls;
 using Atelier.Core.Events;
 using Atelier.Core.Primitives;
 using Atelier.Core.Properties;
 
-namespace Atelier.Controls;
+namespace Atelier.Audio;
 
 /// <summary>
 /// A rotary control for picking a value from a range, like a knob on a mixing desk: an arc around a dial shows the value,
@@ -76,6 +77,7 @@ public class Knob : Control
 
     static Knob()
     {
+        AudioTheme.Register();
         IsFocusableProperty.OverrideDefaultValue<Knob>(true);
     }
 

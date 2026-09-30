@@ -435,15 +435,15 @@ public static class MarkupExtensions
         return element;
     }
 
-    /// <summary>Adapts an <see cref="Action"/> to an <see cref="EventHandler"/>, for the <c>On{Event}(Action)</c> overloads.</summary>
-    internal static EventHandler ToHandler(Action action)
+    /// <summary>Adapts an <see cref="Action"/> to an <see cref="EventHandler"/>, for the <c>On{Event}(Action)</c> overloads (also in other libraries' markup).</summary>
+    public static EventHandler ToHandler(Action action)
     {
         ArgumentNullException.ThrowIfNull(action);
         return (_, _) => action();
     }
 
-    /// <summary>Adapts an <see cref="Action{T}"/> to an <see cref="EventHandler{TEventArgs}"/>, for the <c>On{Event}(Action&lt;T&gt;)</c> overloads.</summary>
-    internal static EventHandler<TArgs> ToHandler<TArgs>(Action<TArgs> action)
+    /// <summary>Adapts an <see cref="Action{T}"/> to an <see cref="EventHandler{TEventArgs}"/>, for the <c>On{Event}(Action&lt;T&gt;)</c> overloads (also in other libraries' markup).</summary>
+    public static EventHandler<TArgs> ToHandler<TArgs>(Action<TArgs> action)
     {
         ArgumentNullException.ThrowIfNull(action);
         return (_, args) => action(args);
@@ -650,8 +650,11 @@ public static class MarkupExtensions
         where T : BindableObject where TSource : class =>
         element.BindToSource(BindableObject.DataContextProperty, source, getter, setter, updateSourceTrigger, getterExpression);
 
-    /// <summary>Binds <paramref name="property"/> to <paramref name="source"/> and returns the target (the implementation of the <c>Bind{Property}</c> methods).</summary>
-    internal static T BindToSource<T, TValue, TSource>(
+    /// <summary>
+    /// Binds <paramref name="property"/> to <paramref name="source"/> and returns the target: the implementation of the
+    /// <c>Bind{Property}</c> methods, public for libraries that write markup methods for their own controls.
+    /// </summary>
+    public static T BindToSource<T, TValue, TSource>(
         this T target,
         BindableProperty<TValue> property,
         TSource source,
@@ -666,8 +669,11 @@ public static class MarkupExtensions
         return target;
     }
 
-    /// <summary>Binds <paramref name="property"/> to the DataContext and returns the target (the implementation of the <c>Bind{Property}&lt;TDataContext&gt;</c> methods).</summary>
-    internal static T BindToDataContext<T, TValue, TDataContext>(
+    /// <summary>
+    /// Binds <paramref name="property"/> to the DataContext and returns the target: the implementation of the
+    /// <c>Bind{Property}&lt;TDataContext&gt;</c> methods, public for libraries that write markup methods for their own controls.
+    /// </summary>
+    public static T BindToDataContext<T, TValue, TDataContext>(
         this T target,
         BindableProperty<TValue> property,
         Func<TDataContext, TValue> getter,

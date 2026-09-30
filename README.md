@@ -143,7 +143,7 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `CheckBox`, `RadioButton`, `Switch` | Three states, rich content, named and unnamed radio groups, thumb icons, value-matching radio binding |
 | `TextBox` | Outlined and filled variants, floating label, placeholder, leading icon, supporting text, `INotifyDataErrorInfo` validation, max length, password mode, undo/redo, clipboard and word navigation |
 | `ComboBox` | Items or bound collections, typed item templates, text search, keyboard navigation, max drop-down height, compact mode |
-| `Slider`, `Knob`, `ProgressBar` | Ranges, small and large steps, tick snapping, formatted value bubble; a rotary knob turned by dragging (Shift for fine steps), the wheel or the keys, reset by double-clicking; determinate and indeterminate progress |
+| `Slider`, `Knob`, `ProgressBar` | Ranges, small and large steps, tick snapping, formatted value bubble; a rotary knob ([`Atelier.Audio`](src/Atelier.Audio)) turned by dragging (Shift for fine steps), the wheel or the keys, reset by double-clicking; determinate and indeterminate progress |
 | `ListBox`, `ItemsControl` | UI virtualization (only the items in view get containers), incremental updates from observable collections, typed templates, type-to-search, keyboard navigation |
 | `TreeView` | Data-bound or item-built trees, children selector, typed templates, configurable expander icons; the shown nodes form one virtualized list |
 | `DataGrid` | Virtualized rows; text, template and check box columns; multi-column sorting; Pixel, Auto and Star widths; resizing, reordering and a column chooser with saved layouts; a filter row and spreadsheet-style filter menus; single, check box and extended selection of rows or cells; F2 editing with custom editors and validation; Ctrl+C as tab-separated text; row context menus and empty placeholders |
@@ -224,10 +224,11 @@ anywhere in a window), so they appear in menus, the command palette and the keyb
 | [`Atelier.Markup`](src/Atelier.Markup) | The fluent markup API |
 | [`Atelier.Generators`](src/Atelier.Generators) | Source generators for commands, keybindings and property-grid metadata |
 | [`Atelier.NodeEditor`](src/Atelier.NodeEditor) | Node graph view models, undo, dataflow evaluation and the `NodeEditor` control (namespace `Atelier.Nodes`) |
+| [`Atelier.Audio`](src/Atelier.Audio) | Controls for audio tools: the `Knob`, with timelines and waveform views to come |
 | [`Atelier.Platform.Silk`](src/Atelier.Platform.Silk) | Windows, OpenGL context, input and clipboard via Silk.NET |
 | [`Atelier.DevTools`](src/Atelier.DevTools) | The F12 developer tools (Debug builds only) |
 | [`Atelier.Gallery`](samples/Atelier.Gallery) | Showcase application for every control |
-| [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (1,250+) |
+| [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (1,300+) |
 
 ---
 

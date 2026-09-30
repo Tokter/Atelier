@@ -464,8 +464,8 @@ internal sealed class SocketRow : UIElement
     // Text boxes and check boxes show the input's name themselves.
     private bool EditorShowsName => Editor is TextBox or ToggleButton;
 
-    // Knobs keep their size at the row's end; other controls take the room next to the name.
-    private bool EditorStretches => Editor is not Knob;
+    // Controls with a set width (like a knob) keep their size at the row's end; others take the room next to the name.
+    private bool EditorStretches => float.IsNaN(Editor!.Width);
 
     public void UpdateEditorVisibility()
     {

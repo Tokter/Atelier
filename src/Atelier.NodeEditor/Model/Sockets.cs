@@ -17,7 +17,11 @@ public enum InputEditor
     /// <summary>A slider between <see cref="InputSocketViewModel.Minimum"/> and <see cref="InputSocketViewModel.Maximum"/>.</summary>
     Slider,
 
-    /// <summary>A knob between <see cref="InputSocketViewModel.Minimum"/> and <see cref="InputSocketViewModel.Maximum"/>.</summary>
+    /// <summary>
+    /// A knob between <see cref="InputSocketViewModel.Minimum"/> and <see cref="InputSocketViewModel.Maximum"/>, from the
+    /// factory registered with <see cref="InputEditors.Register"/> (such as one making an <c>Atelier.Audio.Knob</c>); a
+    /// slider until one is registered.
+    /// </summary>
     Knob,
 
     /// <summary>A check box.</summary>
