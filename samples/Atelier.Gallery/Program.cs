@@ -55,6 +55,7 @@ internal static class Program
             .Register<CardsViewModel>(vm => new CardsView(vm))
             .Register<IconsViewModel>(vm => new IconsView(vm))
             .Register<BadgesViewModel>(vm => new BadgesView(vm))
+            .Register<TimelineViewModel>(vm => new TimelineView(vm))
             .Register<TabsViewModel>(vm => new TabsView(vm))
             .Register<MenusViewModel>(vm => new MenusView(vm))
             .Register<DataGridViewModel>(vm => new DataGridView(vm))

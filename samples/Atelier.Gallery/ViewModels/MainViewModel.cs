@@ -69,6 +69,7 @@ public partial class MainViewModel : ObservableObject
             new KeybindingViewModel(),
             new ThemeEditorViewModel(),
             new NodeEditorViewModel(),
+            new TimelineViewModel(),
         ];
 
         // The navigation lists the pages alphabetically.

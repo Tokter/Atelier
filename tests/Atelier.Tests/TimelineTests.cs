@@ -1,4 +1,11 @@
 using System.ComponentModel;
+using Atelier.Controls;
+using Atelier.Core.Events;
+using Atelier.Core.Keybinding;
+using Atelier.Core.Primitives;
+using Atelier.Rendering;
+using Atelier.Theming;
+using Atelier.Theming.Material;
 using Atelier.Audio;
 
 namespace Atelier.Tests;
@@ -287,5 +294,121 @@ public class TimelineGridTests
         Assert.Equal("-00:02.000", TimelineFormat.Time(-2));
         Assert.Equal("5.2.3", TimelineFormat.Bar(5, 2, 3));
         Assert.Equal("48000", TimelineFormat.Samples(48000));
+    }
+}
+
+public class TimelineControlTests
+{
+    // A control laid out at the origin, `width` wide.
+    private static T Laid<T>(T control, float width = 800, float height = 26) where T : TimelineControl
+    {
+        control.Measure(new Size(width, height));
+        control.Arrange(new Rect(0, 0, width, height));
+        return control;
+    }
+
+    [Fact]
+    public void ConnectedControls_ZoomAndScrollTogether()
+    {
+        var song = new TimelineContext { PixelsPerSecond = 100 };
+        var ruler = Laid(new TimelineRuler { Timeline = song });
+        var lane = Laid(new TimelineLane { Timeline = song }, 400, 60);
+
+        TimelineCommands.ZoomIn.Execute(ruler); // around the ruler's middle
+        Assert.Equal(125, lane.CurrentTimeline.PixelsPerSecond);
+        Assert.Equal(4, ruler.XToTime(400), 9);
+        TimelineCommands.ScrollForward.Execute(lane);
+        Assert.Equal(ruler.XToTime(0), lane.XToTime(0));
+        Assert.True(ruler.XToTime(0) > 0);
+    }
+
+    [Fact]
+    public void AControlWithoutAContext_HasItsOwn()
+    {
+        var a = Laid(new TimelineRuler());
+        var b = Laid(new TimelineRuler());
+        Assert.Same(a.CurrentTimeline, a.CurrentTimeline);
+        Assert.NotSame(a.CurrentTimeline, b.CurrentTimeline);
+        TimelineCommands.ZoomIn.Execute(a);
+        Assert.NotEqual(a.CurrentTimeline.PixelsPerSecond, b.CurrentTimeline.PixelsPerSecond);
+    }
+
+    [Fact]
+    public void DraggingTheRuler_ZoomsAroundTheGrabbedTime_AndScrollsWithThePointer()
+    {
+        var song = new TimelineContext { PixelsPerSecond = 100 };
+        var ruler = Laid(new TimelineRuler { Timeline = song });
+        var drag = TimelineCommands.ZoomDrag.BeginDrag(new DragStart(ruler, ruler, ruler, new Point(200, 10), PointerButtons.Left, ModifierKeys.None))!;
+
+        drag.Update(new Point(200, -90), ModifierKeys.None); // 100 px up
+        Assert.Equal(100 * Math.E, song.PixelsPerSecond, 6);
+        Assert.Equal(2, ruler.XToTime(200), 9);
+        drag.Update(new Point(300, -90), ModifierKeys.None);
+        Assert.Equal(2, ruler.XToTime(300), 9);
+
+        drag.Cancel();
+        Assert.Equal((0.0, 100.0), (song.Start, song.PixelsPerSecond));
+    }
+
+    [Fact]
+    public void TheWheel_ZoomsOverTheRuler_ButOverLanesOnlyWithCtrlAlt()
+    {
+        var song = new TimelineContext { PixelsPerSecond = 100, Start = 10 };
+        var ruler = Laid(new TimelineRuler { Timeline = song });
+        var lane = Laid(new TimelineLane { Timeline = song });
+
+        var plain = new PointerWheelEventArgs(new Point(400, 30), new Point(400, 30), 0, 1);
+        lane.OnPointerWheel(plain);
+        Assert.False(plain.Handled); // left to the page's scroll viewer
+        Assert.Equal(100, song.PixelsPerSecond);
+
+        lane.OnPointerWheel(new PointerWheelEventArgs(new Point(400, 30), new Point(400, 30), 0, 1, modifiers: ModifierKeys.Control | ModifierKeys.Alt));
+        Assert.Equal(125, song.PixelsPerSecond);
+        ruler.OnPointerWheel(new PointerWheelEventArgs(new Point(400, 10), 0, -1));
+        Assert.Equal(100, song.PixelsPerSecond, 9);
+        Assert.Equal(10, song.Start, 9); // zoomed back around the same point
+
+        ruler.OnPointerWheel(new PointerWheelEventArgs(new Point(400, 10), 1, 0)); // a sideways swipe
+        Assert.Equal(10 - TimelineCommands.WheelScrollPixels / 100.0, song.Start, 5);
+    }
+
+    [Fact]
+    public void TheRuler_IsARowHigh_PlusOneForASecondRow_AndItsMenuChoosesTheUnits()
+    {
+        var ruler = new TimelineRuler();
+        ruler.Measure(new Size(500, 100));
+        Assert.Equal(TimelineRuler.RowHeight, ruler.DesiredSize.Height);
+        ruler.SecondaryMode = TimelineRulerMode.Time;
+        ruler.Measure(new Size(500, 100));
+        Assert.Equal(TimelineRuler.RowHeight + TimelineRuler.SecondaryRowHeight, ruler.DesiredSize.Height);
+
+        ruler.Mode = TimelineRulerMode.Samples;
+        var items = ruler.CreateContextMenu().Items.OfType<MenuItem>().ToList();
+        Assert.Equal(["Beats", "Time", "Samples"], items.Take(3).Select(i => i.Header as string));
+        Assert.True(items[2].IsChecked);
+        var secondRow = items.Single(i => i.Header as string == "Second row").Items.OfType<MenuItem>().ToList();
+        Assert.Equal(4, secondRow.Count);
+        Assert.True(secondRow[2].IsChecked); // Time
+    }
+
+    [Fact]
+    public void RenderingTheRulerAndALane_DrawsTheSameTicks()
+    {
+        using var _ = ActiveTheme.Use(MaterialTheme.CreateLight());
+        var song = new TimelineContext { PixelsPerSecond = 100 };
+        var ruler = Laid(new TimelineRuler { Timeline = song }, 400);
+        var lane = Laid(new TimelineLane { Timeline = song }, 400, 50);
+
+        using var bitmap = new SkiaSharp.SKBitmap(400, 50);
+        using var canvas = new SkiaSharp.SKCanvas(bitmap);
+        using var paints = new PaintRegistry();
+        var context = new DrawingContext(canvas, paints);
+        VisualTreeRenderer.Render(lane, ref context, ThemeVisualPresenter.Instance);
+        Assert.NotEqual(bitmap.GetPixel(210, 25), bitmap.GetPixel(200, 25)); // the bar line at 2 s
+
+        canvas.Clear();
+        VisualTreeRenderer.Render(ruler, ref context, ThemeVisualPresenter.Instance);
+        Assert.Contains(ruler.Grid.Ticks, t => t.Label == "2" && t.X == 200);
+        Assert.Equal(ruler.Grid.Ticks.Select(t => t.X), lane.Grid.Ticks.Select(t => t.X));
     }
 }

@@ -66,7 +66,7 @@ All screenshots show the included [Gallery](samples/Atelier.Gallery) application
 | **Tooltips**: plain text, or rich content with clickable actions | **Theme editor**: schemes generated from an accent color, every role tunable in light and dark |
 | ![Keybinding editor](docs/screenshots/keybinding-editor.png) | ![Command palette](docs/screenshots/command-palette.png) |
 | **Keybinding editor**: commands by group, with their labels, icons and shortcuts; record new shortcuts, see conflicts | **Command palette**: search and run the commands that work where the focus is (Ctrl+Shift+P) |
-| ![Node editor, dark theme](docs/screenshots/node-editor-dark.png) | |
+| ![Node editor, dark theme](docs/screenshots/node-editor-dark.png) | ![Timeline ruler and lanes, dark theme](docs/screenshots/timeline-dark.png) |
 | **Node editor**: Blender-style node graphs with typed sockets, knobs and sliders beside the inputs, live evaluation, and rebindable mouse and keyboard tools | |
 
 ---
@@ -165,6 +165,7 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `KeybindingEditor`, `ShortcutRecorder`, `ShortcutView` | Lets users change every command's label, icon and shortcut, listed by group (or all, or the changed ones), with search, conflicts and reset; records shortcuts and chords from key presses, and clicks, drags and wheel turns; shows shortcuts as key caps |
 | `CommandPalette` | Searches the commands whose shortcuts work where the focus is (`KeybindingHandler.GetActiveCommands`: the handlers from the focus up to the window), ranks label prefixes, word starts and initials first, and runs the chosen one on its target |
 | `NodeEditor` | Blender-style node graphs ([`Atelier.NodeEditor`](src/Atelier.NodeEditor)): typed sockets with opt-in conversions, links as curves, value controls beside unconnected inputs; Blender-style editing (select, box select, move with snapping, drag to connect or move links, delete, duplicate, collapse, mute, a searchable add menu and a context menu; drop a node on a link to insert it, Alt+drag to detach it, drop a link on empty space to search for a node to connect, Ctrl+right drag to cut links, Shift+right drag to add reroute points); reusable node groups (Ctrl+G to make one, Tab to edit it, with its inputs and outputs in a panel); saving as JSON and copy and paste with every action a rebindable command; grid and dot backgrounds, undo, and optional dataflow evaluation |
+| `TimelineRuler`, `TimelineLane` | A DAW-style beat and time ruler and track lanes ([`Atelier.Audio`](src/Atelier.Audio)) connected through a shared `TimelineContext` (zoom, scroll, tempo map, sample rate), so zooming or scrolling one moves all; ticks and labels adapt to the zoom in bars and beats (`5`, `5.2`, `5.2.3`, following tempo and time signature changes), time (`01:05`, milliseconds only when zoomed in) or samples, with an optional second row in another unit; Bitwig-style zooming by dragging the ruler, wheel zoom and scroll, and a menu to choose the units, all rebindable commands; lanes draw the matching grid lines behind their content |
 
 ### Layout
 
@@ -224,7 +225,7 @@ anywhere in a window), so they appear in menus, the command palette and the keyb
 | [`Atelier.Markup`](src/Atelier.Markup) | The fluent markup API |
 | [`Atelier.Generators`](src/Atelier.Generators) | Source generators for commands, keybindings and property-grid metadata |
 | [`Atelier.NodeEditor`](src/Atelier.NodeEditor) | Node graph view models, undo, dataflow evaluation and the `NodeEditor` control (namespace `Atelier.Nodes`) |
-| [`Atelier.Audio`](src/Atelier.Audio) | Controls for audio tools: the `Knob`, and the timeline model shared by connected timeline controls (`TimelineContext` for zoom and scroll, `TempoMap` with tempo and meter changes, `TimelinePosition` in seconds or beats, and the adaptive beat, time and sample `TimelineGrid`); ruler and waveform views to come |
+| [`Atelier.Audio`](src/Atelier.Audio) | Controls for audio tools: the `Knob`, and the timeline model shared by connected timeline controls (`TimelineContext` for zoom and scroll, `TempoMap` with tempo and meter changes, `TimelinePosition` in seconds or beats, and the adaptive beat, time and sample `TimelineGrid`), the `TimelineRuler` and `TimelineLane`; waveform views to come |
 | [`Atelier.Platform.Silk`](src/Atelier.Platform.Silk) | Windows, OpenGL context, input and clipboard via Silk.NET |
 | [`Atelier.DevTools`](src/Atelier.DevTools) | The F12 developer tools (Debug builds only) |
 | [`Atelier.Gallery`](samples/Atelier.Gallery) | Showcase application for every control |
