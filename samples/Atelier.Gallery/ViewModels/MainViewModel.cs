@@ -70,6 +70,7 @@ public partial class MainViewModel : ObservableObject
             new ThemeEditorViewModel(),
             new NodeEditorViewModel(),
             new TimelineViewModel(),
+            new WorkspacesViewModel(),
         ];
 
         // The navigation lists the pages alphabetically.

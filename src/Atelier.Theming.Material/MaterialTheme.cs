@@ -82,6 +82,11 @@ public class MaterialTheme : Theme
         renderers.Register(new MaterialTreeViewItemRenderer(colors));
         renderers.Register(new MaterialImageRenderer());
         renderers.Register(new MaterialToolbarRenderer(colors));
+        renderers.Register(new MaterialWorkspaceViewRenderer(colors));
+        renderers.Register(new MaterialAreaLayoutRenderer(colors));
+        renderers.Register(new MaterialAreaRenderer(colors));
+        renderers.Register(new MaterialAreaBorderRenderer(colors));
+        renderers.Register(new MaterialAreaCornerRenderer(colors));
 
         Styles.AddRange(MaterialStyles.CreateStyles(colors, Sizing));
         Styles.AddRange(MaterialTypography.CreateStyles());

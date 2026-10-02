@@ -149,6 +149,14 @@ public static class MaterialStyles
                 .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
             new Style(TabControl.AddButtonStyleKey, typeof(Button))
                 .Set(Control.ForegroundProperty, colors.OnSurfaceVariant),
+            // Areas: small (8 px) corners; the editor button is a compact on-surface text button with small corners.
+            new Style(typeof(Area))
+                .Set(Control.CornerRadiusProperty, new CornerRadius(MaterialShape.Small)),
+            new Style(Area.EditorButtonStyleKey, typeof(Button))
+                .Set(Control.ForegroundProperty, colors.OnSurface)
+                .Set(Control.CornerRadiusProperty, new CornerRadius(MaterialShape.Small))
+                .Set(ContentControl.HorizontalContentAlignmentProperty, HorizontalAlignment.Center)
+                .Set(ContentControl.VerticalContentAlignmentProperty, VerticalAlignment.Center),
             // Data grids: extra-small (4 px) corners, title-small headers.
             new Style(typeof(DataGrid))
                 .Set(Control.CornerRadiusProperty, new CornerRadius(MaterialShape.ExtraSmall)),

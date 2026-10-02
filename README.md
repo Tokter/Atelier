@@ -68,6 +68,8 @@ All screenshots show the included [Gallery](samples/Atelier.Gallery) application
 | **Keybinding editor**: commands by group, with their labels, icons and shortcuts; record new shortcuts, see conflicts | **Command palette**: search and run the commands that work where the focus is (Ctrl+Shift+P) |
 | ![Node editor, dark theme](docs/screenshots/node-editor-dark.png) | ![Timeline ruler and lanes, dark theme](docs/screenshots/timeline-dark.png) |
 | **Node editor**: Blender-style node graphs with typed sockets, knobs and sliders beside the inputs, live evaluation, and rebindable mouse and keyboard tools | |
+| ![Workspaces and areas](docs/screenshots/workspaces.png) | |
+| **Workspaces**: Blender-style areas that split, join, swap and maximize, each with an editor picked from a registry; workspaces in tabs | |
 
 ---
 
@@ -168,6 +170,7 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `TimelineRuler`, `TimelineLane` | A DAW-style beat and time ruler and track lanes ([`Atelier.Audio`](src/Atelier.Audio)) connected through a shared `TimelineContext` (zoom, scroll, tempo map, sample rate), so zooming or scrolling one moves all; ticks and labels adapt to the zoom in bars and beats (`5`, `5.2`, `5.2.3`, following tempo and time signature changes), time (`01:05`, milliseconds only when zoomed in) or samples, with an optional second row in another unit; Bitwig-style zooming by dragging the ruler, wheel zoom and scroll, and a menu to choose the units, all rebindable commands; lanes draw the matching grid lines behind their content. Colored marker flags above the ruler (shared by the song and drawn across every lane, or a lane's own), a loop bar below it, a play start marker and a playhead, with positions pinned to seconds or to beats; click to set the play start, drag flags and loop edges (snapping to the grid in view, Shift inverts it), double-click to add or rename markers or toggle the loop, right-click to recolor or delete |
 | `TimelinePanel`, `WaveformView` | Clips on a track ([`Atelier.Audio`](src/Atelier.Audio)): the panel places each child at an attached start and length in seconds or beats, following zoom, scroll and tempo changes and skipping clips out of view; the lightweight waveform draws part of a sound from a shared `WaveformData` (an exact min/max peak pyramid and running sums for RMS, so drawing costs the same at any length) like a DAW: a filled peak envelope with the RMS inside when zoomed out (smoothed over 25 ms, so low notes don't turn into moiré), the waveform's own shape closer in, and a line through the samples with a dot per sample at the deepest zoom; one lane per channel or combined |
 | `AudioWaveformEditor` | Non-destructive editing of one sound on the timeline ([`Atelier.Audio`](src/Atelier.Audio)), like a DAW clip: drag the edges to trim (the trimmed parts stay dimmed), square handles to fade in and out (linear or equal-power), and a dB chip to change the gain; drag to select, trim to the selection, and a menu; everything snaps to the grid and is a bindable property, and `GetGain()` gives the same fade and gain curve (`WaveformGain`) for playback; the waveform is drawn at the level they give it |
+| `WorkspaceView`, `AreaLayout`, `Area` | Blender-style areas and workspaces: register editor types (id, title, icon, category, content and header factories) in an `AreaEditorRegistry`, and every area gets a button in its top-left corner to switch its editor (switching back finds the editor as it was). Drag from an area's corner into it to split it, into a neighbor to join that neighbor, or with Ctrl onto another area to swap them; drag borders to resize; right-click a border for the Area Options (split, join, swap) or a header for split, Maximize Area (Ctrl+Space) and Close Area. Workspaces are browser-style tabs that switch arrangements (Ctrl+Page Up/Down), added from templates, renamed by double-click, duplicated (`Layout.001`), deleted and reordered from their menu; `AreaDefinition` describes layouts in code and saves them as JSON |
 
 ### Layout
 
@@ -231,7 +234,7 @@ anywhere in a window), so they appear in menus, the command palette and the keyb
 | [`Atelier.Platform.Silk`](src/Atelier.Platform.Silk) | Windows, OpenGL context, input and clipboard via Silk.NET |
 | [`Atelier.DevTools`](src/Atelier.DevTools) | The F12 developer tools (Debug builds only) |
 | [`Atelier.Gallery`](samples/Atelier.Gallery) | Showcase application for every control |
-| [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (1,300+) |
+| [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (1,400+) |
 
 ---
 
