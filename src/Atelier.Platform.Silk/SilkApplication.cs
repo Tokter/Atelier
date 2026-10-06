@@ -150,7 +150,11 @@ public static class SilkApplication
         Wake();
     }
 
-    /// <summary>Closes all windows, which ends <see cref="Run"/>.</summary>
+    /// <summary>
+    /// Asks all windows to close, which ends <see cref="Run"/> once they have. A window whose
+    /// <see cref="SilkWindow.Closing"/> handlers keep it open (for example to ask about unsaved changes) stays open, and
+    /// the application keeps running.
+    /// </summary>
     public static void Shutdown()
     {
         foreach (var window in s_windows.ToArray())
@@ -398,6 +402,7 @@ public static class SilkApplication
             MainWindow = s_windows.Count > 0 ? s_windows[0] : null;
         }
 
+        window.RaiseClosed();
         WindowClosed?.Invoke(window);
     }
 

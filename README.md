@@ -55,7 +55,7 @@ All screenshots show the included [Gallery](samples/Atelier.Gallery) application
 | ![Date and time pickers, dark theme](docs/screenshots/date-time-pickers-dark.png) | ![Tabs](docs/screenshots/tabs.png) |
 | **Date & time pickers**: MD3 docked and modal calendars, clock dial and text input | **Tabs**: MD3 primary and secondary tabs, closeable and reorderable browser tabs |
 | ![Buttons](docs/screenshots/buttons.png) | ![Text fields, dark theme](docs/screenshots/text-fields-dark.png) |
-| **Buttons**: variants, commands, repeat and toggle buttons, toolbars | **Text fields**: outlined and filled, labels, validation, binding |
+| **Buttons**: variants, commands, repeat and toggle buttons, toolbars | **Text fields**: outlined and filled, labels, validation, binding, multi-line |
 | ![Cards](docs/screenshots/cards.png) | ![Icons, dark theme](docs/screenshots/icons-dark.png) |
 | **Cards**: variants, elevation, shape, media and clipping | **Icons**: Material Symbols with fill, weight, grade and optical size |
 | ![Typography](docs/screenshots/typography.png) | ![Layout panels, dark theme](docs/screenshots/layout-dark.png) |
@@ -143,7 +143,7 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 |---|---|
 | `Button`, `RepeatButton`, `ToggleButton` | Filled, tonal, elevated, outlined and text variants; commands with `CanExecute`; a registered command's icon, label and tooltip (description and shortcut) when no content is set; click modes; repeat delay and interval; two- and three-state toggles |
 | `CheckBox`, `RadioButton`, `Switch` | Three states, rich content, named and unnamed radio groups, thumb icons, value-matching radio binding |
-| `TextBox` | Outlined and filled variants, floating label, placeholder, leading icon, supporting text, `INotifyDataErrorInfo` validation, max length, password mode, undo/redo, clipboard and word navigation |
+| `TextBox` | Outlined and filled variants, floating label, placeholder, leading icon, supporting text, `INotifyDataErrorInfo` validation, max length, password mode, undo/redo, clipboard and word navigation; multi-line text areas (`AcceptsReturn`, `TextWrapping`, `MinLines`/`MaxLines`, scrolling) |
 | `ComboBox` | Items or bound collections, typed item templates, text search, keyboard navigation, max drop-down height, compact mode |
 | `Slider`, `Knob`, `ProgressBar` | Ranges, small and large steps, tick snapping, formatted value bubble; a rotary knob ([`Atelier.Audio`](src/Atelier.Audio)) turned by dragging (Shift for fine steps), the wheel or the keys, reset by double-clicking; determinate and indeterminate progress |
 | `ListBox`, `ItemsControl` | UI virtualization (only the items in view get containers), incremental updates from observable collections, typed templates, type-to-search, keyboard navigation |
@@ -212,6 +212,8 @@ anywhere in a window), so they appear in menus, the command palette and the keyb
 
 - Borderless windows with native resizing, snapping and shadows on Windows; multiple windows with per-window focus.
 - Render-on-demand: idle windows don't draw.
+- `SilkWindow.Closing` intercepts every close request (close button, Alt+F4, taskbar, `Close()`): cancel it, or pass an
+  async decision such as a "Save changes?" dialog to `e.Defer(...)`; `Close(force: true)` skips it.
 - Hot reload through .NET Hot Reload, or manually with F5 or Ctrl+R when the app doesn't handle those keys itself.
 - System clipboard, key repeat, and an optional frame-rate overlay (`SilkWindow.ShowFpsOverlay`).
 

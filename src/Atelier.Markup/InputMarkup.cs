@@ -72,6 +72,26 @@ public static class TextBoxMarkup
     /// <summary>Sets the width of the caret in pixels. The default is 2.</summary>
     public static T CaretWidth<T>(this T textBox, float caretWidth) where T : TextBox => textBox.Set(TextBox.CaretWidthProperty, caretWidth);
 
+    /// <summary>Sets whether Enter inserts a line break, making the field multi-line. The default is <c>false</c>.</summary>
+    public static T AcceptsReturn<T>(this T textBox, bool acceptsReturn = true) where T : TextBox => textBox.Set(TextBox.AcceptsReturnProperty, acceptsReturn);
+
+    /// <summary>Sets whether lines wrap at the field's width; wrapping makes the field multi-line. The default is no wrapping.</summary>
+    public static T TextWrapping<T>(this T textBox, TextWrapping wrapping = Controls.TextWrapping.Wrap) where T : TextBox =>
+        textBox.Set(TextBox.TextWrappingProperty, wrapping);
+
+    /// <summary>Sets the number of lines a multi-line field is at least tall enough for (at least 1, the default).</summary>
+    public static T MinLines<T>(this T textBox, int minLines) where T : TextBox => textBox.Set(TextBox.MinLinesProperty, minLines);
+
+    /// <summary>Sets the number of lines a multi-line field grows to before it scrolls; 0 (the default) grows with the text.</summary>
+    public static T MaxLines<T>(this T textBox, int maxLines) where T : TextBox => textBox.Set(TextBox.MaxLinesProperty, maxLines);
+
+    /// <summary>
+    /// Makes the field a multi-line text area: Enter inserts line breaks, lines wrap, and the field shows
+    /// <paramref name="minLines"/> lines and grows to <paramref name="maxLines"/> (0: with the text) before scrolling.
+    /// </summary>
+    public static T Multiline<T>(this T textBox, int minLines = 3, int maxLines = 0) where T : TextBox =>
+        textBox.AcceptsReturn().TextWrapping().MinLines(minLines).MaxLines(maxLines);
+
     #endregion
 
     #region Events

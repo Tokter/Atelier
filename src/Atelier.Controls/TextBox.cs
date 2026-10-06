@@ -23,26 +23,40 @@ public enum TextBoxVariant
 }
 
 /// <summary>
-/// A single-line text input with a Material Design 3 look: optional floating label, leading icon, placeholder and
-/// supporting text (replaced by the first validation error while a binding reports one).
+/// A text input with a Material Design 3 look: optional floating label, leading icon, placeholder and supporting text
+/// (replaced by the first validation error while a binding reports one). Single-line by default; set
+/// <see cref="AcceptsReturn"/> and/or <see cref="TextWrapping"/> for a multi-line text area.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Editing: typing, Backspace/Delete (Ctrl: whole words), arrow keys, Home/End (Shift extends the selection, Ctrl moves
 /// by words), Ctrl+A, clipboard (Ctrl+C/X/V, Ctrl+Insert, Shift+Delete, Shift+Insert), undo (Ctrl+Z) and redo (Ctrl+Y,
 /// Ctrl+Shift+Z). Pointer: click places the caret, Shift+click extends the selection, drag selects, double-click selects
-/// a word and triple-click selects everything.
+/// a word and triple-click selects everything (a line in a multi-line box).
+/// </para>
+/// <para>
+/// Multi-line (see <see cref="IsMultiline"/>): Enter inserts a line break when <see cref="AcceptsReturn"/> is set,
+/// Up/Down and Page Up/Page Down move between lines (keeping the caret's column), Home/End go to the start or end of the
+/// line and Ctrl+Home/Ctrl+End to the start or end of the text. The first line sits where the text of a single-line
+/// field does; the field grows by one line height per line, between <see cref="MinLines"/> and <see cref="MaxLines"/>,
+/// and scrolls (mouse wheel, or following the caret) beyond that or when its height is set.
 /// </para>
 /// <para>
 /// The caret and selection never split a text element: surrogate pairs (such as emoji) and grapheme clusters (such as a
-/// letter plus combining accent) are edited and navigated as one character. Pasted or typed text is cut at its first
-/// line break, since the box holds one line.
+/// letter plus combining accent) are edited and navigated as one character. Without <see cref="AcceptsReturn"/>, pasted
+/// or typed text is cut at its first line break; with it, line breaks are inserted as '\n'.
 /// </para>
 /// <para>
-/// Character offsets are measured once per text and font and cached, so hit testing, scrolling the caret into view and
-/// rendering the caret and selection don't re-measure text.
+/// Character offsets and line layout are computed once per text, font and width and cached, so hit testing, scrolling
+/// the caret into view and rendering the caret and selection don't re-measure text.
 /// </para>
 /// </remarks>
+/// <example>
+/// <code>
+/// new TextBox().Label("Notes").AcceptsReturn().TextWrapping(TextWrapping.Wrap).MinLines(3).MaxLines(8)
+///     .BindText(vm, v => v.Notes, (v, text) => v.Notes = text)
+/// </code>
+/// </example>
 public class TextBox : Control
 {
     /// <summary>Identifies the <see cref="Text"/> property.</summary>
@@ -153,6 +167,34 @@ public class TextBox : Control
             (s, o, n) => ((TextBox)s).TrimUndoHistory(),
             validateValue: static value => value >= 0
         );
+
+    /// <summary>Identifies the <see cref="AcceptsReturn"/> property.</summary>
+    public static readonly BindableProperty<bool> AcceptsReturnProperty =
+        BindableProperty.Register<TextBox, bool>(
+            nameof(AcceptsReturn),
+            false,
+            (s, o, n) => ((TextBox)s).OnLineModeChanged(),
+            options: PropertyOptions.AffectsMeasure | PropertyOptions.AffectsRender
+        );
+
+    /// <summary>Identifies the <see cref="TextWrapping"/> property.</summary>
+    public static readonly BindableProperty<TextWrapping> TextWrappingProperty =
+        BindableProperty.Register<TextBox, TextWrapping>(
+            nameof(TextWrapping),
+            TextWrapping.NoWrap,
+            (s, o, n) => ((TextBox)s).OnLineModeChanged(),
+            options: PropertyOptions.AffectsMeasure | PropertyOptions.AffectsRender
+        );
+
+    /// <summary>Identifies the <see cref="MinLines"/> property.</summary>
+    public static readonly BindableProperty<int> MinLinesProperty =
+        BindableProperty.Register<TextBox, int>(nameof(MinLines), 1, options: PropertyOptions.AffectsMeasure,
+            validateValue: static value => value >= 1);
+
+    /// <summary>Identifies the <see cref="MaxLines"/> property.</summary>
+    public static readonly BindableProperty<int> MaxLinesProperty =
+        BindableProperty.Register<TextBox, int>(nameof(MaxLines), 0, options: PropertyOptions.AffectsMeasure,
+            validateValue: static value => value >= 0);
 
     private static string CoerceString(BindableObject sender, string value) => value ?? string.Empty;
 
@@ -277,6 +319,57 @@ public class TextBox : Control
         set => SetValue(UndoLimitProperty, value);
     }
 
+    /// <summary>
+    /// Gets or sets whether Enter inserts a line break, making the box multi-line (see <see cref="IsMultiline"/>). Pasted
+    /// text then keeps its line breaks (as '\n'). Ctrl+Enter is left to the surrounding UI, for example a dialog's
+    /// default button. The default is <c>false</c>.
+    /// </summary>
+    public bool AcceptsReturn
+    {
+        get => GetValue(AcceptsReturnProperty);
+        set => SetValue(AcceptsReturnProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets whether lines wrap at the width of the field (at spaces; words that are too long break between
+    /// characters). <see cref="TextWrapping.Wrap"/> makes the box multi-line (see <see cref="IsMultiline"/>) even without
+    /// <see cref="AcceptsReturn"/>. The default is <see cref="TextWrapping.NoWrap"/>: long lines scroll horizontally.
+    /// </summary>
+    public TextWrapping TextWrapping
+    {
+        get => GetValue(TextWrappingProperty);
+        set => SetValue(TextWrappingProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the number of lines a multi-line box is at least tall enough for. At least 1; the default is 1. An
+    /// explicit <c>Height</c> takes precedence.
+    /// </summary>
+    public int MinLines
+    {
+        get => GetValue(MinLinesProperty);
+        set => SetValue(MinLinesProperty, value);
+    }
+
+    /// <summary>
+    /// Gets or sets the number of lines a multi-line box grows to before it scrolls. 0, the default, means it grows with
+    /// its text. <see cref="MinLines"/> wins if it is larger; an explicit <c>Height</c> takes precedence.
+    /// </summary>
+    public int MaxLines
+    {
+        get => GetValue(MaxLinesProperty);
+        set => SetValue(MaxLinesProperty, value);
+    }
+
+    /// <summary>
+    /// Gets whether the box shows several lines: <see cref="AcceptsReturn"/> is set or <see cref="TextWrapping"/> is
+    /// <see cref="TextWrapping.Wrap"/>. A password field (see <see cref="PasswordChar"/>) is always single-line.
+    /// </summary>
+    public bool IsMultiline => (AcceptsReturn || TextWrapping == TextWrapping.Wrap) && PasswordChar == '\0';
+
+    // Line breaks the user types or pastes are kept only in a multi-line box that accepts Enter.
+    private bool AcceptsLineBreaks => AcceptsReturn && IsMultiline;
+
     /// <summary>Gets whether a label is set.</summary>
     public bool HasLabel => !string.IsNullOrEmpty(Label);
 
@@ -311,14 +404,29 @@ public class TextBox : Control
 
     /// <summary>
     /// Gets the bounds of the trailing icon's 40×40 target in the element's coordinates: centered vertically in the field
-    /// (above the supporting text) with its center 24 px from the right edge. Empty without a trailing icon.
+    /// row (see <see cref="GetFieldRowHeight"/>) with its center 24 px from the right edge. Empty without a trailing icon.
     /// </summary>
     public Rect GetTrailingIconBounds()
     {
         if (!HasTrailingIcon) return Rect.Zero;
-        float fieldHeight = Math.Max(0f, Bounds.Height - (HasSupportingText ? 20f : 0f));
+        float rowHeight = GetFieldRowHeight();
         float half = TrailingIconTargetSize * 0.5f;
-        return new Rect(Bounds.Width - 24f - half, fieldHeight * 0.5f - half, TrailingIconTargetSize, TrailingIconTargetSize);
+        return new Rect(Bounds.Width - 24f - half, rowHeight * 0.5f - half, TrailingIconTargetSize, TrailingIconTargetSize);
+    }
+
+    /// <summary>
+    /// Gets the height of the row the icons and the resting label are centered in: the field container (the bounds
+    /// above the supporting text) of a single-line box, or the height of a one-line field for a multi-line box, so they
+    /// stay beside the first line.
+    /// </summary>
+    public float GetFieldRowHeight() =>
+        IsMultiline ? GetOneLineFieldHeight() : Math.Max(0f, Bounds.Height - (HasSupportingText ? 20f : 0f));
+
+    // The container height of a one-line field, as MeasureOverride computes it for a single line.
+    private float GetOneLineFieldHeight()
+    {
+        float fieldHeight = HasLabel && Variant == TextBoxVariant.Filled ? Math.Max(FieldHeight, 52f) : FieldHeight;
+        return Math.Max(fieldHeight, LineHeight + Padding.Vertical);
     }
 
     /// <summary>Raises <see cref="TrailingIconClick"/>, as a click on the trailing icon does.</summary>
@@ -374,8 +482,37 @@ public class TextBox : Control
     /// <summary>Gets the floating label's animation progress: 0 = resting inside the field, 1 = floating above the text.</summary>
     public float LabelAnimationProgress { get; private set; } = 0f;
 
+    private float _scrollX;
+    private float _scrollY;
+    // Set by ArrangeOverride, which runs before the new bounds are assigned: the scroll offsets are fitted to the new
+    // size when they are next read.
+    private bool _scrollFitPending;
+    // Set when the mouse wheel scrolled a multi-line box; layout passes then keep the offset instead of jumping back to
+    // the caret.
+    private bool _userScrolled;
+
     /// <summary>Gets how far the text is scrolled left, in pixels, to keep the caret visible.</summary>
-    public float ScrollOffset { get; private set; } = 0f;
+    public float ScrollOffset
+    {
+        get
+        {
+            ApplyPendingScrollFit();
+            return _scrollX;
+        }
+    }
+
+    /// <summary>
+    /// Gets how far the lines of a multi-line box are scrolled up, in pixels, to keep the caret visible or as scrolled
+    /// with the mouse wheel. Always 0 for a single-line box.
+    /// </summary>
+    public float VerticalScrollOffset
+    {
+        get
+        {
+            ApplyPendingScrollFit();
+            return _scrollY;
+        }
+    }
 
     /// <summary>Gets the x coordinate where the text viewport starts: the left padding plus room for a leading icon.</summary>
     public float GetTextContentStartX() => Padding.Left + (HasLeadingIcon ? 36f : 0f);
@@ -469,6 +606,19 @@ public class TextBox : Control
     private float[] _offsets = new float[1];
     private bool[] _boundaries = new bool[] { true };
     private string _displayText = string.Empty;
+    private bool _metricsMultiline;
+    private int _metricsVersion;
+
+    // Cached line layout (see EnsureLines): one entry per visual line, plus the line strings, created when first drawn.
+    private readonly List<LineSpan> _lines = new();
+    private readonly List<string?> _lineTexts = new();
+    private int _linesVersion = -1;
+    private float _linesWrapWidth = float.NaN;
+    private float _maxLineWidth;
+    private List<LineSpan>? _measureLines;
+
+    // The x position (in unscrolled content coordinates) Up/Down aim for, kept across consecutive vertical moves.
+    private float _preferredCaretX = float.NaN;
 
     static TextBox()
     {
@@ -513,7 +663,8 @@ public class TextBox : Control
 
     /// <summary>
     /// Gets the horizontal distance in pixels from the start of the text to caret position <paramref name="index"/>
-    /// (clamped to the text). Uses cached measurements.
+    /// (clamped to the text), as if all text were on one line (line breaks have no width in a multi-line box). Uses
+    /// cached measurements. See <see cref="GetCharacterX"/> for where a position is drawn.
     /// </summary>
     /// <param name="index">A caret position, 0 to <c>Text.Length</c>.</param>
     public float GetCharacterOffset(int index)
@@ -522,22 +673,36 @@ public class TextBox : Control
         return _offsets[Math.Clamp(index, 0, Text.Length)];
     }
 
-    /// <summary>Gets the width of the displayed text in pixels.</summary>
+    /// <summary>Gets the width of the displayed text in pixels, as if it were on one line.</summary>
     public float GetTextWidth() => GetCharacterOffset(Text.Length);
 
     /// <summary>
     /// Gets the x coordinate at which the first character is drawn: the viewport start, plus the alignment offset while
-    /// the text fits, minus <see cref="ScrollOffset"/>.
+    /// the text fits, minus <see cref="ScrollOffset"/>. For a multi-line box, see <see cref="GetLineOriginX"/>.
     /// </summary>
-    public float GetTextOriginX() => GetTextContentStartX() + GetAlignmentOffset() - ScrollOffset;
+    public float GetTextOriginX() => IsMultiline ? GetLineOriginX(0) : GetTextContentStartX() + GetAlignmentOffset(GetTextWidth()) - ScrollOffset;
 
-    private float GetAlignmentOffset()
+    /// <summary>
+    /// Gets the x coordinate, in the element's coordinates, at which caret position <paramref name="index"/> is drawn on
+    /// its line (scrolling and alignment included).
+    /// </summary>
+    /// <param name="index">A caret position, 0 to <c>Text.Length</c>.</param>
+    public float GetCharacterX(int index)
+    {
+        if (!IsMultiline) return GetTextOriginX() + GetCharacterOffset(index);
+
+        EnsureLines();
+        index = Math.Clamp(index, 0, Text.Length);
+        int line = GetLineIndexFromCharacterIndex(index);
+        return GetLineOriginX(line) + _offsets[index] - _offsets[_lines[line].Start];
+    }
+
+    private float GetAlignmentOffset(float width)
     {
         var alignment = TextAlignment;
         if (alignment == TextAlignment.Left) return 0f;
 
         float viewport = GetViewportWidth();
-        float width = GetTextWidth();
         float caretWidth = GetRoundedCaretWidth();
         if (width + caretWidth > viewport) return 0f;
 
@@ -554,7 +719,9 @@ public class TextBox : Control
         float fontSize = FontSize;
         string? family = FontFamily;
         char mask = PasswordChar;
-        if (ReferenceEquals(text, _metricsText) && fontSize == _metricsFontSize && mask == _metricsMask && string.Equals(family, _metricsFamily))
+        bool multiline = IsMultiline;
+        if (ReferenceEquals(text, _metricsText) && fontSize == _metricsFontSize && mask == _metricsMask &&
+            multiline == _metricsMultiline && string.Equals(family, _metricsFamily))
         {
             return;
         }
@@ -563,6 +730,8 @@ public class TextBox : Control
         _metricsFontSize = fontSize;
         _metricsFamily = family;
         _metricsMask = mask;
+        _metricsMultiline = multiline;
+        _metricsVersion++;
 
         int n = text.Length;
         if (_offsets.Length < n + 1)
@@ -601,7 +770,10 @@ public class TextBox : Control
             {
                 if (i > 0 && font != null)
                 {
-                    x += mask != '\0' ? maskWidth : font.MeasureText(text.AsSpan(elementStart, i - elementStart));
+                    // Line breaks end a line in a multi-line box and take no room.
+                    x += mask != '\0' ? maskWidth
+                        : multiline && IsLineBreak(text[elementStart]) ? 0f
+                        : font.MeasureText(text.AsSpan(elementStart, i - elementStart));
                 }
                 elementX = x;
                 elementStart = i;
@@ -641,6 +813,257 @@ public class TextBox : Control
     /// <summary>Returns the end of the text element after caret position <paramref name="index"/>.</summary>
     private int NextBoundary(int index) => index >= Text.Length ? Text.Length : SnapForward(index + 1);
 
+    private static bool IsLineBreak(char c) => c is '\r' or '\n';
+
+    #endregion
+
+    #region Lines
+
+    /// <summary>
+    /// Gets the distance between the baselines of consecutive lines: the font's line spacing, rounded up to whole pixels.
+    /// </summary>
+    public float LineHeight => MathF.Ceiling(TextMeasurer.GetFontSpacing(FontSize, FontFamily));
+
+    /// <summary>
+    /// Gets the number of visual lines: 1 for a single-line box; otherwise one per line of the text, plus the extra lines
+    /// created by wrapping (see <see cref="TextWrapping"/>). Text ending in a line break has an empty last line.
+    /// </summary>
+    public int LineCount
+    {
+        get
+        {
+            EnsureLines();
+            return _lines.Count;
+        }
+    }
+
+    /// <summary>Gets the index in <see cref="Text"/> of the first character of visual line <paramref name="line"/>.</summary>
+    /// <param name="line">The line index, clamped to 0 to <see cref="LineCount"/> − 1.</param>
+    public int GetLineStart(int line) => GetLine(line).Start;
+
+    /// <summary>Gets the number of characters on visual line <paramref name="line"/>, excluding its line break.</summary>
+    /// <param name="line">The line index, clamped to 0 to <see cref="LineCount"/> − 1.</param>
+    public int GetLineLength(int line) => GetLine(line).Length;
+
+    /// <summary>Gets the width in pixels of visual line <paramref name="line"/>.</summary>
+    /// <param name="line">The line index, clamped to 0 to <see cref="LineCount"/> − 1.</param>
+    public float GetLineWidth(int line) => GetLine(line).Width;
+
+    /// <summary>
+    /// Gets the characters of visual line <paramref name="line"/> as drawn, without the line break (the
+    /// <see cref="DisplayText"/> for a single-line box). The strings are created once per layout and cached.
+    /// </summary>
+    /// <param name="line">The line index, clamped to 0 to <see cref="LineCount"/> − 1.</param>
+    public string GetLineText(int line)
+    {
+        if (!IsMultiline) return DisplayText;
+
+        EnsureLines();
+        line = Math.Clamp(line, 0, _lines.Count - 1);
+        var span = _lines[line];
+        return _lineTexts[line] ??= span.Length == 0 ? string.Empty : Text.Substring(span.Start, span.Length);
+    }
+
+    /// <summary>
+    /// Gets the visual line caret position <paramref name="index"/> is on. A position where a line wraps belongs to the
+    /// line it starts.
+    /// </summary>
+    /// <param name="index">A caret position, clamped to 0 to <c>Text.Length</c>.</param>
+    public int GetLineIndexFromCharacterIndex(int index)
+    {
+        EnsureLines();
+        index = Math.Clamp(index, 0, Text.Length);
+
+        // Last line whose start is at or before index.
+        int lo = 0;
+        int hi = _lines.Count - 1;
+        while (lo < hi)
+        {
+            int mid = (lo + hi + 1) >> 1;
+            if (_lines[mid].Start <= index) lo = mid;
+            else hi = mid - 1;
+        }
+        return lo;
+    }
+
+    /// <summary>
+    /// Gets the x coordinate at which visual line <paramref name="line"/> starts: the viewport start, plus the alignment
+    /// offset while the line fits, minus <see cref="ScrollOffset"/>.
+    /// </summary>
+    /// <param name="line">The line index, clamped to 0 to <see cref="LineCount"/> − 1.</param>
+    public float GetLineOriginX(int line) =>
+        GetTextContentStartX() + GetAlignmentOffset(IsMultiline ? GetLine(line).Width : GetTextWidth()) - ScrollOffset;
+
+    /// <summary>
+    /// Gets the y coordinate of the baseline of the first line of a multi-line box when it isn't scrolled: where the text
+    /// of a single-line field of <see cref="FieldHeight"/> sits.
+    /// </summary>
+    public float GetFirstBaselineY()
+    {
+        float rowHeight = GetOneLineFieldHeight();
+        return Variant == TextBoxVariant.Filled && HasLabel ? rowHeight - 14f : (rowHeight + FontSize) * 0.5f - 2f;
+    }
+
+    /// <summary>Gets the y coordinate of the baseline of visual line <paramref name="line"/> of a multi-line box, scrolling included.</summary>
+    /// <param name="line">The line index (not clamped).</param>
+    public float GetLineBaselineY(int line) => GetFirstBaselineY() + line * LineHeight - VerticalScrollOffset;
+
+    /// <summary>
+    /// Gets the y coordinate of the top of visual line <paramref name="line"/> of a multi-line box, scrolling included;
+    /// each line is <see cref="LineHeight"/> tall.
+    /// </summary>
+    /// <param name="line">The line index (not clamped).</param>
+    public float GetLineTop(int line) => GetViewportTop() + line * LineHeight - VerticalScrollOffset;
+
+    /// <summary>Gets the y coordinate where the lines of a multi-line box are shown from (0 for a single-line box).</summary>
+    public float GetViewportTop() => IsMultiline ? GetFirstBaselineY() - GetAscent() : 0f;
+
+    /// <summary>
+    /// Gets the height of the area the lines of a multi-line box are shown in, at least one line: the field container
+    /// minus the space above the first line and below the last. For a single-line box, the field row height.
+    /// </summary>
+    public float GetViewportHeight()
+    {
+        if (!IsMultiline) return GetFieldRowHeight();
+
+        float container = Math.Max(0f, Bounds.Height - (HasSupportingText ? 20f : 0f));
+        float lineHeight = LineHeight;
+        float top = GetViewportTop();
+        float bottomInset = Math.Max(0f, GetOneLineFieldHeight() - top - lineHeight);
+        return Math.Max(lineHeight, container - top - bottomInset);
+    }
+
+    /// <summary>Gets the height of all lines of a multi-line box: <see cref="LineCount"/> × <see cref="LineHeight"/>.</summary>
+    public float GetContentHeight() => LineCount * LineHeight;
+
+    private float GetMaxVerticalScroll() => IsMultiline ? Math.Max(0f, GetContentHeight() - GetViewportHeight()) : 0f;
+
+    private float GetMaxHorizontalScroll()
+    {
+        if (IsMultiline)
+        {
+            if (TextWrapping == TextWrapping.Wrap) return 0f;
+            EnsureLines();
+            return Math.Max(0f, _maxLineWidth + GetRoundedCaretWidth() - GetViewportWidth());
+        }
+        return Math.Max(0f, GetTextWidth() + GetRoundedCaretWidth() - GetViewportWidth());
+    }
+
+    private float GetAscent()
+    {
+        if (FontSize <= 0) return 0f;
+        TextMeasurer.GetFont(FontSize, FontFamily).GetFontMetrics(out var metrics);
+        return -metrics.Ascent;
+    }
+
+    private LineSpan GetLine(int line)
+    {
+        EnsureLines();
+        return _lines[Math.Clamp(line, 0, _lines.Count - 1)];
+    }
+
+    // The last caret position on a line (for End, clicks past the end and Up/Down): a line wrapped at a space ends
+    // where the next line starts, which would show the caret there, so the caret stops before that space.
+    private int GetLineCaretEnd(int line)
+    {
+        var span = GetLine(line);
+        int end = span.Start + span.Length;
+        bool wrapped = span.End == end && line < _lines.Count - 1;
+        return wrapped && end > span.Start && char.IsWhiteSpace(Text[end - 1]) ? PreviousBoundary(end) : end;
+    }
+
+    private void EnsureLines()
+    {
+        EnsureTextMetrics();
+        float wrapWidth = GetWrapWidth(GetViewportWidth());
+        if (_linesVersion == _metricsVersion && wrapWidth.Equals(_linesWrapWidth))
+        {
+            return;
+        }
+
+        _linesVersion = _metricsVersion;
+        _linesWrapWidth = wrapWidth;
+        BuildLines(_lines, wrapWidth);
+
+        _maxLineWidth = 0f;
+        _lineTexts.Clear();
+        foreach (var line in _lines)
+        {
+            _maxLineWidth = Math.Max(_maxLineWidth, line.Width);
+            _lineTexts.Add(null);
+        }
+    }
+
+    // The width lines wrap at for a viewport (leaving room for the caret), or infinity when they don't wrap.
+    private float GetWrapWidth(float viewportWidth)
+    {
+        if (!IsMultiline || TextWrapping != TextWrapping.Wrap) return float.PositiveInfinity;
+        float width = viewportWidth - GetRoundedCaretWidth();
+        return width > 0 ? width : float.PositiveInfinity;
+    }
+
+    // Splits the text into visual lines: at '\n', "\r\n" and '\r', and with a finite wrap width after the last space
+    // that fits (or between characters for a word wider than the line). Trailing spaces may overhang the wrap width.
+    private void BuildLines(List<LineSpan> lines, float wrapWidth)
+    {
+        EnsureTextMetrics();
+        lines.Clear();
+        string text = Text;
+        int n = text.Length;
+        if (!IsMultiline)
+        {
+            AddLine(lines, 0, n, n);
+            return;
+        }
+
+        bool wrap = float.IsFinite(wrapWidth);
+        int paragraphStart = 0;
+        while (true)
+        {
+            int paragraphEnd = text.IndexOfAny(s_lineBreaks, paragraphStart);
+            if (paragraphEnd < 0) paragraphEnd = n;
+
+            int lineStart = paragraphStart;
+            if (wrap)
+            {
+                int breakAfterSpace = -1;
+                int i = paragraphStart;
+                while (i < paragraphEnd)
+                {
+                    int next = Math.Min(paragraphEnd, NextBoundary(i));
+                    bool space = char.IsWhiteSpace(text[i]);
+                    if (!space && i > lineStart && _offsets[next] - _offsets[lineStart] > wrapWidth)
+                    {
+                        int breakAt = breakAfterSpace > lineStart ? breakAfterSpace : i;
+                        AddLine(lines, lineStart, breakAt - lineStart, breakAt);
+                        lineStart = breakAt;
+                        breakAfterSpace = -1;
+                        continue; // re-check the current character against the new line
+                    }
+
+                    if (space) breakAfterSpace = next;
+                    i = next;
+                }
+            }
+
+            if (paragraphEnd >= n)
+            {
+                AddLine(lines, lineStart, n - lineStart, n);
+                return;
+            }
+
+            int nextParagraph = paragraphEnd + (text[paragraphEnd] == '\r' && paragraphEnd + 1 < n && text[paragraphEnd + 1] == '\n' ? 2 : 1);
+            AddLine(lines, lineStart, paragraphEnd - lineStart, nextParagraph);
+            paragraphStart = nextParagraph;
+        }
+    }
+
+    private void AddLine(List<LineSpan> lines, int start, int length, int end) =>
+        lines.Add(new LineSpan(start, length, end, _offsets[start + length] - _offsets[start]));
+
+    /// <summary>A visual line: its characters (without the line break), where the next line starts and its width.</summary>
+    private readonly record struct LineSpan(int Start, int Length, int End, float Width);
+
     #endregion
 
     #region Caret and selection
@@ -658,6 +1081,7 @@ public class TextBox : Control
         {
             SelectionAnchor = _caretIndex;
         }
+        _preferredCaretX = float.NaN;
         _breakUndoCoalescing = true;
         EnsureCaretVisible();
         ResetCaretBlink();
@@ -698,37 +1122,88 @@ public class TextBox : Control
         InvalidateVisual();
     }
 
-    /// <summary>Scrolls the text horizontally (see <see cref="ScrollOffset"/>) so the caret is inside the viewport.</summary>
+    /// <summary>
+    /// Scrolls the text (see <see cref="ScrollOffset"/> and, for a multi-line box, <see cref="VerticalScrollOffset"/>) so
+    /// the caret is inside the viewport.
+    /// </summary>
     public void EnsureCaretVisible()
     {
+        _scrollFitPending = false;
+        _userScrolled = false;
+
         float viewportWidth = GetViewportWidth();
         if (viewportWidth <= 0)
         {
-            ScrollOffset = 0f;
+            SetScroll(0f, 0f);
             return;
         }
 
-        float caretTextX = GetCharacterOffset(_caretIndex);
-        float totalTextWidth = GetTextWidth();
+        bool multiline = IsMultiline;
         float caretWidth = GetRoundedCaretWidth();
-        float maxScroll = Math.Max(0f, totalTextWidth + caretWidth - viewportWidth);
-
-        float newOffset = ScrollOffset;
-
-        if (caretTextX < newOffset)
+        int line = multiline ? GetLineIndexFromCharacterIndex(_caretIndex) : 0;
+        float caretTextX = GetCharacterOffset(_caretIndex);
+        if (multiline)
         {
-            newOffset = caretTextX;
-        }
-        else if (caretTextX + caretWidth > newOffset + viewportWidth)
-        {
-            newOffset = caretTextX + caretWidth - viewportWidth;
+            caretTextX -= _offsets[_lines[line].Start];
         }
 
-        newOffset = Math.Clamp(newOffset, 0f, maxScroll);
-        if (MathF.Abs(newOffset - ScrollOffset) > 0.001f)
+        float newX = _scrollX;
+        if (caretTextX < newX)
         {
-            ScrollOffset = newOffset;
+            newX = caretTextX;
+        }
+        else if (caretTextX + caretWidth > newX + viewportWidth)
+        {
+            newX = caretTextX + caretWidth - viewportWidth;
+        }
+
+        float newY = 0f;
+        if (multiline)
+        {
+            float lineHeight = LineHeight;
+            float viewportHeight = GetViewportHeight();
+            float top = line * lineHeight;
+            newY = _scrollY;
+            if (top < newY)
+            {
+                newY = top;
+            }
+            else if (top + lineHeight > newY + viewportHeight)
+            {
+                newY = top + lineHeight - viewportHeight;
+            }
+            newY = Math.Clamp(newY, 0f, GetMaxVerticalScroll());
+        }
+
+        SetScroll(Math.Clamp(newX, 0f, GetMaxHorizontalScroll()), newY);
+    }
+
+    // Keeps the scroll offsets in range without following the caret (after the wheel scrolled a multi-line box).
+    private void ClampScroll() =>
+        SetScroll(Math.Clamp(_scrollX, 0f, GetMaxHorizontalScroll()), Math.Clamp(_scrollY, 0f, GetMaxVerticalScroll()));
+
+    private void SetScroll(float x, float y)
+    {
+        if (MathF.Abs(x - _scrollX) > 0.001f || MathF.Abs(y - _scrollY) > 0.001f)
+        {
+            _scrollX = x;
+            _scrollY = y;
             InvalidateVisual();
+        }
+    }
+
+    private void ApplyPendingScrollFit()
+    {
+        if (!_scrollFitPending) return;
+
+        _scrollFitPending = false;
+        if (_userScrolled && IsMultiline)
+        {
+            ClampScroll();
+        }
+        else
+        {
+            EnsureCaretVisible();
         }
     }
 
@@ -785,6 +1260,7 @@ public class TextBox : Control
 
     private static int GetCharCategory(char c)
     {
+        if (IsLineBreak(c)) return 4; // a double-click at a line's end selects the word before it, not the next line
         if (char.IsLetterOrDigit(c) || c == '_') return 1;
         if (char.IsWhiteSpace(c)) return 2;
         return 3;
@@ -890,27 +1366,61 @@ public class TextBox : Control
     /// Returns the caret position closest to <paramref name="localX"/>, a distance in pixels from the start of the text
     /// (see <see cref="GetTextOriginX"/>). Uses a binary search over the cached character offsets.
     /// </summary>
-    internal int EstimateCaretIndex(float localX)
+    internal int EstimateCaretIndex(float localX) => Text.Length == 0 || localX <= 0 ? 0 : HitTest(0, Text.Length, localX);
+
+    /// <summary>
+    /// Returns the caret position closest to <paramref name="point"/>, in the element's coordinates: on the line under
+    /// the point (the first or last line when above or below them), at the character boundary nearest to its x.
+    /// </summary>
+    /// <param name="point">The point, for example a pointer position.</param>
+    public int GetCharacterIndexFromPoint(Point point)
     {
-        int n = Text.Length;
-        if (n == 0 || localX <= 0) return 0;
+        if (!IsMultiline) return EstimateCaretIndex(point.X - GetTextOriginX());
 
+        EnsureLines();
+        int line = (int)MathF.Floor((point.Y - GetLineTop(0)) / LineHeight);
+        line = Math.Clamp(line, 0, _lines.Count - 1);
+        return GetIndexInLine(line, point.X - GetLineOriginX(line));
+    }
+
+    // The caret position on a line closest to localX, measured from the line's origin.
+    private int GetIndexInLine(int line, float localX)
+    {
+        int start = GetLine(line).Start;
+        return HitTest(start, GetLineCaretEnd(line), _offsets[start] + localX);
+    }
+
+    // The text-element boundary between start and end whose offset is closest to x. Binary search over the offsets.
+    private int HitTest(int start, int end, float x)
+    {
         EnsureTextMetrics();
-        if (localX >= _offsets[n]) return n;
+        if (end <= start || x <= _offsets[start]) return start;
+        if (x >= _offsets[end]) return end;
 
-        // Largest index whose offset is <= localX.
-        int lo = 0;
-        int hi = n;
+        // Largest index whose offset is <= x.
+        int lo = start;
+        int hi = end;
         while (lo < hi)
         {
             int mid = (lo + hi + 1) >> 1;
-            if (_offsets[mid] <= localX) lo = mid;
+            if (_offsets[mid] <= x) lo = mid;
             else hi = mid - 1;
         }
 
         int previous = SnapBackward(lo);
-        int next = NextBoundary(previous);
-        return localX - _offsets[previous] < _offsets[next] - localX ? previous : next;
+        int next = Math.Min(end, NextBoundary(previous));
+        return x - _offsets[previous] < _offsets[next] - x ? previous : next;
+    }
+
+    /// <summary>
+    /// Selects visual line <paramref name="line"/> without its line break, with the caret at its end, as a triple-click
+    /// does in a multi-line box.
+    /// </summary>
+    /// <param name="line">The line index, clamped to 0 to <see cref="LineCount"/> − 1.</param>
+    public void SelectLine(int line)
+    {
+        line = Math.Clamp(line, 0, LineCount - 1);
+        Select(GetLineStart(line), GetLineLength(line));
     }
 
     #endregion
@@ -919,8 +1429,8 @@ public class TextBox : Control
 
     /// <summary>
     /// Replaces the selection (or inserts at the caret) with <paramref name="replacement"/> as if the user typed it: the
-    /// text is cut at its first line break and limited by <see cref="MaxLength"/>. The caret ends up after the inserted
-    /// text. Works even when <see cref="IsReadOnly"/> is set.
+    /// text is cut at its first line break (unless <see cref="AcceptsReturn"/> is set) and limited by
+    /// <see cref="MaxLength"/>. The caret ends up after the inserted text. Works even when <see cref="IsReadOnly"/> is set.
     /// </summary>
     /// <param name="replacement">The text to insert; <c>null</c> or empty deletes the selection.</param>
     public void ReplaceSelection(string replacement) => InsertText(replacement ?? string.Empty, EditKind.Other);
@@ -947,8 +1457,8 @@ public class TextBox : Control
     }
 
     /// <summary>
-    /// Replaces the selection with the clipboard text, cut at its first line break and limited by <see cref="MaxLength"/>.
-    /// Does nothing when read-only.
+    /// Replaces the selection with the clipboard text, cut at its first line break (unless <see cref="AcceptsReturn"/> is
+    /// set) and limited by <see cref="MaxLength"/>. Does nothing when read-only.
     /// </summary>
     public void Paste()
     {
@@ -1004,7 +1514,9 @@ public class TextBox : Control
         int lineBreak = text.IndexOfAny(s_lineBreaks);
         if (lineBreak >= 0)
         {
-            text = text[..lineBreak];
+            text = !AcceptsLineBreaks ? text[..lineBreak]
+                : text.Contains('\r') ? text.Replace("\r\n", "\n").Replace('\r', '\n')
+                : text;
         }
 
         text = LimitToMaxLength(text);
@@ -1093,6 +1605,7 @@ public class TextBox : Control
 
         _caretIndex = SnapBackward(caret);
         SelectionAnchor = SnapBackward(anchor);
+        _preferredCaretX = float.NaN;
         EnsureCaretVisible();
         ResetCaretBlink();
         InvalidateVisual();
@@ -1282,6 +1795,13 @@ public class TextBox : Control
         UpdateLabelAnimation(animate: false);
     }
 
+    // AcceptsReturn or TextWrapping changed: the lines and the scrolling start over.
+    private void OnLineModeChanged()
+    {
+        _preferredCaretX = float.NaN;
+        EnsureCaretVisible();
+    }
+
     private void UpdateLabelAnimation(bool animate)
     {
         bool shouldFloat = HasLabel && (IsFocused || !string.IsNullOrEmpty(Text));
@@ -1339,12 +1859,19 @@ public class TextBox : Control
         Focus();
         CapturePointer();
 
-        int idx = EstimateCaretIndex(e.Position.X - GetTextOriginX());
+        int idx = GetCharacterIndexFromPoint(e.Position);
         int clicks = e.ClickCount > 0 ? e.ClickCount : CountClicks(e);
 
         if (clicks >= 3)
         {
-            SelectAll();
+            if (IsMultiline)
+            {
+                SelectLine(GetLineIndexFromCharacterIndex(idx));
+            }
+            else
+            {
+                SelectAll();
+            }
         }
         else if (clicks == 2)
         {
@@ -1391,7 +1918,7 @@ public class TextBox : Control
 
         if (IsPointerCaptured)
         {
-            int idx = EstimateCaretIndex(e.Position.X - GetTextOriginX());
+            int idx = GetCharacterIndexFromPoint(e.Position);
             if (idx != _caretIndex)
             {
                 SetCaretIndex(idx, keepSelection: true);
@@ -1445,6 +1972,37 @@ public class TextBox : Control
     }
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// A multi-line box scrolls three lines per notch (horizontally with a horizontal wheel when lines don't wrap) and
+    /// handles the event while it can scroll that way, so an enclosing scroll viewer takes over at the ends.
+    /// </remarks>
+    public override void OnPointerWheel(PointerWheelEventArgs e)
+    {
+        base.OnPointerWheel(e);
+        if (e.Handled || !IsMultiline) return;
+
+        ApplyPendingScrollFit();
+        float step = 3f * LineHeight;
+        float x = _scrollX;
+        float y = _scrollY;
+        if (e.DeltaY != 0)
+        {
+            y = Math.Clamp(y - e.DeltaY * step, 0f, GetMaxVerticalScroll());
+        }
+        if (e.DeltaX != 0)
+        {
+            x = Math.Clamp(x - e.DeltaX * step, 0f, GetMaxHorizontalScroll());
+        }
+
+        if (x != _scrollX || y != _scrollY)
+        {
+            SetScroll(x, y);
+            _userScrolled = true;
+            e.Handled = true;
+        }
+    }
+
+    /// <inheritdoc/>
     public override void OnTextInput(TextInputEventArgs e)
     {
         base.OnTextInput(e);
@@ -1478,9 +2036,19 @@ public class TextBox : Control
         }
 
         bool readOnly = IsReadOnly;
+        bool multiline = IsMultiline;
         bool handled = true;
         switch (key)
         {
+            case Key.Enter when AcceptsLineBreaks && !readOnly && (e.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt)) == 0:
+                InsertText("\n", EditKind.Typing);
+                break;
+            case Key.Up when multiline && !ctrl:
+            case Key.Down when multiline && !ctrl:
+            case Key.PageUp when multiline && !ctrl:
+            case Key.PageDown when multiline && !ctrl:
+                HandleVerticalNavigationKey(key, shift);
+                break;
             case Key.A when ctrl:
                 SelectAll();
                 break;
@@ -1584,14 +2152,41 @@ public class TextBox : Control
                 }
                 break;
 
+            // A multi-line box goes to the start or end of the line, Ctrl+Home/End to the start or end of the text.
             case Key.Home:
-                SetCaretIndex(0, keepSelection: shift);
+                SetCaretIndex(IsMultiline && !ctrl ? GetLineStart(GetLineIndexFromCharacterIndex(_caretIndex)) : 0, keepSelection: shift);
                 break;
 
             case Key.End:
-                SetCaretIndex(Text.Length, keepSelection: shift);
+                SetCaretIndex(IsMultiline && !ctrl ? GetLineCaretEnd(GetLineIndexFromCharacterIndex(_caretIndex)) : Text.Length, keepSelection: shift);
                 break;
         }
+    }
+
+    // Up/Down move one line, Page Up/Page Down one viewport of lines; the caret keeps aiming for the column it started
+    // in. Moving above the first line goes to the start of the text, below the last line to its end.
+    private void HandleVerticalNavigationKey(Key key, bool shift)
+    {
+        int pageLines = Math.Max(1, (int)(GetViewportHeight() / LineHeight));
+        int delta = key switch
+        {
+            Key.Up => -1,
+            Key.Down => 1,
+            Key.PageUp => -pageLines,
+            _ => pageLines,
+        };
+
+        int line = GetLineIndexFromCharacterIndex(_caretIndex);
+        float scroll = ScrollOffset;
+        float preferredX = float.IsNaN(_preferredCaretX) ? GetCharacterX(_caretIndex) + scroll : _preferredCaretX;
+
+        int target = line + delta;
+        int index = target < 0 ? 0
+            : target >= LineCount ? Text.Length
+            : GetIndexInLine(target, preferredX - scroll - GetLineOriginX(target));
+
+        SetCaretIndex(index, keepSelection: shift);
+        _preferredCaretX = preferredX;
     }
 
     #endregion
@@ -1599,8 +2194,17 @@ public class TextBox : Control
     #region Layout
 
     /// <inheritdoc/>
+    /// <remarks>
+    /// A multi-line box is as tall as a one-line field plus one <see cref="LineHeight"/> per further line, counting the
+    /// lines (wrapped at the available width) between <see cref="MinLines"/> and <see cref="MaxLines"/>.
+    /// </remarks>
     protected override Size MeasureOverride(Size availableSize)
     {
+        if (IsMultiline)
+        {
+            return MeasureMultiline(availableSize);
+        }
+
         var padding = Padding;
         string displayText = Text.Length > 0 ? DisplayText
             : !string.IsNullOrEmpty(Placeholder) ? Placeholder
@@ -1629,11 +2233,49 @@ public class TextBox : Control
         );
     }
 
+    private Size MeasureMultiline(Size availableSize)
+    {
+        var padding = Padding;
+        float chromeWidth = GetTextContentStartX() + padding.Right + (HasTrailingIcon ? 36f : 0f);
+        float availableTextWidth = float.IsFinite(availableSize.Width) ? availableSize.Width - chromeWidth : float.PositiveInfinity;
+
+        _measureLines ??= new List<LineSpan>();
+        BuildLines(_measureLines, GetWrapWidth(availableTextWidth));
+
+        float textWidth = 0f;
+        foreach (var line in _measureLines)
+        {
+            textWidth = Math.Max(textWidth, line.Width);
+        }
+        if (Text.Length == 0)
+        {
+            string hint = !string.IsNullOrEmpty(Placeholder) ? Placeholder : Label;
+            textWidth = TextMeasurer.Measure(hint, FontSize, FontFamily).Width;
+        }
+
+        float contentW = chromeWidth + textWidth + 4;
+        bool hasSupportingText = HasSupportingText;
+        if (hasSupportingText)
+        {
+            var supportSize = TextMeasurer.Measure(DisplayedSupportingText, 12f, FontFamily);
+            contentW = Math.Max(contentW, padding.Left + supportSize.Width + padding.Right);
+        }
+
+        int maxLines = MaxLines;
+        int lines = Math.Max(MinLines, maxLines > 0 ? Math.Min(_measureLines.Count, maxLines) : _measureLines.Count);
+        float containerH = GetOneLineFieldHeight() + (lines - 1) * LineHeight;
+        float totalH = containerH + (hasSupportingText ? 20f : 0f);
+
+        float width = float.IsFinite(availableSize.Width) ? Math.Min(contentW, availableSize.Width) : contentW;
+        return new Size(Math.Max(140f, width), totalH);
+    }
+
     /// <inheritdoc/>
     protected override Size ArrangeOverride(Size finalSize)
     {
         var size = base.ArrangeOverride(finalSize);
-        EnsureCaretVisible();
+        // The bounds are assigned after this returns; the scroll offsets are fitted to them when next read.
+        _scrollFitPending = true;
         return size;
     }
 

@@ -82,6 +82,42 @@ public partial class TextBoxesViewModel : PageViewModel
 
     public string BioCounter => $"{Bio.Length} / {BioMaxLength}";
 
+    public const string DefaultNotes =
+        "Multi-line fields wrap long lines at spaces, like this one, which is long enough to wrap in a narrow column.\n" +
+        "Press Enter for a new line.\n\nEdit the notes and close the window: it asks whether to save them first.";
+
+    private string _savedNotes = DefaultNotes;
+
+    // The notes are "unsaved" until SaveNotes runs; the gallery window asks about them when it is closed.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasUnsavedNotes), nameof(NotesStatus))]
+    [NotifyCanExecuteChangedFor(nameof(SaveNotesCommand), nameof(RevertNotesCommand))]
+    private string _notes = DefaultNotes;
+
+    public bool HasUnsavedNotes => Notes != _savedNotes;
+
+    public string NotesStatus => HasUnsavedNotes ? "Unsaved changes — closing the window asks to save" : "Saved";
+
+    [RelayCommand(CanExecute = nameof(HasUnsavedNotes))]
+    [property: Command("SaveNotes", Group, Label = "Save notes", Icon = MaterialIcons.Save, Description = "Mark the notes on the Text Fields page as saved")]
+    public void SaveNotes()
+    {
+        _savedNotes = Notes;
+        OnPropertyChanged(nameof(HasUnsavedNotes));
+        OnPropertyChanged(nameof(NotesStatus));
+        SaveNotesCommand.NotifyCanExecuteChanged();
+        RevertNotesCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(HasUnsavedNotes))]
+    [property: Command("RevertNotes", Group, Label = "Revert", Icon = MaterialIcons.Undo, Description = "Discard the unsaved changes to the notes")]
+    private void RevertNotes() => Notes = _savedNotes;
+
+    public const string LogText =
+        "[09:41:02] Loading project 'Atelier.slnx'\n[09:41:03] Restoring packages…\n[09:41:05] Building Atelier.Core\n" +
+        "[09:41:07] Building Atelier.Controls — lines don't wrap here, so this long one scrolls sideways\n" +
+        "[09:41:09] Building Atelier.Gallery\n[09:41:10] Running 1,490 tests\n[09:41:14] All tests passed\n[09:41:14] Done";
+
     [RelayCommand]
     [property: Command("Submit", Group, Label = "Create account", Description = "Validate the form and show the result")]
     private void Submit()
@@ -102,5 +138,7 @@ public partial class TextBoxesViewModel : PageViewModel
         LastTextChanged = "Type in the field to see TextChanged";
         SubmitResult = "Fix the errors and submit";
         Form.Reset();
+        Notes = DefaultNotes;
+        SaveNotes();
     }
 }

@@ -706,15 +706,160 @@ public class SilkWindow : IDisposable, IHostWindow
         _window.WindowState = _window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     }
 
-    public void Close()
+    /// <summary>
+    /// Asks the window to close, as its close button does: <see cref="Closing"/> is raised first and its handlers can
+    /// keep the window open. The request is processed on the next loop iteration.
+    /// </summary>
+    public void Close() => Close(force: false);
+
+    /// <summary>
+    /// Closes the window; with <paramref name="force"/> it closes without raising <see cref="Closing"/>, for example
+    /// after the user chose "Don't save" in a prompt shown by a <see cref="Closing"/> handler.
+    /// </summary>
+    /// <param name="force"><c>true</c> to close even if a <see cref="Closing"/> handler would keep the window open.</param>
+    public void Close(bool force)
     {
+        if (force)
+        {
+            _closeConfirmed = true;
+        }
+
         if (TryGetHwnd(out var hwnd))
         {
+            // Goes through the same path as Alt+F4 and the taskbar: GLFW's close callback, then OnNativeClosing.
             PostMessage(hwnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
             return;
         }
-        Dispatch(() => _window.Close());
+
+        Dispatch(() =>
+        {
+            if (IsClosed || (!_closeConfirmed && !ConfirmClose()))
+            {
+                return;
+            }
+            _closeConfirmed = true;
+            _window.Close();
+        });
     }
+
+    /// <summary>
+    /// Occurs on the UI thread when the window is asked to close — by its close button, Alt+F4, the taskbar or Dock, the
+    /// system menu or <see cref="Close()"/> — before anything is torn down. Set <see cref="System.ComponentModel.CancelEventArgs.Cancel"/>
+    /// to keep the window open, or pass an asynchronous decision (such as a "Save changes?" dialog) to
+    /// <see cref="WindowClosingEventArgs.Defer"/>; a minimized window is restored then, so the prompt can be seen. Not
+    /// raised by <see cref="Close(bool)"/> with <c>force</c>, nor when the application loop ends.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// window.Closing += (s, e) =>
+    /// {
+    ///     if (editor.IsDirty)
+    ///     {
+    ///         e.Defer(AskToSaveAsync()); // completes with true to close, false to stay open
+    ///     }
+    /// };
+    /// </code>
+    /// </example>
+    public event EventHandler<WindowClosingEventArgs>? Closing;
+
+    /// <summary>Occurs on the UI thread after the window has closed and released its resources.</summary>
+    public event EventHandler? Closed;
+
+    /// <summary>Gets whether a <see cref="Closing"/> handler's deferred decision is still pending.</summary>
+    public bool IsCloseDecisionPending => _closeDecisionPending;
+
+    // Set by Close(force: true), or once the Closing handlers agreed: the next close request goes through unasked.
+    private volatile bool _closeConfirmed;
+    private bool _closeDecisionPending;
+
+    // GLFW's close callback (close button, Alt+F4, taskbar, WM_CLOSE): GLFW has already flagged the window as closing,
+    // so keeping it open means clearing that flag again.
+    private void OnNativeClosing()
+    {
+        if (_isClosing || _isDisposed)
+        {
+            return;
+        }
+
+        if (!_closeConfirmed && !ConfirmClose())
+        {
+            _window.IsClosing = false;
+            return;
+        }
+
+        _closeConfirmed = true;
+        OnClosing();
+    }
+
+    // Raises Closing. Returns whether the window may close now; with deferred decisions it stays open, and closes
+    // itself once they all agree.
+    private bool ConfirmClose()
+    {
+        if (_closeDecisionPending)
+        {
+            return false; // a prompt from an earlier request is still open
+        }
+
+        var handler = Closing;
+        if (handler == null)
+        {
+            return true;
+        }
+
+        var args = new WindowClosingEventArgs();
+        handler(this, args);
+        if (args.Cancel)
+        {
+            return false;
+        }
+
+        if (args.Deferrals.Count == 0)
+        {
+            return true;
+        }
+
+        _closeDecisionPending = true;
+        if (WindowState == WindowState.Minimized)
+        {
+            Restore(); // closed from the taskbar while minimized: show the prompt
+        }
+        _ = AwaitCloseDecisionAsync(args.Deferrals);
+        return false;
+    }
+
+    private async Task AwaitCloseDecisionAsync(IReadOnlyList<Task<bool>> deferrals)
+    {
+        bool close = false;
+        Exception? error = null;
+        try
+        {
+            close = (await Task.WhenAll(deferrals).ConfigureAwait(false)).All(canClose => canClose);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            error = ex;
+        }
+
+        Dispatch(() =>
+        {
+            _closeDecisionPending = false;
+            if (error != null)
+            {
+                // Surface the handler's failure like any other exception on the UI thread; the window stays open.
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error).Throw();
+            }
+            if (close && !IsClosed)
+            {
+                Close(force: true);
+            }
+        });
+    }
+
+    /// <summary>Raises <see cref="Closed"/>; called by the application after the window was disposed.</summary>
+    internal void RaiseClosed() => Closed?.Invoke(this, EventArgs.Empty);
 
     public SilkWindow(
         string title = "Atelier Application",
@@ -764,7 +909,7 @@ public class SilkWindow : IDisposable, IHostWindow
         _window.Resize += OnResize;
         _window.Update += OnUpdate;
         _window.Render += OnRender;
-        _window.Closing += OnClosing;
+        _window.Closing += OnNativeClosing;
         _window.StateChanged += OnWindowStateChanged;
         _window.FocusChanged += OnWindowFocusChanged;
 
@@ -1984,7 +2129,7 @@ public class SilkWindow : IDisposable, IHostWindow
         _window.Resize -= OnResize;
         _window.Update -= OnUpdate;
         _window.Render -= OnRender;
-        _window.Closing -= OnClosing;
+        _window.Closing -= OnNativeClosing;
 
         try
         {

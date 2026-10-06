@@ -27,7 +27,7 @@ public class TextBoxesView : GalleryPage
 
         SectionsPanel.BindIsEnabled(_vm, v => v.ControlsEnabled);
 
-        Sections(AnatomySection(), InputOptionsSection(), BindingSection(), FormSection());
+        Sections(AnatomySection(), InputOptionsSection(), MultilineSection(), BindingSection(), FormSection());
     }
 
     private UIElement AnatomySection() => Ui.Section("Anatomy and states",
@@ -64,6 +64,28 @@ public class TextBoxesView : GalleryPage
             Ui.Demo("Undo and caret",
                 Field("Edit me, then press Ctrl+Z").Label("Undo limit 3").UndoLimit(3),
                 Field("A wider caret").Label("Caret width 3").CaretWidth(3))));
+
+    private UIElement MultilineSection() => Ui.Section("Multi-line",
+        "AcceptsReturn lets Enter insert line breaks and TextWrapping wraps long lines. The field grows from MinLines to " +
+        "MaxLines and then scrolls with the caret or the mouse wheel. Up/Down move between lines, Home/End go to the ends " +
+        "of the line and Ctrl+Home/End to the ends of the text.",
+        Ui.Columns(300,
+            Ui.Demo("Notes: 3 to 8 lines, wrapping",
+                Field().Label("Notes").Multiline(minLines: 3, maxLines: 8)
+                    .BindText(_vm, v => v.Notes, (v, text) => v.Notes = text)
+                    .BindSupportingText(_vm, v => v.NotesStatus),
+                Ui.Row(
+                    new Button().Variant(ButtonVariant.Tonal).Command(_vm.SaveNotesCommand),
+                    new Button().Variant(ButtonVariant.Text).Command(_vm.RevertNotesCommand))),
+            Ui.Demo("Fixed height, no wrapping",
+                Field(TextBoxesViewModel.LogText).Label("Build log").AcceptsReturn().Height(180)),
+            Ui.Demo("Wrapping only (Enter is left to the form)",
+                Field("Pasted line breaks are cut, as in a single-line field, but long text wraps onto more lines.")
+                    .Label("Summary").TextWrapping().MaxLines(4))),
+        Ui.Code("new TextBox().Label(\"Notes\").Multiline(minLines: 3, maxLines: 8)\n" +
+                "    .BindText(vm, v => v.Notes, (v, text) => v.Notes = text)\n\n" +
+                "// Ask before closing with unsaved changes (Alt+F4, taskbar, close button):\n" +
+                "window.Closing += (s, e) =>\n{\n    if (vm.HasUnsavedNotes) e.Defer(AskToSaveAsync());\n};"));
 
     private UIElement BindingSection() => Ui.Section("Binding and events",
         "Text binds two-way. By default the source is updated on every change; with UpdateSourceTrigger.LostFocus only " +

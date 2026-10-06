@@ -1,4 +1,9 @@
 using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Atelier.Controls;
+using Atelier.Core.Primitives;
+using Atelier.Core.Tree;
 using Atelier.Core.ViewResolution;
 using Atelier.Gallery.ViewModels;
 using Atelier.Gallery.Views;
@@ -94,9 +99,35 @@ internal static class Program
 
         vm.ToggleFpsOverlayAction = () => window.ShowFpsOverlay = !window.ShowFpsOverlay;
 
+        // Closing the window (close button, Alt+F4, taskbar) while the Text Fields page has unsaved notes asks first.
+        var textFields = vm.Pages.OfType<TextBoxesViewModel>().First();
+        window.Closing += (_, e) =>
+        {
+            if (textFields.HasUnsavedNotes && window.Content is { } root)
+            {
+                e.Defer(AskToSaveNotesAsync(textFields, root));
+            }
+        };
+
         // Setting content via a factory lambda enables Hot Reload: the view is rebuilt from the same view model.
         window.SetContent(() => new MainView(vm));
         window.Show();
         return window;
+    }
+
+    /// <summary>Asks whether to save the notes; completes with whether the window may close.</summary>
+    private static async Task<bool> AskToSaveNotesAsync(TextBoxesViewModel page, UIElement root)
+    {
+        var dialog = new Dialog("Save your notes?", "The notes on the Text Fields page have changes that aren't saved.")
+            .AddButton("Cancel", DialogResult.Cancel, isCancel: true)
+            .AddButton("Don't save", DialogResult.No)
+            .AddButton("Save", DialogResult.Yes, isDefault: true);
+
+        var result = (await dialog.ShowAsync(root)).Result;
+        if (result == DialogResult.Yes)
+        {
+            page.SaveNotes();
+        }
+        return result is DialogResult.Yes or DialogResult.No;
     }
 }
