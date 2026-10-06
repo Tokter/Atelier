@@ -68,8 +68,8 @@ All screenshots show the included [Gallery](samples/Atelier.Gallery) application
 | **Keybinding editor**: commands by group, with their labels, icons and shortcuts; record new shortcuts, see conflicts | **Command palette**: search and run the commands that work where the focus is (Ctrl+Shift+P) |
 | ![Node editor, dark theme](docs/screenshots/node-editor-dark.png) | ![Timeline ruler and lanes, dark theme](docs/screenshots/timeline-dark.png) |
 | **Node editor**: Blender-style node graphs with typed sockets, knobs and sliders beside the inputs, live evaluation, and rebindable mouse and keyboard tools | |
-| ![Workspaces and areas](docs/screenshots/workspaces.png) | |
-| **Workspaces**: Blender-style areas that split, join, swap and maximize, each with an editor picked from a registry; workspaces in tabs | |
+| ![Workspaces and areas](docs/screenshots/workspaces.png) | ![3D viewport, dark theme](docs/screenshots/viewport3d-dark.png) |
+| **Workspaces**: Blender-style areas that split, join, swap and maximize, each with an editor picked from a registry; workspaces in tabs | **3D viewport**: OpenGL-rendered meshes with textures, normal maps and translucency, lines and points, a ground grid and Blender-style navigation |
 
 ---
 
@@ -160,7 +160,7 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `ToolTip`, `RichToolTip` | `.ToolTip("text")` on any element; rich tooltips hold any element and stay open for their buttons and links; placement, delays, disabled elements, optional keyboard-focus tooltips |
 | `ScrollViewer` | Per-axis scroll bar modes, wheel and keyboard scrolling, scroll events |
 | `TransitioningContentControl` | Fade, slide, zoom, slide-and-fade and composite transitions with configurable duration and easing |
-| `PropertyGrid` | Categories, sorting, filtering, validation, custom editors per type or predicate, a resizable label column; metadata generated at compile time |
+| `PropertyGrid` | Categories (alphabetical, or in a given order with `CategoryOrder`), sorting, filtering, validation, custom editors per type or predicate, a resizable label column; metadata generated at compile time |
 | `GridSplitter` | Resizes grid columns or rows by dragging or with the arrow keys; keeps star proportions; min/max limits, snapping, preview mode, Escape to cancel, double-click to restore |
 | `Icon`, `Image`, `TextBlock` | Material Symbols with variable axes, SVG path data or whole SVG documents (`Source`: an icon name or SVG); stretch modes; wrapping, trimming, max lines and line height |
 | `TitleBar`, `Toolbar`, `KeybindingHandler` | Custom window chrome, action bars, scoped shortcuts with chords, and pointer gestures bound like keys (`"RightClick"`, `"Ctrl+WheelUp"`, `"MiddleDrag"` running an `IDragCommand`); a handler can run further groups for a fixed target; users can change a command's label, icon and shortcut (`KeybindingManager.SetCustomization`, saved and restored as JSON) |
@@ -171,6 +171,8 @@ new Grid().Columns("Auto,*").Spacing(12, 8).Children(label.Cell(0, 0), field.Cel
 | `TimelinePanel`, `WaveformView` | Clips on a track ([`Atelier.Audio`](src/Atelier.Audio)): the panel places each child at an attached start and length in seconds or beats, following zoom, scroll and tempo changes and skipping clips out of view; the lightweight waveform draws part of a sound from a shared `WaveformData` (an exact min/max peak pyramid and running sums for RMS, so drawing costs the same at any length) like a DAW: a filled peak envelope with the RMS inside when zoomed out (smoothed over 25 ms, so low notes don't turn into moiré), the waveform's own shape closer in, and a line through the samples with a dot per sample at the deepest zoom; one lane per channel or combined |
 | `AudioWaveformEditor` | Non-destructive editing of one sound on the timeline ([`Atelier.Audio`](src/Atelier.Audio)), like a DAW clip: drag the edges to trim (the trimmed parts stay dimmed), square handles to fade in and out (linear or equal-power), and a dB chip to change the gain; drag to select, trim to the selection, and a menu; everything snaps to the grid and is a bindable property, and `GetGain()` gives the same fade and gain curve (`WaveformGain`) for playback; the waveform is drawn at the level they give it |
 | `WorkspaceView`, `AreaLayout`, `Area` | Blender-style areas and workspaces: register editor types (id, title, icon, category, content and header factories) in an `AreaEditorRegistry`, and every area gets a button in its top-left corner to switch its editor (switching back finds the editor as it was). Drag from an area's corner into it to split it, into a neighbor to join that neighbor, or with Ctrl onto another area to swap them; drag borders to resize; right-click a border for the Area Options (split, join, swap) or a header for split, Maximize Area (Ctrl+Space) and Close Area. Workspaces are browser-style tabs that switch arrangements (Ctrl+Page Up/Down), added from templates, renamed by double-click, duplicated (`Layout.001`), deleted and reordered from their menu; `AreaDefinition` describes layouts in code and saves them as JSON |
+| `Viewport3D` | GPU-rendered 3D ([`Atelier.Graphics3D`](src/Atelier.Graphics3D)): a `Scene3D` of `MeshInstance3D`s (a `Mesh3D` of triangles, lines or points with normals, texture coordinates and vertex colors, a transform and a `Material3D`: base color and sRGB texture, tangent-free normal map, roughness, metalness, translucency for backlit fabric, unlit, double-sided, drawn on top) rendered with OpenGL 3.3 on the window's context into a 4× multisampled floating-point buffer, lit by a sun (GGX highlights) and a sky and ground ambient, tone-mapped (Khronos PBR Neutral) over a background gradient; an infinite ground grid, an axis gizmo and shaded, wireframe or shaded-wireframe drawing; `Mesh3D.UpdatePositions` animates every frame; redraws only on changes. Blender-style navigation with an `OrbitCamera`: middle-drag orbit, Shift+middle-drag pan, wheel zoom towards the pointer, Alt+drag without a middle button, Home to frame, numpad views and orthographic, all rebindable commands; a placeholder without a GPU |
+| `XYChart` | 2D line and scatter charts for engineering data ([`Atelier.Charts`](src/Atelier.Charts)): `XYSeries` with solid, dashed or dotted lines and circle, square, diamond or triangle markers; axes with titles, nice ticks (1, 2, 5 × 10ⁿ, as many decimals as the step needs, in the current culture), grid and zero lines; labeled points (`ChartAnnotation`) in rounded labels that place themselves around the point clear of other labels, the legend and the curves; a legend in the emptiest corner; a readout of the nearest point under the pointer. The view fits the data (and follows new points) until you zoom or pan: the wheel zooms at the pointer (Ctrl only horizontally, Shift only vertically), dragging pans, right-dragging zooms into a box, + and − zoom, Home or a double click fits again, all rebindable commands; lines skip what is out of view, so thousands of points stay fast |
 
 ### Layout
 
@@ -212,6 +214,8 @@ anywhere in a window), so they appear in menus, the command palette and the keyb
 
 - Borderless windows with native resizing, snapping and shadows on Windows; multiple windows with per-window focus.
 - Render-on-demand: idle windows don't draw.
+- Game controllers: `Gamepads.First` / `Gamepads.GetState(i)` give sticks (+Y up), triggers (0–1) and buttons in the
+  Xbox layout, from GLFW's gamepad support (Xbox and most other controllers); `Gamepads.ApplyDeadzone` for dead zones.
 - `SilkWindow.Closing` intercepts every close request (close button, Alt+F4, taskbar, `Close()`): cancel it, or pass an
   async decision such as a "Save changes?" dialog to `e.Defer(...)`; `Close(force: true)` skips it.
 - Hot reload through .NET Hot Reload, or manually with F5 or Ctrl+R when the app doesn't handle those keys itself.
@@ -233,10 +237,12 @@ anywhere in a window), so they appear in menus, the command palette and the keyb
 | [`Atelier.Generators`](src/Atelier.Generators) | Source generators for commands, keybindings and property-grid metadata |
 | [`Atelier.NodeEditor`](src/Atelier.NodeEditor) | Node graph view models, undo, dataflow evaluation and the `NodeEditor` control (namespace `Atelier.Nodes`) |
 | [`Atelier.Audio`](src/Atelier.Audio) | Controls for audio tools: the `Knob`, and the timeline model shared by connected timeline controls (`TimelineContext` for zoom and scroll, `TempoMap` with tempo and meter changes, `TimelinePosition` in seconds or beats, and the adaptive beat, time and sample `TimelineGrid`), the `TimelineRuler` and `TimelineLane`, clips on a `TimelinePanel`, `WaveformView` with shared `WaveformData`, and the `AudioWaveformEditor` for trims, fades, gain and selections |
+| [`Atelier.Charts`](src/Atelier.Charts) | The `XYChart` with its series, annotations and axes (`XYSeries`, `ChartAnnotation`, `ChartAxis`), nice tick math (`ChartTicks`), zoom and pan commands, renderer and theme styles |
+| [`Atelier.Graphics3D`](src/Atelier.Graphics3D) | The 3D scene model (`Scene3D`, `Mesh3D`, `Material3D`, `Texture3D`, `OrbitCamera`) and the OpenGL `Viewport3D`, which renders on the window's GPU context (`IHostWindow.GraphicsDevice`) and composites into the 2D frame |
 | [`Atelier.Platform.Silk`](src/Atelier.Platform.Silk) | Windows, OpenGL context, input and clipboard via Silk.NET |
 | [`Atelier.DevTools`](src/Atelier.DevTools) | The F12 developer tools (Debug builds only) |
 | [`Atelier.Gallery`](samples/Atelier.Gallery) | Showcase application for every control |
-| [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (1,400+) |
+| [`Atelier.Tests`](tests/Atelier.Tests) | Unit, layout, binding and rendering tests (1,520+) |
 
 ---
 

@@ -634,6 +634,44 @@ public class SilkWindow : IDisposable, IHostWindow
         return false;
     }
 
+    private SilkGraphicsDevice? _graphicsDevice;
+
+    /// <summary>
+    /// Gets the window's OpenGL context (3.3 core), for controls that render with OpenGL directly; <c>null</c> until the
+    /// window has loaded.
+    /// </summary>
+    public IGraphicsDevice? GraphicsDevice => _isLoaded && _grContext != null ? _graphicsDevice ??= new SilkGraphicsDevice(this) : null;
+
+    private sealed class SilkGraphicsDevice(SilkWindow window) : IGraphicsDevice
+    {
+        public GraphicsApi Api => GraphicsApi.OpenGL;
+        public int MajorVersion => window._window.API.Version.MajorVersion;
+        public int MinorVersion => window._window.API.Version.MinorVersion;
+        public bool IsCoreProfile => window._window.API.Profile == ContextProfile.Core;
+        public bool IsAlive { get; private set; } = true;
+
+        public event EventHandler? Disposing;
+
+        public IntPtr GetProcAddress(string name) =>
+            window._window.GLContext is { } context && context.TryGetProcAddress(name, out var address) ? address : IntPtr.Zero;
+
+        public void MakeCurrent() => window.MakeContextCurrent();
+
+        public void RaiseDisposing()
+        {
+            if (!IsAlive) return;
+            IsAlive = false;
+            try
+            {
+                Disposing?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception e)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SilkWindow] A graphics resource couldn't be released: {e.Message}");
+            }
+        }
+    }
+
     public void DragMove()
     {
         if (TryGetHwnd(out var hwnd))
@@ -1160,6 +1198,8 @@ public class SilkWindow : IDisposable, IHostWindow
 
         // 1. Initialize Silk.NET Input
         _inputContext = _window.CreateInput();
+        // Gamepads are global in GLFW: the first window with an input context serves them (see Gamepads).
+        if (Gamepads.Current is not SilkGamepadProvider) Gamepads.Current = new SilkGamepadProvider(_inputContext);
         HookInputEvents();
 
         // 2. Initialize SkiaSharp OpenGL context. Make this window's context current first: with several windows another
@@ -2000,9 +2040,20 @@ public class SilkWindow : IDisposable, IHostWindow
         }
     }
 
+    // Hands the gamepads to another open window when this window served them, before its input context goes away.
+    private void ReleaseGamepads()
+    {
+        if (Gamepads.Current is not SilkGamepadProvider provider || provider.Input != _inputContext) return;
+        var other = SilkApplication.Windows.FirstOrDefault(w => w != this && !w.IsClosed && w._inputContext != null);
+        Gamepads.Current = other?._inputContext is { } input ? new SilkGamepadProvider(input) : null;
+    }
+
     private void CleanupGraphicsResources()
     {
         MakeContextCurrent();
+
+        // Controls that made GPU objects on this context release them while it is still current.
+        _graphicsDevice?.RaiseDisposing();
 
         try
         {
@@ -2131,6 +2182,7 @@ public class SilkWindow : IDisposable, IHostWindow
         _window.Render -= OnRender;
         _window.Closing -= OnNativeClosing;
 
+        ReleaseGamepads();
         try
         {
             _inputContext?.Dispose();

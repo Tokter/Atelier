@@ -52,4 +52,11 @@ public interface IHostWindow
 
     /// <summary>Starts moving the window with the pointer (call while a pointer button is pressed).</summary>
     void DragMove();
+
+    /// <summary>
+    /// Gets the GPU context the window renders with, for controls that draw with the graphics API directly, or
+    /// <c>null</c> when there is none (for example when rendering without a window).
+    /// </summary>
+    /// <remarks>The default implementation returns <c>null</c>.</remarks>
+    IGraphicsDevice? GraphicsDevice => null;
 }

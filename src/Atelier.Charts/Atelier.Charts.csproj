@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Charts for engineering and data plots: the XYChart (lines, scatter markers, labeled points, zoom and pan), drawn with
+    SkiaSharp. It brings its own renderer and theme styles, and its own markup methods, like Atelier.Audio.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Atelier.Core\Atelier.Core.csproj" />
+    <ProjectReference Include="..\Atelier.Rendering\Atelier.Rendering.csproj" />
+    <ProjectReference Include="..\Atelier.Theming\Atelier.Theming.csproj" />
+    <ProjectReference Include="..\Atelier.Controls\Atelier.Controls.csproj" />
+    <ProjectReference Include="..\Atelier.Theming.Material\Atelier.Theming.Material.csproj" />
+    <ProjectReference Include="..\Atelier.Markup\Atelier.Markup.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Atelier.Charts</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Like Atelier.Markup: keep every public member documented and every cref valid. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CS1570;CS1572;CS1573;CS1574;CS1591</WarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Atelier.Tests" />
+  </ItemGroup>
+
+</Project>

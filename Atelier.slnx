@@ -4,10 +4,12 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Atelier.Audio/Atelier.Audio.csproj" />
+    <Project Path="src/Atelier.Charts/Atelier.Charts.csproj" />
     <Project Path="src/Atelier.Controls/Atelier.Controls.csproj" />
     <Project Path="src/Atelier.Core/Atelier.Core.csproj" />
     <Project Path="src/Atelier.DevTools/Atelier.DevTools.csproj" />
     <Project Path="src/Atelier.Generators/Atelier.Generators.csproj" />
+    <Project Path="src/Atelier.Graphics3D/Atelier.Graphics3D.csproj" />
     <Project Path="src/Atelier.Layout/Atelier.Layout.csproj" />
     <Project Path="src/Atelier.Markup/Atelier.Markup.csproj" />
     <Project Path="src/Atelier.NodeEditor/Atelier.NodeEditor.csproj" />

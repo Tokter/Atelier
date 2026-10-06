@@ -71,6 +71,8 @@ public partial class MainViewModel : ObservableObject
             new NodeEditorViewModel(),
             new TimelineViewModel(),
             new WorkspacesViewModel(),
+            new Viewport3DViewModel(),
+            new ChartsViewModel(),
         ];
 
         // The navigation lists the pages alphabetically.

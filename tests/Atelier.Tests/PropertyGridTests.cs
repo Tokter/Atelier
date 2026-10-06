@@ -136,6 +136,39 @@ public class PropertyGridTests
     }
 
     [Fact]
+    public void CategoryOrder_ListsTheGivenCategoriesFirst_ThenTheOthersAlphabetically()
+    {
+        var model = new TestInspectableModel();
+        var grid = new PropertyGrid { SortMode = PropertySortMode.Categorized };
+        grid.CategoryOrder.Add("Network");
+        grid.CategoryOrder.Add("General");
+        grid.SelectedObject = model;
+
+        string[] categories = ["General", "Network", "Diagnostics", "Appearance"];
+        var headers = CategoryHeaders(grid).Where(categories.Contains).ToList();
+
+        Assert.Equal(["Network", "General", "Appearance", "Diagnostics"], headers);
+    }
+
+    [Fact]
+    public void Categories_AreAlphabetical_WithoutACategoryOrder()
+    {
+        var grid = new PropertyGrid { SortMode = PropertySortMode.Categorized, SelectedObject = new TestInspectableModel() };
+
+        string[] categories = ["General", "Network", "Diagnostics", "Appearance"];
+        Assert.Equal(["Appearance", "Diagnostics", "General", "Network"], CategoryHeaders(grid).Where(categories.Contains).ToList());
+    }
+
+    private static IEnumerable<string> CategoryHeaders(VisualNode node)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child is TextBlock { Bold: true } text) yield return text.Text;
+            foreach (string header in CategoryHeaders(child)) yield return header;
+        }
+    }
+
+    [Fact]
     public void PropertyGrid_AlphabeticalMode_SortsProperties()
     {
         var model = new TestInspectableModel();

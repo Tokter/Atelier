@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    GPU-accelerated 3D: a scene model (meshes, materials, textures, instances) and the Viewport3D control, which renders
+    it with OpenGL on the window's context and composites the result into the 2D frame. It brings its own renderer and
+    markup methods, like Atelier.Audio.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Atelier.Core\Atelier.Core.csproj" />
+    <ProjectReference Include="..\Atelier.Rendering\Atelier.Rendering.csproj" />
+    <ProjectReference Include="..\Atelier.Theming\Atelier.Theming.csproj" />
+    <ProjectReference Include="..\Atelier.Controls\Atelier.Controls.csproj" />
+    <ProjectReference Include="..\Atelier.Theming.Material\Atelier.Theming.Material.csproj" />
+    <ProjectReference Include="..\Atelier.Markup\Atelier.Markup.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Atelier.Graphics3D</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Like Atelier.Markup: keep every public member documented and every cref valid. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CS1570;CS1572;CS1573;CS1574;CS1591</WarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

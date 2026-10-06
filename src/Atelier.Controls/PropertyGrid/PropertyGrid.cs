@@ -48,8 +48,22 @@ public class PropertyGrid : Control
     private static readonly Color s_errorText = Color.FromRgb(0xC6, 0x28, 0x28);
     private static readonly Color s_errorBackground = Color.FromRgb(0xC6, 0x28, 0x28).WithAlpha(0.08f);
 
-    private static readonly Comparison<CategoryGroup> s_groupComparison =
-        static (a, b) => StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name);
+    // Categories in CategoryOrder first (in that order), then the others alphabetically.
+    private int CompareGroups(CategoryGroup a, CategoryGroup b)
+    {
+        int ia = IndexInCategoryOrder(a.Name), ib = IndexInCategoryOrder(b.Name);
+        if (ia != ib) return ia.CompareTo(ib);
+        return StringComparer.OrdinalIgnoreCase.Compare(a.Name, b.Name);
+    }
+
+    private int IndexInCategoryOrder(string name)
+    {
+        for (int i = 0; i < CategoryOrder.Count; i++)
+        {
+            if (string.Equals(CategoryOrder[i], name, StringComparison.OrdinalIgnoreCase)) return i;
+        }
+        return int.MaxValue;
+    }
 
     private static readonly Comparison<PropertyRow> s_alphabeticalComparison = static (a, b) =>
     {
@@ -198,6 +212,13 @@ public class PropertyGrid : Control
     /// editor recreates the grid's rows.
     /// </summary>
     public PropertyEditorRegistry EditorRegistry { get; } = new();
+
+    /// <summary>
+    /// Gets the categories to list first, in this order (e.g. the steps of a design); the other categories follow
+    /// alphabetically. Empty (the default) lists all categories alphabetically. Set before assigning
+    /// <see cref="SelectedObject"/>, or call <see cref="RebuildProperties"/> after changing it.
+    /// </summary>
+    public IList<string> CategoryOrder { get; } = new List<string>();
 
     #endregion
 
@@ -817,7 +838,7 @@ public class PropertyGrid : Control
                 }
             }
 
-            _groups.Sort(s_groupComparison);
+            _groups.Sort(CompareGroups);
         }
 
         ArrangeRows();
