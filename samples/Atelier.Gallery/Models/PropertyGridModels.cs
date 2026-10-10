@@ -167,7 +167,7 @@ public partial class ServiceConfigModel
     public LogSeverity LogLevel { get; set; } = LogSeverity.Information;
 
     [InspectableProperty("Runtime", "Diagnostics", IsReadOnly = true)]
-    public string Runtime { get; } = ".NET 9";
+    public string Runtime { get; } = ".NET 10";
 }
 
 /// <summary>A particle emitter whose setters validate by throwing, to show how the grid reports errors.</summary>

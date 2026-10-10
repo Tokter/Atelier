@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Atelier is a retained-mode desktop UI framework for .NET 9 in plain C# (no XAML): SkiaSharp rendering on an OpenGL
+Atelier is a retained-mode desktop UI framework for .NET 10 in plain C# (no XAML): SkiaSharp rendering on an OpenGL
 surface via Silk.NET, Material Design 3 theming, and a fluent markup API. `README.md` is the user-facing feature
 reference and is kept current (see "Conventions").
 
@@ -20,7 +20,7 @@ dotnet run --project samples/Atelier.Gallery                # showcase app
 
 CI (`.github/workflows/ci.yml`, windows-latest) builds and tests in **Release**. Release and Debug differ:
 `Atelier.DevTools` is only referenced in Debug (by `Atelier.Platform.Silk` and the tests), so code touching DevTools must
-compile in both configurations. SDK is pinned by `global.json` (9.0.100, latestFeature).
+compile in both configurations. SDK is pinned by `global.json` (10.0.100, latestFeature).
 
 Headless gallery screenshots (used for `docs/screenshots/`): set `ATELIER_GALLERY_SNAPSHOT=<folder>`, optionally with
 `ATELIER_GALLERY_PAGES=0,3,7`, `ATELIER_GALLERY_THEME=dark`, `ATELIER_GALLERY_SIZE=1280x800`, and the other

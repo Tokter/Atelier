@@ -5,13 +5,13 @@
 <h1 align="center">Atelier</h1>
 
 <p align="center">
-  <strong>A GPU-accelerated desktop UI framework for .NET 9, written in plain C#</strong><br>
+  <strong>A GPU-accelerated desktop UI framework for .NET 10, written in plain C#</strong><br>
   <em>SkiaSharp rendering · Silk.NET windowing · Material Design 3</em>
 </p>
 
 <p align="center">
   <a href="https://github.com/Tokter/Atelier/actions/workflows/ci.yml"><img src="https://github.com/Tokter/Atelier/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <img src="https://img.shields.io/badge/.NET-9.0-purple.svg" alt=".NET 9" />
+  <img src="https://img.shields.io/badge/.NET-10.0-purple.svg" alt=".NET 10" />
   <img src="https://img.shields.io/badge/Rendering-SkiaSharp-blue.svg" alt="SkiaSharp" />
   <img src="https://img.shields.io/badge/Windowing-Silk.NET-green.svg" alt="Silk.NET" />
   <img src="https://img.shields.io/badge/Design-Material%203-teal.svg" alt="Material Design 3" />
