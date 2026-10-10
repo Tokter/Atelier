@@ -52,6 +52,10 @@ internal sealed class SceneRenderer
         gl.Enable(EnableCap.Blend);
         gl.BlendEquation(BlendEquationModeEXT.FuncAdd);
         gl.BlendFunc(BlendingFactor.One, BlendingFactor.OneMinusSrcAlpha);
+        // Skia, sharing the context, leaves its sampler objects bound to the texture units; a bound sampler overrides
+        // the textures' own filtering (linear, mipmapped), and Skia's often sample nearest.
+        gl.BindSampler(0, 0);
+        gl.BindSampler(1, 0);
 
         var program = gpu.MeshProgram;
         program.Use();

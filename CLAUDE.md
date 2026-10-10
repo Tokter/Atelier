@@ -31,7 +31,7 @@ Headless gallery screenshots (used for `docs/screenshots/`): set `ATELIER_GALLER
 Project layering (lower depends on nothing above it):
 `Core` → `Layout` → `Rendering` → `Theming` → `Controls` → `Theming.Material` → `Markup` / `NodeEditor` / `DevTools` →
 `Platform.Silk`. `Audio` (audio-tool controls: `Knob`, timeline, waveforms) sits on `Markup` and brings its own
-renderers (`AudioTheme`) and markup; `NodeEditor` must not depend on it. `Graphics3D` (the OpenGL `Viewport3D` and its scene model) sits on `Markup` the same way, with `Graphics3DTheme`; it renders with Silk.NET.OpenGL through `IHostWindow.GraphicsDevice` (implemented by `SilkWindow`), so it never references `Platform.Silk`. `Charts` (the Skia-drawn `XYChart`) sits on `Markup` the same way, with `ChartsTheme`. `Generators` is a Roslyn source-generator
+renderers (`AudioTheme`) and markup; `NodeEditor` must not depend on it. `Graphics3D` (the OpenGL `Viewport3D` and its scene model) sits on `Markup` the same way, with `Graphics3DTheme`; it renders with Silk.NET.OpenGL through `IHostWindow.GraphicsDevice` (implemented by `SilkWindow`), so it never references `Platform.Silk`. Skia shares that context, so `SceneRenderer` sets every piece of GL state it relies on (Skia leaves its sampler objects bound, which override the textures' filtering: unbound, or textures sample nearest). `Charts` (the Skia-drawn `XYChart`) sits on `Markup` the same way, with `ChartsTheme`. `Generators` is a Roslyn source-generator
 project referenced as an analyzer (`OutputItemType="Analyzer" ReferenceOutputAssembly="false"`).
 
 - **Property system** (`Atelier.Core/Properties`): elements are `BindableObject`s with static
